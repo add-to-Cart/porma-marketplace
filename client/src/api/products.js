@@ -20,3 +20,8 @@ export const updateProduct = async (id, productData) => {
   const res = await api.patch(`/products/${id}`, productData);
   return res.data;
 };
+
+export const searchProducts = async (query) => {
+  const res = await api.get(`/products/search?query=${query}`);
+  return res.data;
+};

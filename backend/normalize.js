@@ -1,61 +1,73 @@
 import admin from "./config/firebaseAdmin.js";
 const db = admin.firestore();
 
-async function normalizeDatabase() {
-  console.log("Reading products from Firestore...");
-  const snapshot = await db.collection("products").get();
+// The indexer logic we built previously
+const generateSearchIndex = (data) => {
+  const words = new Set();
+  data.name
+    ?.toLowerCase()
+    .split(/\s+/)
+    .forEach((word) => words.add(word));
+  words.add(data.category?.toLowerCase());
+  data.tags?.forEach((tag) => words.add(tag.toLowerCase()));
+
+  const comp = data.vehicleCompatibility;
+  if (comp) {
+    comp.makes?.forEach((make) => words.add(make.toLowerCase()));
+    comp.models?.forEach((model) => words.add(model.toLowerCase()));
+    if (comp.type) words.add(comp.type.toLowerCase());
+  }
+  return Array.from(words).filter((word) => word && word.length > 1);
+};
+
+async function cleanAndMigrateData() {
+  const productsRef = db.collection("products");
+  const snapshot = await productsRef.get();
+
+  console.log(`Starting cleanup for ${snapshot.size} products...`);
+
   const batch = db.batch();
-  let count = 0;
 
-  snapshot.forEach((doc) => {
+  snapshot.docs.forEach((doc) => {
     const data = doc.data();
-    const docRef = db.collection("products").doc(doc.id);
 
-    // 1. CLEAN TAGS & STYLES (Removing \"quotes\" and normalization)
-    const cleanArray = (arr) => {
-      if (!Array.isArray(arr)) return [];
-      return arr
-        .map((item) => item.replace(/["\\]/g, "").trim().toLowerCase())
-        .filter(Boolean);
+    // 1. Standardize Vehicle Compatibility (Moving root make/model inside)
+    const compatibility = {
+      type: data.vehicleCompatibility?.type || data.vehicleType || "Universal",
+      isUniversalFit: data.vehicleCompatibility?.isUniversalFit || false,
+      makes: data.vehicleCompatibility?.makes || (data.make ? [data.make] : []),
+      models:
+        data.vehicleCompatibility?.models || (data.model ? [data.model] : []),
+      yearRange: data.vehicleCompatibility?.yearRange || null,
     };
 
-    // 2. CONSTRUCT NESTED COMPATIBILITY
-    // Taking data from either the old flat fields or existing nested object
-    const vc = data.vehicleCompatibility || {};
-    const type = data.vehicleType || vc.type || "Universal";
-    const isUniversal = vc.isUniversalFit ?? type === "Universal";
-
-    const normalizedVC = {
-      type: type,
-      isUniversalFit: isUniversal,
-      makes: isUniversal ? [] : vc.makes || [],
-      models: isUniversal ? [] : vc.models || [],
-      yearRange: isUniversal ? null : vc.yearRange || { from: null, to: null },
-    };
-
-    // 3. PREPARE CLEAN OBJECT
-    const cleanData = {
+    // 2. Clean and Normalize the data
+    const cleanedProduct = {
       ...data,
-      tags: cleanArray(data.tags),
-      styles: cleanArray(data.styles),
-      vehicleCompatibility: normalizedVC,
-      price: Number(data.price) || 0,
-      stock: Number(data.stock) || 0,
+      price: parseFloat(data.price) || 0,
+      stock: parseInt(data.stock) || 0,
+      category: data.category?.trim() || "Uncategorized",
+      tags: (data.tags || []).map((t) => t.toLowerCase().trim()),
+      vehicleCompatibility: compatibility,
+
+      // 3. Generate the new Search Index
+      searchIndex: generateSearchIndex({
+        ...data,
+        vehicleCompatibility: compatibility,
+      }),
+
+      // 4. Remove Legacy Fields (Using FieldValue.delete())
+      normalizedName: admin.firestore.FieldValue.delete(),
+      make: admin.firestore.FieldValue.delete(),
+      model: admin.firestore.FieldValue.delete(),
+      vehicleType: admin.firestore.FieldValue.delete(),
     };
 
-    // 4. REMOVE REDUNDANT TOP-LEVEL FIELDS
-    // These are now inside vehicleCompatibility or cleaned above
-    delete cleanData.vehicleType;
-    delete cleanData.make;
-    delete cleanData.model;
-    delete cleanData.year;
-
-    batch.set(docRef, cleanData);
-    count++;
+    batch.update(doc.ref, cleanedProduct);
   });
 
   await batch.commit();
-  console.log(`✅ Done! Normalized ${count} products.`);
+  console.log("Database successfully cleaned and indexed!");
 }
 
-normalizeDatabase().catch(console.error);
+cleanAndMigrateData().catch(console.error);
