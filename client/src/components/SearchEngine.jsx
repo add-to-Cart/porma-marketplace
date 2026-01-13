@@ -1,85 +1,63 @@
-import { useState, useEffect } from "react";
+import { useSearch } from "@/contexts/SearchContext";
 import { searchProducts } from "@/api/products";
-import { Search, Loader2 } from "lucide-react"; // Optional icons
+import { useEffect } from "react";
+import { Search, Loader2 } from "lucide-react";
+import { useFilters } from "@/contexts/FilterContext";
 
 export default function SearchEngine() {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const {
+    searchQuery,
+    setSearchQuery,
+    setSearchResults,
+    isSearching,
+    setIsSearching,
+  } = useSearch();
+  const { filters } = useFilters();
 
-  // DEBOUNCE LOGIC: Wait for the user to stop typing
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
-      if (query.trim().length > 1) {
-        setLoading(true);
-        try {
-          const data = await searchProducts(query);
-          setResults(data);
-        } catch (error) {
-          console.error("Search failed:", error);
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        setResults([]);
+      setIsSearching(true);
+      try {
+        // Pass both query and metadata filters
+        const data = await searchProducts({
+          query: searchQuery,
+          category: filters.category,
+          vehicleType: filters.vehicleType,
+          make: filters.vehicle.make,
+          model: filters.vehicle.model,
+        });
+        setSearchResults(data);
+      } catch (error) {
+        console.error("Search failed:", error);
+      } finally {
+        setIsSearching(false);
       }
-    }, 400); // 400ms delay
+    }, 400);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [query]);
+  }, [searchQuery, filters]); // Re-run when filters change!
 
   return (
-    <div className="max-w-2xl mx-auto p-4 relative">
-      {/* Search Input */}
-      <div className="relative">
+    <div className="relative w-full max-w-xl">
+      <div className="relative group">
+        <Search
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors"
+          size={18}
+        />
         <input
           type="text"
-          placeholder="Search for parts (e.g. Ninja 400 Foot Pegs)..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="w-full p-4 pl-12 rounded-full border-2 border-gray-200 focus:border-blue-500 outline-none transition-all shadow-sm"
+          placeholder="Search for parts (e.g. Ninja 400)..."
+          value={searchQuery} // Controlled by Context
+          onChange={(e) => setSearchQuery(e.target.value)} // Updates Context
+          className="w-full bg-gray-100 border-none rounded-2xl py-3 pl-10 pr-12 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all outline-none"
         />
-        <Search className="absolute left-4 top-4 text-gray-400" size={24} />
-        {loading && (
+        {isSearching && (
           <Loader2
-            className="absolute right-4 top-4 animate-spin text-blue-500"
-            size={24}
+            className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-blue-500"
+            size={18}
           />
         )}
       </div>
-
-      {/* Results Dropdown */}
-      {results.length > 0 && (
-        <div className="absolute w-full mt-2 bg-white border rounded-xl shadow-xl z-50 overflow-hidden">
-          {results.map((product) => (
-            <div
-              key={product.id}
-              className="p-4 hover:bg-gray-50 border-b last:border-none cursor-pointer flex items-center justify-between"
-            >
-              <div className="flex items-center gap-4">
-                <img
-                  src={product.imageUrl}
-                  alt=""
-                  className="w-12 h-12 object-cover rounded"
-                />
-                <div>
-                  <h4 className="font-bold text-gray-800">{product.name}</h4>
-                  <p className="text-xs text-gray-500">
-                    Fits: {product.vehicleCompatibility.makes.join(", ")}
-                  </p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="font-bold text-blue-600">₱{product.price}</p>
-                {/* Optional: Show relevance score during development */}
-                <span className="text-[10px] bg-gray-100 px-2 py-1 rounded">
-                  Match: {product.searchScore}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

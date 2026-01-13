@@ -1,7 +1,21 @@
 import api from "./api";
 
-export const getAllProducts = async () => {
-  const res = await api.get("/products");
+export const getAllProducts = async (filters) => {
+  // Convert the filter object into URL parameters (?category=...&vehicleType=...)
+  const params = new URLSearchParams(filters).toString();
+  const res = await api.get(`/products?${params}`);
+  return res.data;
+};
+
+export const searchProducts = async (filters) => {
+  // Convert filter object to query string
+  const params = new URLSearchParams(filters).toString();
+  const res = await api.get(`/products/search?${params}`);
+  return res.data;
+};
+
+export const getTrendingProducts = async () => {
+  const res = await api.get("/products/trending");
   return res.data;
 };
 
@@ -18,10 +32,5 @@ export const createProduct = async (productData) => {
 
 export const updateProduct = async (id, productData) => {
   const res = await api.patch(`/products/${id}`, productData);
-  return res.data;
-};
-
-export const searchProducts = async (query) => {
-  const res = await api.get(`/products/search?query=${query}`);
   return res.data;
 };

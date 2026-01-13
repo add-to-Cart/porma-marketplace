@@ -4,51 +4,85 @@ import { getAllProducts } from "@/api/products.js";
 import ProductCard from "@/components/ProductCard";
 
 import { useFilters } from "@/contexts/FilterContext";
+import { useSearch } from "@/contexts/SearchContext"; // 1. Import Search Context
 
 export default function Marketplace() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const { filters } = useFilters();
-  const navigate = useNavigate();
+  const { searchResults, searchQuery, isSearching } = useSearch();
 
   useEffect(() => {
-    const fetchProducts = async () => {
-      const fetchedProducts = await getAllProducts();
-      setProducts(fetchedProducts);
-      setLoading(false);
+    const fetchMarketplace = async () => {
+      setLoading(true); // Reset loading when filters change
+      try {
+        const data = await getAllProducts(filters);
+        setProducts(data);
+      } catch (error) {
+        console.error("Failed to fetch products", error);
+      } finally {
+        setLoading(false); // CRITICAL FIX: Stop loading!
+      }
     };
-    fetchProducts();
-  }, []);
+    fetchMarketplace();
+  }, [filters]);
 
-  if (loading) return <p className="p-4">Loading products...</p>;
-
-  const filteredProducts = products.filter((p) => {
+  const baseFilteredProducts = products.filter((p) => {
     let match = true;
+
+    // Existing Filters
     if (filters.category) match = match && p.category === filters.category;
-    if (filters.vehicleType)
-      match = match && p.vehicleType === filters.vehicleType;
+    if (filters.vehicleType) {
+      match =
+        match &&
+        (p.vehicleCompatibility?.type === filters.vehicleType ||
+          p.vehicleCompatibility?.type === "Universal");
+    }
+
+    // ADD THESE: Filter by specific Make/Model from your Sidebar
+    if (filters.vehicle?.make) {
+      match =
+        match && p.vehicleCompatibility?.makes?.includes(filters.vehicle.make);
+    }
+    if (filters.vehicle?.model) {
+      match =
+        match &&
+        p.vehicleCompatibility?.models?.includes(filters.vehicle.model);
+    }
+
     return match;
   });
 
-  const handleUpdateClick = (product) => {
-    navigate(`/products/update/${product.id}`);
-  };
+  const isUserSearching = searchQuery.trim().length > 1;
+  const finalDisplay = isUserSearching ? searchResults : baseFilteredProducts;
+
+  if (loading || isSearching)
+    return <p className="p-4 text-center">Loading Discovery Feed...</p>;
 
   return (
     <div className="flex flex-col gap-6 p-6 min-h-screen">
-      {/* Product Grid */}
+      {/* Search Indicator */}
+      {isUserSearching && (
+        <div className="px-2">
+          <h2 className="text-xl font-bold">Results for "{searchQuery}"</h2>
+          <p className="text-gray-500 text-sm">
+            {finalDisplay.length} parts found
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filteredProducts.length === 0 ? (
-          <p className="text-sm text-gray-500 col-span-full">
-            No products found.
+        {finalDisplay.length === 0 ? (
+          <p className="text-sm text-gray-500 col-span-full text-center py-20">
+            No products found matching your criteria.
           </p>
         ) : (
-          filteredProducts.map((product) => (
+          finalDisplay.map((product) => (
             <ProductCard
               key={product.id}
               product={product}
-              onClick={handleUpdateClick} // Pass click handler
+              onClick={() => navigate(`/products/${product.id}`)} // Fixed link
             />
           ))
         )}

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createProduct } from "@/api/products";
 import { useNavigate } from "react-router-dom";
 
-export default function CreateProductPage() {
+export default function CreateProduct() {
   const VEHICLE_DATA = {
     Motorcycle: {
       Yamaha: [

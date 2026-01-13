@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { updateProduct, getProductById } from "@/api/products";
 
-export default function ProductUpdatePage() {
+export default function ProductUpdate() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -74,52 +74,24 @@ export default function ProductUpdatePage() {
   const handleUpdate = async () => {
     setUpdating(true);
     try {
-      const ref = doc(db, "products", id);
-
-      // Construct the structured object for the database
-      const finalData = {
-        name: formData.name.trim(),
-        description: formData.description.trim(),
-        category: formData.category,
-        price: parseFloat(formData.price),
-        stock: parseInt(formData.stock),
-        isAvailable: formData.isAvailable,
-        tags: formData.tags
-          .split(",")
-          .map((t) => t.trim().toLowerCase())
-          .filter(Boolean),
-        styles: formData.styles
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-        // This connects back to our Master Update structure
-        vehicleType: formData.vehicleType,
+      // Structure the data to match what the backend expects
+      const payload = {
+        ...formData,
         vehicleCompatibility: {
-          type: formData.vehicleType,
           isUniversalFit: formData.isUniversalFit,
-          makes: formData.vehicleMakes
-            .split(",")
-            .map((m) => m.trim())
-            .filter(Boolean),
-          models: formData.vehicleModels
-            .split(",")
-            .map((m) => m.trim())
-            .filter(Boolean),
-          yearRange: formData.isUniversalFit
-            ? null
-            : {
-                from: formData.yearFrom ? parseInt(formData.yearFrom) : null,
-                to: formData.yearTo ? parseInt(formData.yearTo) : null,
-              },
+          makes: formData.vehicleMakes.split(",").map((m) => m.trim()),
+          models: formData.vehicleModels.split(",").map((m) => m.trim()),
+          yearRange: {
+            from: parseInt(formData.yearFrom),
+            to: parseInt(formData.yearTo),
+          },
         },
       };
 
-      // ⚡ Call backend API PATCH
-      await updateProduct(id, finalData);
-      alert("✅ Product updated successfully!");
-      navigate("/");
+      await updateProduct(id, payload);
+      navigate("/marketplace");
     } catch (err) {
-      setError("Update failed");
+      setError("Failed to update product");
     } finally {
       setUpdating(false);
     }

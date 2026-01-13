@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useFilters } from "@/contexts/FilterContext";
 
-export default function CompatiblePartsPage() {
+export default function CompatibleParts() {
   const { filters } = useFilters();
   const vehicle = filters.vehicle;
 

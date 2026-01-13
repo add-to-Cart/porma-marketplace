@@ -4,13 +4,29 @@ import { createContext, useContext, useState } from "react";
 const SearchContext = createContext();
 
 export const SearchProvider = ({ children }) => {
-  const [search, setSearch] = useState([]);
+  const [searchQuery, setSearchQuery] = useState(""); // The text in the input
+  const [searchResults, setSearchResults] = useState([]); // The data from the API
+  const [isSearching, setIsSearching] = useState(false); // Loading state for UI
 
   return (
-    <SearchContext.Provider value={{ search, setSearch }}>
+    <SearchContext.Provider
+      value={{
+        searchQuery,
+        setSearchQuery,
+        searchResults,
+        setSearchResults,
+        isSearching,
+        setIsSearching,
+      }}
+    >
       {children}
     </SearchContext.Provider>
   );
 };
 
-export const useSearch = () => useContext(SearchContext);
+export const useSearch = () => {
+  const context = useContext(SearchContext);
+  if (!context)
+    throw new Error("useSearch must be used within a SearchProvider");
+  return context;
+};

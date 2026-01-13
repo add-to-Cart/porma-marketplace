@@ -1,9 +1,51 @@
 import admin from "../config/firebaseAdmin.js";
 const db = admin.firestore();
 
+// productController.js
+
+// 1. MARKETPLACE: Global Discovery with Metadata Awareness
 export const getAllProducts = async (req, res) => {
   try {
-    const snapshot = await db.collection("products").get();
+    const { category, vehicleType, make, model } = req.query;
+    let query = db.collection("products");
+
+    // Metadata Filtering (Marketplace Constraints)
+    if (category) query = query.where("category", "==", category);
+    if (vehicleType)
+      query = query.where("vehicleCompatibility.type", "==", vehicleType);
+
+    // For specific vehicle filtering without a search keyword
+    if (make)
+      query = query.where("vehicleCompatibility.makes", "array-contains", make);
+
+    // Default: Sort by newest
+    const snapshot = await query.orderBy("createdAt", "desc").limit(50).get();
+
+    let products = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+    // In-memory filter for Model (since Firestore handles only 1 array-contains per query)
+    if (model) {
+      products = products.filter((p) =>
+        p.vehicleCompatibility?.models?.includes(model)
+      );
+    }
+
+    res.json(products);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch marketplace", error: err.message });
+  }
+};
+
+export const getTrendingProducts = async (req, res) => {
+  try {
+    const snapshot = await db
+      .collection("products")
+      .where("isAvailable", "==", true)
+      .orderBy("viewCount", "desc") // Sorting by popularity
+      .limit(8)
+      .get();
 
     const products = snapshot.docs.map((doc) => ({
       id: doc.id,
@@ -12,7 +54,10 @@ export const getAllProducts = async (req, res) => {
 
     res.json(products);
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch products" });
+    console.error("TRENDING_ERROR:", err.message); // Look at your terminal for this!
+    res
+      .status(500)
+      .json({ message: "Failed to fetch trending", error: err.message });
   }
 };
 
@@ -53,12 +98,14 @@ const generateSearchIndex = (data) => {
   // 4. Add vehicle details (Makes & Models)
   const comp = data.vehicleCompatibility;
   if (comp) {
-    comp.makes?.forEach((make) => words.add(make.toLowerCase()));
-    comp.models?.forEach((model) => words.add(model.toLowerCase()));
+    if (comp.isUniversalFit) {
+      words.add("universal");
+    } else {
+      comp.makes?.forEach((make) => words.add(make.toLowerCase()));
+      comp.models?.forEach((model) => words.add(model.toLowerCase()));
+    }
     if (comp.type) words.add(comp.type.toLowerCase());
   }
-
-  // Remove empty strings or very short words (optional)
   return Array.from(words).filter((word) => word && word.length > 1);
 };
 
@@ -104,51 +151,58 @@ export const createProduct = async (req, res) => {
   }
 };
 
-// --- NEW: SEARCH FUNCTION WITH MULTI-CRITERIA RANKING ---
 export const searchProducts = async (req, res) => {
   try {
-    const { query } = req.query;
-    if (!query) return res.json([]);
+    const { query, category, vehicleType, make, model } = req.query;
+    let productQuery = db.collection("products");
 
-    const searchTerm = query.toLowerCase().trim();
+    // 1. Metadata Filtering (Enforcement)
+    if (category) productQuery = productQuery.where("category", "==", category);
+    if (vehicleType)
+      productQuery = productQuery.where(
+        "vehicleCompatibility.type",
+        "==",
+        vehicleType
+      );
 
-    // 1. Efficient Retrieval: O(1) per keyword match using Firestore Index
-    const snapshot = await db
-      .collection("products")
-      .where("searchIndex", "array-contains", searchTerm)
-      .limit(50)
-      .get();
+    // 2. Keyword/Vehicle Discovery
+    // Note: We prioritize the searchIndex if a query, make, or model is provided
+    const searchTerm = (query || model || make || "").toLowerCase().trim();
+    if (searchTerm) {
+      productQuery = productQuery.where(
+        "searchIndex",
+        "array-contains",
+        searchTerm
+      );
+    }
 
+    const snapshot = await productQuery.limit(100).get();
     let products = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-    // 2. Multi-Criteria Ranking (The "Number 2" Logic)
-    // We manually score results to ensure the most relevant item is first
+    // 3. Rule-Based Ranking & Trend Spotlight Logic
     products = products.map((product) => {
-      let score = 0;
+      let relevanceScore = 0;
 
-      // Exact name match (Weight: 10)
-      if (product.name.toLowerCase() === searchTerm) score += 10;
-      else if (product.name.toLowerCase().includes(searchTerm)) score += 5;
+      // Relevance Rules
+      if (query && product.name.toLowerCase().includes(query.toLowerCase()))
+        relevanceScore += 20;
+      if (model && product.vehicleCompatibility?.models.includes(model))
+        relevanceScore += 30;
 
-      // Vehicle match (Weight: 8)
-      const isVehicleMatch = product.vehicleCompatibility?.models.some(
-        (m) => m.toLowerCase() === searchTerm
-      );
-      if (isVehicleMatch) score += 8;
+      // Trend Spotlight Rules (Popularity)
+      // Rule: (Sales * 10) + (Views * 0.5) + (Rating * 5)
+      const popularityScore =
+        product.soldCount * 10 + product.viewCount * 0.5 + product.rating * 5;
 
-      // Tag match (Weight: 5)
-      if (product.tags?.includes(searchTerm)) score += 5;
-
-      return { ...product, searchScore: score };
+      return { ...product, finalScore: relevanceScore + popularityScore };
     });
 
-    // Sort by score descending
-    products.sort((a, b) => b.searchScore - a.searchScore);
+    // Sort by final score descending
+    products.sort((a, b) => b.finalScore - a.finalScore);
 
     res.json(products);
   } catch (err) {
-    console.error("Search Error:", err);
-    res.status(500).json({ message: "Search failed" });
+    res.status(500).json({ message: "Discovery failed", error: err.message });
   }
 };
 

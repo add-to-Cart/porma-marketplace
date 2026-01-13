@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getAllProducts,
+  getTrendingProducts,
   updateProduct,
   getProductById,
   createProduct,
@@ -11,9 +12,10 @@ const router = express.Router();
 
 // 1. Static/Specific routes first
 router.get("/", getAllProducts);
-router.get("/search", searchProducts); // MOVED THIS UP
+router.get("/search", searchProducts);
+router.get("/trending", getTrendingProducts); // ADD THIS LINE HERE
 
-// 2. Dynamic ID routes last
+// 2. Dynamic ID (Generic) routes last
 router.get("/:id", getProductById);
 
 router.post("/", createProduct);

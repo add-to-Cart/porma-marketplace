@@ -4,13 +4,16 @@ import "./index.css";
 import App from "./App.jsx";
 import { GarageProvider } from "@/contexts/GarageContext";
 import { FilterProvider } from "@/contexts/FilterContext";
+import { SearchProvider } from "@/contexts/SearchContext.jsx";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <FilterProvider>
-      <GarageProvider>
-        <App />
-      </GarageProvider>
-    </FilterProvider>
+    <SearchProvider>
+      <FilterProvider>
+        <GarageProvider>
+          <App />
+        </GarageProvider>
+      </FilterProvider>
+    </SearchProvider>
   </StrictMode>
 );
