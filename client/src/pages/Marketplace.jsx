@@ -9,24 +9,28 @@ import { useSearch } from "@/contexts/SearchContext"; // 1. Import Search Contex
 export default function Marketplace() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   const { filters } = useFilters();
   const { searchResults, searchQuery, isSearching } = useSearch();
 
   useEffect(() => {
     const fetchMarketplace = async () => {
-      setLoading(true); // Reset loading when filters change
+      // If a search is active, don't waste resources fetching the general feed
+      if (searchQuery.trim().length > 1) return;
+
+      setLoading(true);
       try {
         const data = await getAllProducts(filters);
         setProducts(data);
       } catch (error) {
         console.error("Failed to fetch products", error);
       } finally {
-        setLoading(false); // CRITICAL FIX: Stop loading!
+        setLoading(false);
       }
     };
     fetchMarketplace();
-  }, [filters]);
+  }, [filters, searchQuery]); // Add searchQuery to dependencies
 
   const baseFilteredProducts = products.filter((p) => {
     let match = true;
@@ -82,7 +86,7 @@ export default function Marketplace() {
             <ProductCard
               key={product.id}
               product={product}
-              onClick={() => navigate(`/products/${product.id}`)} // Fixed link
+              onClick={() => navigate(`/products/${product.id}`)}
             />
           ))
         )}

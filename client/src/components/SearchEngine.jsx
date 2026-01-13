@@ -15,10 +15,16 @@ export default function SearchEngine() {
   const { filters } = useFilters();
 
   useEffect(() => {
+    // If query is too short, clear results immediately and don't fetch
+    if (searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
     const delayDebounceFn = setTimeout(async () => {
       setIsSearching(true);
       try {
-        // Pass both query and metadata filters
         const data = await searchProducts({
           query: searchQuery,
           category: filters.category,
@@ -35,7 +41,7 @@ export default function SearchEngine() {
     }, 400);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery, filters]); // Re-run when filters change!
+  }, [searchQuery, filters, setSearchResults, setIsSearching]);
 
   return (
     <div className="relative w-full max-w-xl">

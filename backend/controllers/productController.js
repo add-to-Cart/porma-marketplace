@@ -154,55 +154,55 @@ export const createProduct = async (req, res) => {
 export const searchProducts = async (req, res) => {
   try {
     const { query, category, vehicleType, make, model } = req.query;
-    let productQuery = db.collection("products");
 
-    // 1. Metadata Filtering (Enforcement)
-    if (category) productQuery = productQuery.where("category", "==", category);
+    if (!query || query.trim().length < 2) {
+      return res.json([]);
+    }
+
+    const keywords = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((k) => k.length > 0);
+    let firestoreQuery = db.collection("products");
+
+    // 1. Apply simple equality filters (These work fine with array-contains-any)
+    if (category)
+      firestoreQuery = firestoreQuery.where("category", "==", category);
     if (vehicleType)
-      productQuery = productQuery.where(
+      firestoreQuery = firestoreQuery.where(
         "vehicleCompatibility.type",
         "==",
         vehicleType
       );
 
-    // 2. Keyword/Vehicle Discovery
-    // Note: We prioritize the searchIndex if a query, make, or model is provided
-    const searchTerm = (query || model || make || "").toLowerCase().trim();
-    if (searchTerm) {
-      productQuery = productQuery.where(
-        "searchIndex",
-        "array-contains",
-        searchTerm
+    // 2. APPLY SEARCH (Uses array-contains-any)
+    firestoreQuery = firestoreQuery.where(
+      "searchIndex",
+      "array-contains-any",
+      keywords.slice(0, 10)
+    );
+
+    const snapshot = await firestoreQuery.get();
+    let products = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+    // 3. APPLY VEHICLE FILTERS IN-MEMORY
+    // This bypasses the Firestore "multiple array filter" limitation
+    if (make) {
+      products = products.filter((p) =>
+        p.vehicleCompatibility?.makes?.includes(make)
       );
     }
 
-    const snapshot = await productQuery.limit(100).get();
-    let products = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-
-    // 3. Rule-Based Ranking & Trend Spotlight Logic
-    products = products.map((product) => {
-      let relevanceScore = 0;
-
-      // Relevance Rules
-      if (query && product.name.toLowerCase().includes(query.toLowerCase()))
-        relevanceScore += 20;
-      if (model && product.vehicleCompatibility?.models.includes(model))
-        relevanceScore += 30;
-
-      // Trend Spotlight Rules (Popularity)
-      // Rule: (Sales * 10) + (Views * 0.5) + (Rating * 5)
-      const popularityScore =
-        product.soldCount * 10 + product.viewCount * 0.5 + product.rating * 5;
-
-      return { ...product, finalScore: relevanceScore + popularityScore };
-    });
-
-    // Sort by final score descending
-    products.sort((a, b) => b.finalScore - a.finalScore);
+    if (model) {
+      products = products.filter((p) =>
+        p.vehicleCompatibility?.models?.includes(model)
+      );
+    }
 
     res.json(products);
   } catch (err) {
-    res.status(500).json({ message: "Discovery failed", error: err.message });
+    console.error("Search Error:", err);
+    res.status(500).json({ message: "Search failed", error: err.message });
   }
 };
 
