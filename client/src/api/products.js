@@ -19,6 +19,12 @@ export const getTrendingProducts = async () => {
   return res.data;
 };
 
+export const getRelatedProducts = async (id, params) => {
+  const query = new URLSearchParams(params).toString();
+  const res = await api.get(`/products/${id}/related?${query}`);
+  return res.data;
+};
+
 export const getProductById = async (id) => {
   const res = await api.get(`/products/${id}`);
   return res.data;

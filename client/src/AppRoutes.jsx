@@ -6,6 +6,7 @@ import CompatibleParts from "@/pages/CompatibleParts";
 import CreateProduct from "@/pages/CreateProduct";
 import ProductDetails from "@/pages/ProductDetails";
 import TrendingProduct from "@/pages/TrendingProduct";
+import DealsPage from "./pages/DealsPage";
 
 export default function AppRoutes() {
   return (
@@ -17,6 +18,7 @@ export default function AppRoutes() {
         <Route path="/compatible-parts" element={<CompatibleParts />} />
         <Route path="/create-product" element={<CreateProduct />} />
         <Route path="/trending" element={<TrendingProduct />} />
+        <Route path="/deals" element={<DealsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

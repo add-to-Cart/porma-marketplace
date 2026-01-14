@@ -6,19 +6,20 @@ import {
   getProductById,
   createProduct,
   searchProducts,
+  getRelatedProducts, // Import the new controller function
 } from "../controllers/productController.js";
 
 const router = express.Router();
 
-// 1. Static/Specific routes first
 router.get("/", getAllProducts);
 router.get("/search", searchProducts);
-router.get("/trending", getTrendingProducts); // ADD THIS LINE HERE
+router.get("/trending", getTrendingProducts);
 
-// 2. Dynamic ID (Generic) routes last
+// FIX: Ensure the ID is passed as a parameter for related products
+router.get("/:id/related", getRelatedProducts);
+
 router.get("/:id", getProductById);
-
 router.post("/", createProduct);
-router.patch("/:id", updateProduct);
+router.patch("//:id", updateProduct);
 
 export default router;

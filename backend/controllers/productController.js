@@ -61,6 +61,46 @@ export const getTrendingProducts = async (req, res) => {
   }
 };
 
+export const getRelatedProducts = async (req, res) => {
+  try {
+    const { id } = req.params; // The current product ID to exclude
+    const { category, make } = req.query;
+
+    let query = db.collection("products");
+
+    // 1. Filter by Category
+    if (category) {
+      query = query.where("category", "==", category);
+    }
+
+    const snapshot = await query.limit(10).get();
+
+    // 2. Map results and Filter out the current product in memory
+    // and prioritize items that match the vehicle 'make'
+    let related = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((p) => p.id !== id);
+
+    if (make) {
+      // Sort so products matching the same brand appear first
+      related.sort((a, b) => {
+        const aMatch = a.vehicleCompatibility?.makes?.includes(make);
+        const bMatch = b.vehicleCompatibility?.makes?.includes(make);
+        return (bMatch ? 1 : 0) - (aMatch ? 1 : 0);
+      });
+    }
+
+    res.json(related.slice(0, 4)); // Return top 4
+  } catch (err) {
+    res
+      .status(500)
+      .json({
+        message: "Failed to fetch related products",
+        error: err.message,
+      });
+  }
+};
+
 export const getProductById = async (req, res) => {
   try {
     const { id } = req.params;

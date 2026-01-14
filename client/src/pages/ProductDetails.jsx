@@ -1,17 +1,36 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { getProductById } from "@/api/products"; //
+import { useParams, useNavigate, Link } from "react-router-dom";
+import {
+  getProductById,
+  getRelatedProducts,
+  getTrendingProducts,
+} from "@/api/products";
+import ProductCard from "@/components/ProductCard";
+import {
+  ChevronLeft,
+  ShoppingCart,
+  ShieldCheck,
+  Truck,
+  Plus,
+  Minus,
+  CheckCircle2,
+  Settings,
+  ArrowRight,
+} from "lucide-react";
 
 export default function ProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [quantity, setQuantity] = useState(1);
+  const [related, setRelated] = useState([]);
+  const [trending, setTrending] = useState([]);
 
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const data = await getProductById(id); //
+        const data = await getProductById(id);
         setProduct(data);
       } catch (err) {
         console.error("Error fetching product:", err);
@@ -22,75 +41,194 @@ export default function ProductDetails() {
     fetchProduct();
   }, [id]);
 
+  useEffect(() => {
+    if (product) {
+      getRelatedProducts(id, {
+        category: product.category,
+        make: product.vehicleCompatibility?.makes?.[0],
+      }).then(setRelated);
+
+      getTrendingProducts().then(setTrending);
+    }
+  }, [product, id]);
+
   if (loading)
-    return <div className="p-10 text-center">Loading product...</div>;
+    return (
+      <div className="p-20 text-center animate-pulse text-gray-400 font-medium">
+        Loading Part Details...
+      </div>
+    );
   if (!product)
-    return <div className="p-10 text-center">Product not found.</div>;
+    return <div className="p-20 text-center">Product not found.</div>;
+
+  const isUniversal = product.vehicleCompatibility?.isUniversalFit;
 
   return (
-    <div className="max-w-5xl mx-auto p-6">
-      <button
-        onClick={() => navigate(-1)}
-        className="mb-6 text-blue-600 hover:underline flex items-center gap-2"
-      >
-        ← Back to Marketplace
-      </button>
+    <div className="max-w-[1200px] mx-auto p-4 md:p-6 lg:pt-10">
+      {/* 1. Slim Breadcrumbs */}
+      <nav className="flex items-center gap-2 text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-6">
+        <Link to="/" className="hover:text-blue-600">
+          Marketplace
+        </Link>
+        <ChevronLeft size={10} className="rotate-180" />
+        <span className="text-gray-900">{product.category}</span>
+      </nav>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10 bg-white p-8 rounded-3xl shadow-sm border">
-        {/* Product Image */}
-        <div className="aspect-square rounded-2xl overflow-hidden bg-gray-100">
-          <img
-            src={product.imageUrl}
-            alt={product.name}
-            className="w-full h-full object-cover"
-          />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+        {/* 2. Media Section (More compact container) */}
+        <div className="lg:col-span-6">
+          <div className="sticky top-28 bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
+            <div className="aspect-square rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
+              <img
+                src={product.imageUrl}
+                alt={product.name}
+                className="w-full h-full object-contain p-4 hover:scale-105 transition-transform"
+              />
+            </div>
+          </div>
         </div>
 
-        {/* Product Info */}
-        <div className="flex flex-col">
-          <span className="text-sm font-bold text-blue-600 uppercase tracking-widest mb-2">
-            {product.category}
-          </span>
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">
-            {product.name}
-          </h1>
-
-          <p className="text-2xl font-black text-gray-900 mb-6">
-            ₱{product.price?.toLocaleString()}
-          </p>
-
-          <div className="space-y-4 mb-8">
-            <div>
-              <h3 className="text-sm font-bold text-gray-500 uppercase">
-                Description
-              </h3>
-              <p className="text-gray-700 leading-relaxed">
-                {product.description}
-              </p>
+        {/* 3. Buying Section (Standard font sizes) */}
+        <div className="lg:col-span-6 flex flex-col">
+          <div className="border-b border-gray-100 pb-5 mb-5">
+            <div className="flex gap-2 mb-3">
+              {isUniversal && (
+                <span className="bg-green-50 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded border border-green-100 flex items-center gap-1">
+                  <CheckCircle2 size={12} /> Universal Fit
+                </span>
+              )}
+              <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-100 uppercase">
+                {product.category}
+              </span>
             </div>
 
-            <div>
-              <h3 className="text-sm font-bold text-gray-500 uppercase">
-                Compatibility
-              </h3>
-              <p className="text-gray-700">
-                {product.vehicleCompatibility?.isUniversalFit
-                  ? "Universal Fit"
-                  : `${product.vehicleCompatibility?.makes?.join(
-                      ", "
-                    )} ${product.vehicleCompatibility?.models?.join(", ")}`}
-              </p>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight mb-2">
+              {product.name}
+            </h1>
+            <p className="text-2xl font-black text-blue-600">
+              ₱{product.price?.toLocaleString()}
+            </p>
+          </div>
+
+          {/* Compatibility Info (Restored Layout) */}
+          <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100">
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
+              Compatibility
+            </h3>
+            <p className="text-sm text-gray-700 font-semibold">
+              {isUniversal
+                ? "Fits all standard vehicle types"
+                : `${product.vehicleCompatibility?.makes?.join(
+                    ", "
+                  )} ${product.vehicleCompatibility?.models?.join(", ")}`}
+            </p>
+          </div>
+
+          {/* Quantity and Actions (Slimmer) */}
+          <div className="space-y-3 mb-8">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center border border-gray-200 rounded-lg bg-white h-12">
+                <button
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  className="px-3 hover:bg-gray-50"
+                >
+                  <Minus size={14} />
+                </button>
+                <span className="w-8 text-center font-bold text-sm">
+                  {quantity}
+                </span>
+                <button
+                  onClick={() => setQuantity(quantity + 1)}
+                  className="px-3 hover:bg-gray-50"
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+              <button className="flex-grow h-12 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm">
+                <ShoppingCart size={18} />
+                Add to Cart
+              </button>
+            </div>
+            <button className="w-full h-12 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-all text-sm">
+              Buy Now
+            </button>
+          </div>
+
+          {/* Trust Factors (Slimmer) */}
+          <div className="grid grid-cols-2 gap-4 pt-6 border-t border-gray-100">
+            <div className="flex gap-3 items-center">
+              <div className="p-2 bg-gray-100 rounded-lg text-gray-500">
+                <Truck size={18} />
+              </div>
+              <span className="text-xs font-bold text-gray-600">
+                Fast Shipping
+              </span>
+            </div>
+            <div className="flex gap-3 items-center">
+              <div className="p-2 bg-gray-100 rounded-lg text-gray-500">
+                <ShieldCheck size={18} />
+              </div>
+              <span className="text-xs font-bold text-gray-600">
+                100% Authentic
+              </span>
             </div>
           </div>
 
+          {/* Admin Edit Shortcut (RESTORED) */}
           <button
             onClick={() => navigate(`/products/update/${id}`)}
-            className="mt-auto w-full py-4 bg-gray-900 text-white rounded-xl font-bold hover:bg-gray-800 transition-colors"
+            className="mt-12 flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-blue-600 transition-colors uppercase tracking-widest border-t border-gray-50 pt-6"
           >
-            Edit Product Information
+            <Settings size={14} />
+            Manage Listing
           </button>
         </div>
       </div>
+
+      {/* 4. Description Section (Restored full content) */}
+      <div className="mt-16 pt-10 border-t border-gray-100">
+        <h2 className="text-lg font-bold text-gray-900 mb-4">
+          Detailed Description
+        </h2>
+        <div className="prose prose-sm max-w-none text-gray-600 leading-relaxed">
+          {product.description}
+        </div>
+      </div>
+
+      {/* 5. Recommended Sections (RESTORED) */}
+      {related.length > 0 && (
+        <section className="mt-20">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-gray-900">
+              Similar Products
+            </h2>
+            <Link
+              to="/"
+              className="text-blue-600 text-xs font-bold flex items-center gap-1"
+            >
+              See All <ArrowRight size={14} />
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {related.map((item) => (
+              <ProductCard key={item.id} product={item} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {trending.length > 0 && (
+        <section className="mt-20 pb-20">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">
+            You May Also Like
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {trending.map((item) => (
+              <ProductCard key={item.id} product={item} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
