@@ -92,12 +92,29 @@ export const getRelatedProducts = async (req, res) => {
 
     res.json(related.slice(0, 4)); // Return top 4
   } catch (err) {
-    res
-      .status(500)
-      .json({
-        message: "Failed to fetch related products",
-        error: err.message,
-      });
+    res.status(500).json({
+      message: "Failed to fetch related products",
+      error: err.message,
+    });
+  }
+};
+
+export const getProductsByTag = async (req, res) => {
+  try {
+    const { tag } = req.query;
+    const snapshot = await db
+      .collection("products")
+      .where("tags", "array-contains", tag.toLowerCase())
+      .limit(8)
+      .get();
+
+    const products = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    res.json(products);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch deals" });
   }
 };
 
