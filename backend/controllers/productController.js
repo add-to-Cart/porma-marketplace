@@ -1,5 +1,6 @@
 import admin from "../config/firebaseAdmin.js";
 const db = admin.firestore();
+import { uploadProductImage } from "../services/cloudinary_service.js";
 
 // productController.js
 
@@ -166,45 +167,46 @@ const generateSearchIndex = (data) => {
   return Array.from(words).filter((word) => word && word.length > 1);
 };
 
+// Inside productController.js
 export const createProduct = async (req, res) => {
   try {
-    const data = req.body;
+    // req.body contains text fields; req.file contains the image
+    const productData = { ...req.body };
 
-    const normalizedProduct = {
-      name: data.name,
-      description: data.description,
-      category: data.category,
-      price: parseFloat(data.price) || 0,
-      stock: parseInt(data.stock) || 0,
-      imageUrl: data.imageUrl || "/mockup.png",
-      isAvailable: data.isAvailable ?? true,
-      soldCount: 0,
-      viewCount: 0,
-      rating: 5.0,
-      ratingsCount: 0,
+    // Parse stringified nested objects if you sent them that way
+    if (typeof productData.vehicleCompatibility === "string") {
+      productData.vehicleCompatibility = JSON.parse(
+        productData.vehicleCompatibility
+      );
+    }
+    if (typeof productData.tags === "string") {
+      productData.tags = JSON.parse(productData.tags);
+    }
+
+    // Generate search index
+    productData.searchIndex = generateSearchIndex(productData);
+
+    // Handle the image upload to Cloudinary
+    if (req.file) {
+      // Generate custom publicId - use a default userId or from body
+      const userId = productData.sellerId || "anonymous";
+      const sanitizedName = productData.name.replace(/\s+/g, "-").toLowerCase();
+      const publicId = `products/${userId}-${sanitizedName}`;
+      // You need to pass the file buffer to your Cloudinary service
+      const uploadResult = await uploadProductImage(req.file, publicId);
+      productData.imageUrl = uploadResult.url;
+      productData.cloudinaryId = uploadResult.publicId;
+    }
+
+    const docRef = await db.collection("products").add({
+      ...productData,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
-      vehicleCompatibility: {
-        type: data.vehicleCompatibility?.type || "Universal",
-        isUniversalFit: data.vehicleCompatibility?.isUniversalFit || false,
-        makes: data.vehicleCompatibility?.makes || [],
-        models: data.vehicleCompatibility?.models || [],
-        yearRange: data.vehicleCompatibility?.yearRange || null,
-      },
-
-      tags: (data.tags || []).map((t) => t.toLowerCase().trim()),
-      styles: data.styles || [],
-
-      // --- NEW: THE SEARCH INDEX ---
-      // This allows Firestore to perform O(1) keyword lookups
-      searchIndex: generateSearchIndex(data),
-    };
-
-    const newDoc = await db.collection("products").add(normalizedProduct);
-    res.status(201).json({ id: newDoc.id, ...normalizedProduct });
+    res.status(201).json({ id: docRef.id, ...productData });
   } catch (err) {
-    console.error("Create Product Error:", err);
-    res.status(500).json({ message: "Failed to create product" });
+    console.error("Error in createProduct:", err);
+    res.status(500).json({ message: "Server Error", error: err.message });
   }
 };
 

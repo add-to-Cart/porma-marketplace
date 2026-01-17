@@ -1,10 +1,15 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-const uploadToCloudinary = async (file, preset) => {
+const uploadToCloudinary = async (file, preset, publicId = null) => {
   const formData = new FormData();
-  formData.append("file", file);
+  const blob = new Blob([file.buffer], { type: file.mimetype });
+  formData.append("file", blob, file.originalname);
   formData.append("upload_preset", preset);
+
+  if (publicId) {
+    formData.append("public_id", publicId);
+  }
 
   const response = await fetch(process.env.CLOUDINARY_BASE_URL, {
     method: "POST",
@@ -33,10 +38,11 @@ export const uploadAvatar = async (file) => {
 /**
  * Upload product image
  */
-export const uploadProductImage = async (file) => {
+export const uploadProductImage = async (file, publicId = null) => {
   return await uploadToCloudinary(
     file,
-    process.env.CLOUDINARY_UPLOAD_PRESET_PRODUCT
+    process.env.CLOUDINARY_UPLOAD_PRESET_PRODUCT,
+    publicId
   );
 };
 

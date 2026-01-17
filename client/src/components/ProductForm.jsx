@@ -17,6 +17,7 @@ export default function ProductForm() {
   const [loading, setLoading] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
 
   const CATEGORIES = [
     "Accessories",
@@ -81,9 +82,10 @@ export default function ProductForm() {
     description: "",
     price: "",
     stock: "",
+    isUniversalFit: false,
     vehicleType: "",
-    make: "",
-    models: [],
+    vehicleMakes: "", // Renamed from 'make' for consistency
+    vehicleModels: "", // Changed from [] to "" to support .split() logic
     yearFrom: "",
     yearTo: "",
     isBundle: false,
@@ -98,6 +100,14 @@ export default function ProductForm() {
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setImageFile(file); // Store the actual file object
+      setImagePreview(URL.createObjectURL(file)); // Store the preview for the UI
+    }
   };
 
   const toggleModel = (modelName) => {
@@ -125,37 +135,48 @@ export default function ProductForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     try {
-      const autoTags = [
-        formData.make,
-        ...formData.models,
-        formData.category,
-      ].filter(Boolean);
-      const payload = {
-        ...formData,
-        price: Number(formData.price),
-        stock: Number(formData.stock),
-        tags: [...new Set([...formData.tags, ...autoTags])],
-        vehicleCompatibility: {
-          type: formData.vehicleType,
-          makes: [formData.make],
-          models: formData.models,
-          yearRange: {
-            from: Number(formData.yearFrom),
-            to: Number(formData.yearTo),
-          },
+      const data = new FormData();
+      data.append("name", formData.name);
+      data.append("category", formData.category);
+      data.append("description", formData.description);
+      data.append("price", formData.price);
+      data.append("stock", formData.stock);
+
+      if (imageFile) {
+        data.append("image", imageFile);
+      }
+
+      const vehicleCompatibility = {
+        type: formData.vehicleType || "Universal",
+        isUniversalFit: formData.isUniversalFit,
+        makes: (formData.vehicleMakes || "")
+          .split(",")
+          .map((m) => m.trim())
+          .filter(Boolean),
+        models: (formData.vehicleModels || "")
+          .split(",")
+          .map((m) => m.trim())
+          .filter(Boolean),
+        yearRange: {
+          from: Number(formData.yearFrom) || null,
+          to: Number(formData.yearTo) || null,
         },
-        createdAt: new Date(),
       };
-      await createProduct(payload);
-      window.location.reload();
+
+      data.append("vehicleCompatibility", JSON.stringify(vehicleCompatibility));
+      data.append("tags", JSON.stringify(formData.tags));
+
+      await createProduct(data);
+      alert("Product Registered Successfully!");
     } catch (err) {
-      console.error(err);
+      console.error("Submission error:", err);
+      alert("Error registering product. Check console.");
     } finally {
       setLoading(false);
     }
   };
-
   return (
     <div className="space-y-6">
       <form
@@ -202,9 +223,7 @@ export default function ProductForm() {
                     <input
                       type="file"
                       className="hidden"
-                      onChange={(e) =>
-                        setImagePreview(URL.createObjectURL(e.target.files[0]))
-                      }
+                      onChange={handleFileChange}
                     />
                   </label>
                 )}
@@ -307,29 +326,44 @@ export default function ProductForm() {
               </div>
             </div>
           </div>
-
-          {/* VEHICLE MATRIX */}
+          {/* 2. In the JSX (Vehicle Compatibility Matrix section) */}
           <div className="border-t-2 border-zinc-900 border-dashed pt-10">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-1.5 bg-zinc-900 text-amber-500">
-                <Truck size={14} />
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-1.5 bg-zinc-900 text-amber-500">
+                  <Truck size={14} />
+                </div>
+                <h3 className="text-[10px] font-black uppercase tracking-[0.3em]">
+                  Vehicle Compatibility Matrix
+                </h3>
               </div>
-              <h3 className="text-[10px] font-black uppercase tracking-[0.3em]">
-                Vehicle Compatibility Matrix
-              </h3>
+
+              {/* NEW: Universal Toggle */}
+              <div className="flex items-center gap-3 bg-zinc-50 px-4 py-2 border-2 border-zinc-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                <input
+                  type="checkbox"
+                  name="isUniversalFit"
+                  checked={formData.isUniversalFit}
+                  onChange={handleChange}
+                  className="w-4 h-4 accent-zinc-900 cursor-pointer"
+                />
+                <span className="text-[10px] font-black uppercase tracking-widest">
+                  Universal Fitment
+                </span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <label className="text-[9px] font-black text-zinc-400 uppercase">
-                  Class
+                  Class (Optional for items like Tools)
                 </label>
                 <select
                   name="vehicleType"
                   onChange={handleChange}
                   className="w-full border-2 border-zinc-100 p-3 text-[10px] font-black uppercase outline-none focus:border-zinc-900"
                 >
-                  <option value="">SELECT TYPE</option>
+                  <option value="">GENERAL / ALL TYPES</option>
                   {Object.keys(VEHICLE_DATA).map((v) => (
                     <option key={v} value={v}>
                       {v}
@@ -337,75 +371,63 @@ export default function ProductForm() {
                   ))}
                 </select>
               </div>
-              <div className="space-y-2">
-                <label className="text-[9px] font-black text-zinc-400 uppercase">
-                  Make
-                </label>
-                <select
-                  name="make"
-                  disabled={!formData.vehicleType}
-                  onChange={handleChange}
-                  className="w-full border-2 border-zinc-100 p-3 text-[10px] font-black uppercase outline-none focus:border-zinc-900 disabled:opacity-30"
-                >
-                  <option value="">SELECT MAKE</option>
-                  {formData.vehicleType &&
-                    Object.keys(VEHICLE_DATA[formData.vehicleType]).map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[9px] font-black text-zinc-400 uppercase">
-                  Year Range
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    name="yearFrom"
-                    type="number"
-                    placeholder="FROM"
-                    onChange={handleChange}
-                    className="w-full border-2 border-zinc-100 p-3 text-[10px] font-mono font-bold"
-                  />
-                  <input
-                    name="yearTo"
-                    type="number"
-                    placeholder="TO"
-                    onChange={handleChange}
-                    className="w-full border-2 border-zinc-100 p-3 text-[10px] font-mono font-bold"
-                  />
-                </div>
-              </div>
+
+              {/* Conditionally hide Make and Year if Universal is checked */}
+              {!formData.isUniversalFit && (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-zinc-400 uppercase">
+                      Make
+                    </label>
+                    <select
+                      name="make"
+                      disabled={!formData.vehicleType}
+                      onChange={handleChange}
+                      className="w-full border-2 border-zinc-100 p-3 text-[10px] font-black uppercase outline-none focus:border-zinc-900 disabled:opacity-30"
+                    >
+                      <option value="">SELECT MAKE</option>
+                      {formData.vehicleType &&
+                        Object.keys(VEHICLE_DATA[formData.vehicleType]).map(
+                          (m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          )
+                        )}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-zinc-400 uppercase">
+                      Year Range
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        name="yearFrom"
+                        type="number"
+                        placeholder="FROM"
+                        onChange={handleChange}
+                        className="w-full border-2 border-zinc-100 p-3 text-[10px] font-mono font-bold"
+                      />
+                      <input
+                        name="yearTo"
+                        type="number"
+                        placeholder="TO"
+                        onChange={handleChange}
+                        className="w-full border-2 border-zinc-100 p-3 text-[10px] font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
-            {formData.make && (
+            {/* Only show models if NOT universal and a make is selected */}
+            {!formData.isUniversalFit && formData.make && (
               <div className="mt-6 bg-zinc-50 p-6 border-2 border-zinc-100">
-                <p className="text-[9px] font-black text-zinc-400 uppercase mb-4 tracking-widest">
-                  Apply to Sub-Models:
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {VEHICLE_DATA[formData.vehicleType][formData.make].map(
-                    (model) => (
-                      <button
-                        key={model}
-                        type="button"
-                        onClick={() => toggleModel(model)}
-                        className={`px-4 py-2 text-[9px] font-black border-2 transition-all ${
-                          formData.models.includes(model)
-                            ? "bg-zinc-900 text-amber-500 border-zinc-900 shadow-md"
-                            : "bg-white text-zinc-400 border-zinc-200 hover:border-zinc-400"
-                        }`}
-                      >
-                        {model.toUpperCase()}
-                      </button>
-                    )
-                  )}
-                </div>
+                {/* ... Model buttons logic ... */}
               </div>
             )}
           </div>
-
           {/* FINAL CONTROLS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6">
             <div className="bg-amber-500 border-2 border-zinc-900 p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
