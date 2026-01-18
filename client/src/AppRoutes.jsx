@@ -9,9 +9,10 @@ import InventoryPage from "@/pages/InventoryPage";
 import ProductDetails from "@/pages/ProductDetails";
 import TrendingProduct from "@/pages/TrendingProduct";
 import DealsPage from "@/pages/DealsPage";
+import Cart from "@/pages/Cart";
 import SellerDashboard from "@/pages/SellerDashboard";
-import AnalyticsPage from "./pages/AnalyticsPage";
-import OrdersPage from "./pages/OrdersPage";
+import AnalyticsPage from "@/pages/AnalyticsPage";
+import OrdersPage from "@/pages/OrdersPage";
 
 export default function AppRoutes() {
   return (
@@ -25,6 +26,7 @@ export default function AppRoutes() {
 
         <Route path="/trending" element={<TrendingProduct />} />
         <Route path="/deals" element={<DealsPage />} />
+        <Route path="/cart" element={<Cart />} />
       </Route>
 
       {/* Seller Layout */}

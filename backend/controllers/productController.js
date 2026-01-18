@@ -15,17 +15,12 @@ export const getAllProducts = async (req, res) => {
     if (category) query = query.where("category", "==", category);
     if (vehicleType)
       query = query.where("vehicleCompatibility.type", "==", vehicleType);
-
     // For specific vehicle filtering without a search keyword
     if (make)
       query = query.where("vehicleCompatibility.makes", "array-contains", make);
 
-    // Filter by bundle/seasonal
-    if (isBundle === "true") query = query.where("isBundle", "==", true);
-    if (isSeasonal === "true") query = query.where("isSeasonal", "==", true);
-
-    // Default: Sort by newest
-    const snapshot = await query.orderBy("createdAt", "desc").limit(50).get();
+    // Default: Sort by newest (limit to reasonable number to avoid performance issues)
+    const snapshot = await query.orderBy("createdAt", "desc").limit(100).get();
 
     let products = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
@@ -34,6 +29,14 @@ export const getAllProducts = async (req, res) => {
       products = products.filter((p) =>
         p.vehicleCompatibility?.models?.includes(model),
       );
+    }
+
+    // In-memory filter for bundle/seasonal to avoid complex Firestore indexing
+    if (isBundle === "true") {
+      products = products.filter((p) => p.isBundle === true);
+    }
+    if (isSeasonal === "true") {
+      products = products.filter((p) => p.isSeasonal === true);
     }
 
     res.json(products);
@@ -49,18 +52,43 @@ export const getTrendingProducts = async (req, res) => {
     const snapshot = await db
       .collection("products")
       .where("isAvailable", "==", true)
-      .orderBy("viewCount", "desc") // Sorting by popularity
-      .limit(8)
+      .orderBy("soldCount", "desc") // Start with top sold
+      .limit(50) // Fetch more to compute
       .get();
 
-    const products = snapshot.docs.map((doc) => ({
+    let products = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
 
-    res.json(products);
+    // Compute trending score
+    products = products.map((p) => {
+      const sold = p.soldCount || 0;
+      const views = p.viewCount || 0;
+      const avgRating = p.rating || 0;
+      const numRatings = p.ratingsCount || 0;
+
+      // Credibility factor for ratings (based on number of ratings)
+      const credibility = Math.min(numRatings / 5, 1); // Max at 5 ratings
+
+      // Base score
+      let score = sold * 1.0 + avgRating * 0.8 * credibility + views * 0.6;
+
+      // Penalize bad products with high sales
+      if (avgRating < 2.5 && sold > 20) {
+        score *= 0.7;
+      }
+
+      return { ...p, trendingScore: score };
+    });
+
+    // Sort by score descending
+    products.sort((a, b) => b.trendingScore - a.trendingScore);
+
+    // Return top 8
+    res.json(products.slice(0, 8));
   } catch (err) {
-    console.error("TRENDING_ERROR:", err.message); // Look at your terminal for this!
+    console.error("TRENDING_ERROR:", err.message);
     res
       .status(500)
       .json({ message: "Failed to fetch trending", error: err.message });
@@ -127,7 +155,14 @@ export const getProductsByTag = async (req, res) => {
 export const getProductById = async (req, res) => {
   try {
     const { id } = req.params;
-    const snapshot = await db.collection("products").doc(id).get();
+    const docRef = db.collection("products").doc(id);
+
+    // Increment view count
+    await docRef.update({
+      viewCount: admin.firestore.FieldValue.increment(1),
+    });
+
+    const snapshot = await docRef.get();
 
     if (!snapshot.exists) {
       return res.status(404).json({ message: "Product not found" });
@@ -201,6 +236,14 @@ export const createProduct = async (req, res) => {
     if (productData.compareAtPrice)
       productData.compareAtPrice = Number(productData.compareAtPrice);
 
+    // Initialize ratings
+    productData.rating = 0;
+    productData.ratingsCount = 0;
+    productData.totalRating = 0;
+    productData.viewCount = 0;
+    productData.soldCount = 0;
+    productData.isApproved = true; // For now, auto-approve
+
     // Generate search index
     productData.searchIndex = generateSearchIndex(productData);
 
@@ -252,10 +295,6 @@ export const searchProducts = async (req, res) => {
         "==",
         vehicleType,
       );
-    if (isBundle === "true")
-      firestoreQuery = firestoreQuery.where("isBundle", "==", true);
-    if (isSeasonal === "true")
-      firestoreQuery = firestoreQuery.where("isSeasonal", "==", true);
 
     // 2. APPLY SEARCH (Uses array-contains-any)
     firestoreQuery = firestoreQuery.where(
@@ -273,6 +312,19 @@ export const searchProducts = async (req, res) => {
       products = products.filter((p) =>
         p.vehicleCompatibility?.makes?.includes(make),
       );
+    }
+    if (model) {
+      products = products.filter((p) =>
+        p.vehicleCompatibility?.models?.includes(model),
+      );
+    }
+
+    // 4. APPLY BUNDLE/SEASONAL FILTERS IN-MEMORY
+    if (isBundle === "true") {
+      products = products.filter((p) => p.isBundle === true);
+    }
+    if (isSeasonal === "true") {
+      products = products.filter((p) => p.isSeasonal === true);
     }
 
     if (model) {

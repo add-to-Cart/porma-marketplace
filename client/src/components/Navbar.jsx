@@ -9,8 +9,10 @@ import {
   Tag,
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import { useCart } from "@/contexts/CartContext";
 
 export default function Navbar() {
+  const { itemCount } = useCart();
   return (
     <nav className="fixed top-0 left-0 right-0 h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 z-50 px-6">
       <div className="max-w-[1440px] mx-auto h-full flex items-center justify-between gap-4">
@@ -68,6 +70,20 @@ export default function Navbar() {
             <Tag size={18} />
             Deals
           </NavLink>
+
+          <NavLink
+            to="/cart"
+            className={({ isActive }) =>
+              `flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                isActive
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-500 hover:text-gray-900"
+              }`
+            }
+          >
+            <ShoppingCart size={18} />
+            Cart
+          </NavLink>
         </div>
 
         {/* 3. Search - Takes up remaining space */}
@@ -82,9 +98,17 @@ export default function Navbar() {
               <Bell size={20} />
               <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
             </button>
-            <button className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors">
+            <NavLink
+              to="/cart"
+              className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors relative"
+            >
               <ShoppingCart size={20} />
-            </button>
+              {itemCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center border-2 border-white">
+                  {itemCount > 99 ? "99+" : itemCount}
+                </span>
+              )}
+            </NavLink>
           </div>
 
           <div className="h-8 w-[1px] bg-gray-200 mx-1" />

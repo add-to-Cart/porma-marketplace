@@ -13,13 +13,13 @@ export default function DealsPage() {
   useEffect(() => {
     const fetchDeals = async () => {
       try {
-        // Fetching by specific tags defined in your DB
-        const [rainyRes, bundleRes] = await Promise.all([
-          api.get("/products/tags?tag=rainy-deal"),
-          api.get("/products/tags?tag=bundle"),
+        // Fetch bundles and seasonal items using flags
+        const [bundleRes, seasonalRes] = await Promise.all([
+          api.get("/products?isBundle=true"),
+          api.get("/products?isSeasonal=true"),
         ]);
-        setRainyKits(rainyRes.data);
         setBundles(bundleRes.data);
+        setRainyKits(seasonalRes.data); // Assuming rainy kits are seasonal
       } catch (err) {
         console.error("Error loading deals", err);
       } finally {
@@ -55,11 +55,9 @@ export default function DealsPage() {
             <CloudRain size={28} />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">
-              Rainy Season Kits
-            </h2>
+            <h2 className="text-2xl font-bold text-gray-900">Seasonal Items</h2>
             <p className="text-gray-500 text-sm">
-              Essential protection for wet weather riding.
+              Limited-time offers and seasonal promotions.
             </p>
           </div>
         </div>

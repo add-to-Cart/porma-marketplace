@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { useCart } from "@/contexts/CartContext";
+
 import {
   getProductById,
   getRelatedProducts,
   getTrendingProducts,
 } from "@/api/products";
 import ProductCard from "@/components/ProductCard";
+import Rating from "@/components/Rating";
 import {
   ChevronLeft,
   ShoppingCart,
@@ -29,6 +32,7 @@ export default function ProductDetails() {
   const [quantity, setQuantity] = useState(1);
   const [related, setRelated] = useState([]);
   const [trending, setTrending] = useState([]);
+  const { addToCart } = useCart();
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -129,6 +133,14 @@ export default function ProductDetails() {
                 </span>
               </div>
             )}
+
+            {/* Rating */}
+            <Rating
+              productId={product.id}
+              averageRating={product.averageRating || 0}
+              numRatings={product.numRatings || 0}
+              onRate={(rating) => console.log("Rated:", rating)} // TODO: Implement API call
+            />
           </div>
 
           {/* MATURE THESIS FEATURE: THE MANIFEST LIST */}
@@ -187,7 +199,10 @@ export default function ProductDetails() {
                   <Plus size={14} />
                 </button>
               </div>
-              <button className="flex-grow h-12 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm">
+              <button
+                onClick={() => addToCart({ ...product, quantity })}
+                className="flex-grow h-12 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm"
+              >
                 <ShoppingCart size={18} />
                 Add to Cart
               </button>

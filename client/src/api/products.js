@@ -1,15 +1,32 @@
 import api from "./api";
 
 export const getAllProducts = async (filters) => {
-  // Convert the filter object into URL parameters (?category=...&vehicleType=...)
-  const params = new URLSearchParams(filters).toString();
+  // Flatten the filters to handle nested vehicle object
+  const flattened = {
+    category: filters.category || "",
+    vehicleType: filters.vehicleType || "",
+    isBundle: filters.isBundle || false,
+    isSeasonal: filters.isSeasonal || false,
+    make: filters.vehicle?.make || "",
+    model: filters.vehicle?.model || "",
+  };
+  const params = new URLSearchParams(flattened).toString();
   const res = await api.get(`/products?${params}`);
   return res.data;
 };
 
 export const searchProducts = async (filters) => {
-  // Convert filter object to query string
-  const params = new URLSearchParams(filters).toString();
+  // Flatten the filters
+  const flattened = {
+    query: filters.query || "",
+    category: filters.category || "",
+    vehicleType: filters.vehicleType || "",
+    isBundle: filters.isBundle || false,
+    isSeasonal: filters.isSeasonal || false,
+    make: filters.vehicle?.make || "",
+    model: filters.vehicle?.model || "",
+  };
+  const params = new URLSearchParams(flattened).toString();
   const res = await api.get(`/products/search?${params}`);
   return res.data;
 };

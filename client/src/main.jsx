@@ -5,15 +5,18 @@ import App from "./App.jsx";
 import { GarageProvider } from "@/contexts/GarageContext";
 import { FilterProvider } from "@/contexts/FilterContext";
 import { SearchProvider } from "@/contexts/SearchContext.jsx";
+import { CartProvider } from "@/contexts/CartContext";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <SearchProvider>
       <FilterProvider>
         <GarageProvider>
-          <App />
+          <CartProvider>
+            <App />
+          </CartProvider>
         </GarageProvider>
       </FilterProvider>
     </SearchProvider>
-  </StrictMode>
+  </StrictMode>,
 );
