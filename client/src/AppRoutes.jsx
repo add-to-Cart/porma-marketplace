@@ -1,6 +1,9 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import MarketPlaceLayout from "@/layout/MarketplaceLayout";
 import SellerLayout from "@/layout/SellerLayout";
+import LoginPage from "@/pages/LoginPage";
+import SignupPage from "@/pages/SignupPage";
+import ProfilePage from "@/pages/ProfilePage";
 
 import MarketPlace from "@/pages/Marketplace";
 import ProductUpdate from "@/pages/ProductUpdate";
@@ -17,6 +20,10 @@ import OrdersPage from "@/pages/OrdersPage";
 export default function AppRoutes() {
   return (
     <Routes>
+      {/* Auth Routes */}
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
+
       {/* Marketplace Layout */}
       <Route element={<MarketPlaceLayout />}>
         <Route path="/" element={<MarketPlace />} />
@@ -27,6 +34,7 @@ export default function AppRoutes() {
         <Route path="/trending" element={<TrendingProduct />} />
         <Route path="/deals" element={<DealsPage />} />
         <Route path="/cart" element={<Cart />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Route>
 
       {/* Seller Layout */}

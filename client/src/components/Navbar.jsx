@@ -7,12 +7,22 @@ import {
   LayoutGrid,
   TrendingUp,
   Tag,
+  LogOut,
 } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Navbar() {
   const { itemCount } = useCart();
+  const { user, signOut } = useAuth();
+  const isAuthenticated = !!user;
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
   return (
     <nav className="fixed top-0 left-0 right-0 h-20 bg-white/80 backdrop-blur-md border-b border-gray-100 z-50 px-6">
       <div className="max-w-[1440px] mx-auto h-full flex items-center justify-between gap-4">
@@ -113,17 +123,54 @@ export default function Navbar() {
 
           <div className="h-8 w-[1px] bg-gray-200 mx-1" />
 
-          <button className="flex items-center gap-2 pl-2 pr-4 py-1.5 hover:bg-gray-50 rounded-full transition-colors border border-transparent hover:border-gray-200">
-            <div className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white shadow-sm">
-              <User size={16} />
+          {isAuthenticated ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate("/profile")}
+                className="flex items-center gap-2 pl-2 pr-4 py-1.5 hover:bg-gray-50 rounded-full transition-colors border border-transparent hover:border-gray-200"
+              >
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
+                  {user?.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt="avatar"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User size={16} className="text-white" />
+                  )}
+                </div>
+                <div className="hidden sm:block text-left">
+                  <p className="text-xs font-bold text-gray-900 leading-none">
+                    {user?.displayName || "User"}
+                  </p>
+                  <p className="text-[10px] text-gray-500">{user?.email}</p>
+                </div>
+              </button>
+              <button
+                onClick={handleSignOut}
+                className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"
+                title="Sign Out"
+              >
+                <LogOut size={20} />
+              </button>
             </div>
-            <div className="hidden sm:block text-left">
-              <p className="text-xs font-bold text-gray-900 leading-none">
-                Account
-              </p>
-              <p className="text-[10px] text-gray-500">Sign In</p>
-            </div>
-          </button>
+          ) : (
+            <button
+              onClick={() => navigate("/login")}
+              className="flex items-center gap-2 pl-2 pr-4 py-1.5 hover:bg-gray-50 rounded-full transition-colors border border-transparent hover:border-gray-200"
+            >
+              <div className="w-8 h-8 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white shadow-sm">
+                <User size={16} />
+              </div>
+              <div className="hidden sm:block text-left">
+                <p className="text-xs font-bold text-gray-900 leading-none">
+                  Account
+                </p>
+                <p className="text-[10px] text-gray-500">Sign In</p>
+              </div>
+            </button>
+          )}
         </div>
       </div>
     </nav>

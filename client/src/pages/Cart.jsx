@@ -1,9 +1,13 @@
 import { useCart } from "@/contexts/CartContext";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Cart() {
   const { cart, updateQuantity, removeFromCart, subtotal, deliveryFee, total } =
     useCart();
+  const navigate = useNavigate();
+  const { isAuthenticated, user } = useAuth();
 
   if (cart.length === 0) {
     return (
@@ -83,19 +87,38 @@ export default function Cart() {
           </div>
         </div>
 
-        <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <p className="text-yellow-800 text-sm">
-            <strong>Note:</strong> You can add items to your cart as a guest,
-            but you must log in to proceed with checkout and complete your
-            purchase.
-          </p>
-        </div>
+        {/* Authentication Status */}
+        {isAuthenticated ? (
+          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-green-800 text-sm">
+              <strong>Welcome back, {user?.displayName || user?.email}!</strong>{" "}
+              You're ready to complete your purchase.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-yellow-800 text-sm">
+              <strong>Note:</strong> You can add items to your cart as a guest,
+              but you must log in to proceed with checkout and complete your
+              purchase.
+            </p>
+          </div>
+        )}
+
         <button
-          className="w-full mt-4 bg-gray-400 text-white py-2 rounded-lg font-semibold cursor-not-allowed"
-          disabled
-          title="Login required to checkout"
+          onClick={() => {
+            if (isAuthenticated) {
+              // TODO: Navigate to actual checkout page when implemented
+              alert(
+                "Checkout functionality coming soon! Your order will be processed.",
+              );
+            } else {
+              navigate("/login");
+            }
+          }}
+          className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold"
         >
-          Login Required for Checkout
+          {isAuthenticated ? "Complete Purchase" : "Proceed to Checkout"}
         </button>
       </div>
     </div>
