@@ -7,7 +7,8 @@ import { uploadProductImage } from "../services/cloudinary_service.js";
 // 1. MARKETPLACE: Global Discovery with Metadata Awareness
 export const getAllProducts = async (req, res) => {
   try {
-    const { category, vehicleType, make, model } = req.query;
+    const { category, vehicleType, make, model, isBundle, isSeasonal } =
+      req.query;
     let query = db.collection("products");
 
     // Metadata Filtering (Marketplace Constraints)
@@ -19,6 +20,10 @@ export const getAllProducts = async (req, res) => {
     if (make)
       query = query.where("vehicleCompatibility.makes", "array-contains", make);
 
+    // Filter by bundle/seasonal
+    if (isBundle === "true") query = query.where("isBundle", "==", true);
+    if (isSeasonal === "true") query = query.where("isSeasonal", "==", true);
+
     // Default: Sort by newest
     const snapshot = await query.orderBy("createdAt", "desc").limit(50).get();
 
@@ -27,7 +32,7 @@ export const getAllProducts = async (req, res) => {
     // In-memory filter for Model (since Firestore handles only 1 array-contains per query)
     if (model) {
       products = products.filter((p) =>
-        p.vehicleCompatibility?.models?.includes(model)
+        p.vehicleCompatibility?.models?.includes(model),
       );
     }
 
@@ -164,6 +169,11 @@ const generateSearchIndex = (data) => {
     }
     if (comp.type) words.add(comp.type.toLowerCase());
   }
+
+  // 5. Add marketing flags
+  if (data.isBundle) words.add("bundle");
+  if (data.isSeasonal) words.add("seasonal");
+
   return Array.from(words).filter((word) => word && word.length > 1);
 };
 
@@ -176,12 +186,20 @@ export const createProduct = async (req, res) => {
     // Parse stringified nested objects if you sent them that way
     if (typeof productData.vehicleCompatibility === "string") {
       productData.vehicleCompatibility = JSON.parse(
-        productData.vehicleCompatibility
+        productData.vehicleCompatibility,
       );
     }
     if (typeof productData.tags === "string") {
       productData.tags = JSON.parse(productData.tags);
     }
+
+    // Parse boolean and number fields
+    if (productData.isBundle)
+      productData.isBundle = productData.isBundle === "true";
+    if (productData.isSeasonal)
+      productData.isSeasonal = productData.isSeasonal === "true";
+    if (productData.compareAtPrice)
+      productData.compareAtPrice = Number(productData.compareAtPrice);
 
     // Generate search index
     productData.searchIndex = generateSearchIndex(productData);
@@ -212,7 +230,8 @@ export const createProduct = async (req, res) => {
 
 export const searchProducts = async (req, res) => {
   try {
-    const { query, category, vehicleType, make, model } = req.query;
+    const { query, category, vehicleType, make, model, isBundle, isSeasonal } =
+      req.query;
 
     if (!query || query.trim().length < 2) {
       return res.json([]);
@@ -231,14 +250,18 @@ export const searchProducts = async (req, res) => {
       firestoreQuery = firestoreQuery.where(
         "vehicleCompatibility.type",
         "==",
-        vehicleType
+        vehicleType,
       );
+    if (isBundle === "true")
+      firestoreQuery = firestoreQuery.where("isBundle", "==", true);
+    if (isSeasonal === "true")
+      firestoreQuery = firestoreQuery.where("isSeasonal", "==", true);
 
     // 2. APPLY SEARCH (Uses array-contains-any)
     firestoreQuery = firestoreQuery.where(
       "searchIndex",
       "array-contains-any",
-      keywords.slice(0, 10)
+      keywords.slice(0, 10),
     );
 
     const snapshot = await firestoreQuery.get();
@@ -248,13 +271,13 @@ export const searchProducts = async (req, res) => {
     // This bypasses the Firestore "multiple array filter" limitation
     if (make) {
       products = products.filter((p) =>
-        p.vehicleCompatibility?.makes?.includes(make)
+        p.vehicleCompatibility?.makes?.includes(make),
       );
     }
 
     if (model) {
       products = products.filter((p) =>
-        p.vehicleCompatibility?.models?.includes(model)
+        p.vehicleCompatibility?.models?.includes(model),
       );
     }
 
@@ -269,6 +292,24 @@ export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
+
+    // Parse stringified nested objects
+    if (typeof updateData.vehicleCompatibility === "string") {
+      updateData.vehicleCompatibility = JSON.parse(
+        updateData.vehicleCompatibility,
+      );
+    }
+    if (typeof updateData.tags === "string") {
+      updateData.tags = JSON.parse(updateData.tags);
+    }
+
+    // Parse boolean and number fields
+    if (updateData.isBundle !== undefined)
+      updateData.isBundle = updateData.isBundle === "true";
+    if (updateData.isSeasonal !== undefined)
+      updateData.isSeasonal = updateData.isSeasonal === "true";
+    if (updateData.compareAtPrice)
+      updateData.compareAtPrice = Number(updateData.compareAtPrice);
 
     // 1. Get the existing product first to ensure we have the full data context
     const docRef = db.collection("products").doc(id);

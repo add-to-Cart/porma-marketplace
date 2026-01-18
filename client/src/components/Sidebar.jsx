@@ -95,6 +95,33 @@ export default function Sidebar() {
         </select>
       </div>
 
+      {/* Bundle/Seasonal Filters */}
+      <div className="space-y-3">
+        <label className="text-xs font-bold text-gray-400 uppercase">
+          Special Offers
+        </label>
+        <div className="space-y-2">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={filters.isBundle}
+              onChange={(e) => updateFilter("isBundle", e.target.checked)}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-700">Bundles/Kits</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={filters.isSeasonal}
+              onChange={(e) => updateFilter("isSeasonal", e.target.checked)}
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-700">Seasonal Items</span>
+          </label>
+        </div>
+      </div>
+
       <hr className="border-gray-100" />
 
       {/* Vehicle Specifics */}

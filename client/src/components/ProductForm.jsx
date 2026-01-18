@@ -83,13 +83,15 @@ export default function ProductForm() {
     price: "",
     stock: "",
     isUniversalFit: false,
+    isBundle: false,
+    isSeasonal: false,
+    compareAtPrice: "",
+    bundleContents: "",
     vehicleType: "",
     vehicleMakes: "", // Renamed from 'make' for consistency
     vehicleModels: "", // Changed from [] to "" to support .split() logic
     yearFrom: "",
     yearTo: "",
-    isBundle: false,
-    dealType: "none",
     imageUrl: "",
     tags: [],
   });
@@ -135,48 +137,41 @@ export default function ProductForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       const data = new FormData();
-      data.append("name", formData.name);
-      data.append("category", formData.category);
-      data.append("description", formData.description);
-      data.append("price", formData.price);
-      data.append("stock", formData.stock);
+      // Append standard fields
+      Object.keys(formData).forEach((key) => {
+        if (!["tags", "vehicleCompatibility"].includes(key)) {
+          data.append(key, formData[key]);
+        }
+      });
 
-      if (imageFile) {
-        data.append("image", imageFile);
-      }
-
+      // Prepare Vehicle Compatibility
       const vehicleCompatibility = {
         type: formData.vehicleType || "Universal",
         isUniversalFit: formData.isUniversalFit,
-        makes: (formData.vehicleMakes || "")
-          .split(",")
-          .map((m) => m.trim())
-          .filter(Boolean),
-        models: (formData.vehicleModels || "")
-          .split(",")
-          .map((m) => m.trim())
-          .filter(Boolean),
+        makes: formData.vehicleMake ? [formData.vehicleMake] : [],
+        models: formData.vehicleModel ? [formData.vehicleModel] : [],
         yearRange: {
-          from: Number(formData.yearFrom) || null,
-          to: Number(formData.yearTo) || null,
+          from: Number(formData.yearFrom),
+          to: Number(formData.yearTo),
         },
       };
 
       data.append("vehicleCompatibility", JSON.stringify(vehicleCompatibility));
       data.append("tags", JSON.stringify(formData.tags));
 
+      if (imageFile) data.append("image", imageFile);
+
       await createProduct(data);
-      alert("Product Registered Successfully!");
+      alert("Product/Bundle Registered Successfully!");
     } catch (err) {
-      console.error("Submission error:", err);
-      alert("Error registering product. Check console.");
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
+
   return (
     <div className="space-y-6">
       <form
@@ -227,6 +222,74 @@ export default function ProductForm() {
                     />
                   </label>
                 )}
+              </div>
+
+              <div className="border-2 border-zinc-900 p-4 bg-zinc-50">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="isBundle"
+                    checked={formData.isBundle}
+                    onChange={handleChange}
+                    className="w-4 h-4 accent-zinc-900"
+                  />
+                  <span className="text-xs font-black uppercase italic">
+                    Activate Bundle/Seasonal Kit Logic
+                  </span>
+                </label>
+
+                {formData.isBundle && (
+                  <div className="p-6 bg-amber-50 border-2 border-zinc-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] space-y-4">
+                    <div className="flex items-center gap-2">
+                      <Package size={20} className="text-zinc-900" />
+                      <h3 className="text-xs font-black uppercase tracking-widest">
+                        Kit Manifest & Price Anchoring
+                      </h3>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase">
+                          Original Combined Price (PHP)
+                        </label>
+                        <input
+                          name="compareAtPrice"
+                          type="number"
+                          value={formData.compareAtPrice}
+                          onChange={handleChange}
+                          className="w-full border-2 border-zinc-900 p-3 font-mono"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black uppercase">
+                          Kit Contents (Comma Separated)
+                        </label>
+                        <input
+                          name="bundleContents"
+                          value={formData.bundleContents}
+                          onChange={handleChange}
+                          className="w-full border-2 border-zinc-900 p-3"
+                          placeholder="e.g. Front Pads, Rear Pads, Cleaner"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-2 border-zinc-900 p-4 bg-zinc-50">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="isSeasonal"
+                    checked={formData.isSeasonal}
+                    onChange={handleChange}
+                    className="w-4 h-4 accent-zinc-900"
+                  />
+                  <span className="text-xs font-black uppercase italic">
+                    Seasonal Item
+                  </span>
+                </label>
               </div>
 
               {/* Tag System */}
@@ -392,7 +455,7 @@ export default function ProductForm() {
                             <option key={m} value={m}>
                               {m}
                             </option>
-                          )
+                          ),
                         )}
                     </select>
                   </div>

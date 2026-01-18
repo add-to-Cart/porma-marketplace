@@ -28,7 +28,7 @@ export default function ProductCard({ product, onClick }) {
         />
 
         {/* Fitment Badge (The "Essential" Info) */}
-        <div className="absolute top-2 right-2">
+        <div className="absolute top-2 right-2 flex flex-col gap-1">
           <span
             className={`px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md ${
               vc?.type === "Motorcycle"
@@ -38,6 +38,16 @@ export default function ProductCard({ product, onClick }) {
           >
             {vc?.type || "Universal"}
           </span>
+          {product.isBundle && (
+            <span className="px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md bg-green-500/90 text-white">
+              Bundle
+            </span>
+          )}
+          {product.isSeasonal && (
+            <span className="px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md bg-purple-500/90 text-white">
+              Seasonal
+            </span>
+          )}
         </div>
       </div>
 
@@ -69,9 +79,22 @@ export default function ProductCard({ product, onClick }) {
 
         <div className="mt-auto">
           <div className="flex items-center justify-between">
-            <span className="text-lg font-black text-gray-900">
-              ₱{product.price?.toLocaleString()}
-            </span>
+            <div className="flex flex-col">
+              {product.isBundle && product.compareAtPrice && (
+                <span className="text-sm font-medium text-gray-500 line-through">
+                  ₱{product.compareAtPrice?.toLocaleString()}
+                </span>
+              )}
+              <span className="text-lg font-black text-gray-900">
+                ₱{product.price?.toLocaleString()}
+              </span>
+              {product.isBundle && product.compareAtPrice && (
+                <span className="text-[10px] font-bold text-green-600">
+                  Save ₱
+                  {(product.compareAtPrice - product.price)?.toLocaleString()}
+                </span>
+              )}
+            </div>
             {product.soldCount > 0 && (
               <span className="text-[10px] font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded">
                 {product.soldCount} sold

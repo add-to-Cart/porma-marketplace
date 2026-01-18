@@ -16,6 +16,9 @@ import {
   CheckCircle2,
   Settings,
   ArrowRight,
+  Percent,
+  Snowflake,
+  ListChecks,
 } from "lucide-react";
 
 export default function ProductDetails() {
@@ -90,25 +93,66 @@ export default function ProductDetails() {
 
         {/* 3. Buying Section (Standard font sizes) */}
         <div className="lg:col-span-6 flex flex-col">
-          <div className="border-b border-gray-100 pb-5 mb-5">
-            <div className="flex gap-2 mb-3">
-              {isUniversal && (
-                <span className="bg-green-50 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded border border-green-100 flex items-center gap-1">
-                  <CheckCircle2 size={12} /> Universal Fit
+          <div className="flex flex-col gap-2">
+            <div className="flex items-baseline gap-4">
+              {product.isBundle && product.compareAtPrice && (
+                <span className="text-2xl text-zinc-400 line-through font-bold decoration-red-500/50">
+                  ₱{product.compareAtPrice.toLocaleString()}
                 </span>
               )}
-              <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-100 uppercase">
-                {product.category}
+              <span className="text-5xl font-black tracking-tighter">
+                ₱{product.price?.toLocaleString()}
               </span>
+              {product.isBundle && product.compareAtPrice && (
+                <span className="text-lg font-bold text-green-600">
+                  Save ₱
+                  {(product.compareAtPrice - product.price)?.toLocaleString()}
+                </span>
+              )}
             </div>
 
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight mb-2">
-              {product.name}
-            </h1>
-            <p className="text-2xl font-black text-blue-600">
-              ₱{product.price?.toLocaleString()}
-            </p>
+            {product.isBundle && product.compareAtPrice && (
+              <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded border border-emerald-100 w-fit">
+                <Percent size={14} />
+                <span className="text-[10px] font-black uppercase">
+                  Bundle Savings: ₱
+                  {(product.compareAtPrice - product.price)?.toLocaleString()}
+                </span>
+              </div>
+            )}
+
+            {product.isSeasonal && (
+              <div className="flex items-center gap-2 bg-purple-50 text-purple-700 px-3 py-1 rounded border border-purple-100 w-fit">
+                <Snowflake size={14} />
+                <span className="text-[10px] font-black uppercase">
+                  Seasonal Item
+                </span>
+              </div>
+            )}
           </div>
+
+          {/* MATURE THESIS FEATURE: THE MANIFEST LIST */}
+          {product.isBundle && product.bundleContents && (
+            <div className="mt-10 p-6 border-4 border-zinc-900 bg-zinc-50 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+              <div className="flex items-center gap-2 mb-4">
+                <ListChecks size={20} className="text-zinc-900" />
+                <h3 className="font-black uppercase tracking-tighter text-sm italic">
+                  The Kit Manifest (What's in the box)
+                </h3>
+              </div>
+              <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {product.bundleContents.split(",").map((item, index) => (
+                  <li
+                    key={index}
+                    className="flex items-start gap-3 text-xs font-bold text-zinc-600"
+                  >
+                    <div className="mt-1 w-2 h-2 bg-zinc-900 rounded-full shrink-0" />
+                    {item.trim()}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {/* Compatibility Info (Restored Layout) */}
           <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100">
@@ -119,11 +163,10 @@ export default function ProductDetails() {
               {isUniversal
                 ? "Fits all standard vehicle types"
                 : `${product.vehicleCompatibility?.makes?.join(
-                    ", "
+                    ", ",
                   )} ${product.vehicleCompatibility?.models?.join(", ")}`}
             </p>
           </div>
-
           {/* Quantity and Actions (Slimmer) */}
           <div className="space-y-3 mb-8">
             <div className="flex items-center gap-3">
@@ -153,7 +196,6 @@ export default function ProductDetails() {
               Buy Now
             </button>
           </div>
-
           {/* Trust Factors (Slimmer) */}
           <div className="grid grid-cols-2 gap-4 pt-6 border-t border-gray-100">
             <div className="flex gap-3 items-center">
@@ -173,7 +215,6 @@ export default function ProductDetails() {
               </span>
             </div>
           </div>
-
           {/* Admin Edit Shortcut (RESTORED) */}
           <button
             onClick={() => navigate(`/products/update/${id}`)}

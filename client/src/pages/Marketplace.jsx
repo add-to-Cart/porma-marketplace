@@ -55,6 +55,10 @@ export default function Marketplace() {
         p.vehicleCompatibility?.models?.includes(filters.vehicle.model);
     }
 
+    // Filter by bundle/seasonal
+    if (filters.isBundle) match = match && p.isBundle;
+    if (filters.isSeasonal) match = match && p.isSeasonal;
+
     return match;
   });
 

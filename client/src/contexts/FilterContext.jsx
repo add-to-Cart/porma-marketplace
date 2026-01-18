@@ -5,6 +5,8 @@ const FilterContext = createContext();
 const INITIAL_FILTERS = {
   category: "",
   vehicleType: "",
+  isBundle: false,
+  isSeasonal: false,
   vehicle: {
     year: "",
     make: "",

@@ -31,19 +31,39 @@ const uploadToCloudinary = async (file, preset, publicId = null) => {
 export const uploadAvatar = async (file) => {
   return await uploadToCloudinary(
     file,
-    process.env.CLOUDINARY_UPLOAD_PRESET_AVATAR
+    process.env.CLOUDINARY_UPLOAD_PRESET_AVATAR,
   );
 };
 
+import cloudinary from "../config/cloudinary.js";
+
 /**
- * Upload product image
+ * Mature approach: Use the Cloudinary SDK upload_stream.
+ * It is more stable for Node.js than manual fetch calls.
  */
-export const uploadProductImage = async (file, publicId = null) => {
-  return await uploadToCloudinary(
-    file,
-    process.env.CLOUDINARY_UPLOAD_PRESET_PRODUCT,
-    publicId
-  );
+export const uploadProductImage = (file, publicId = null) => {
+  return new Promise((resolve, reject) => {
+    const uploadOptions = {
+      folder: "porma_products",
+      resource_type: "auto",
+      upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET_PRODUCT,
+    };
+
+    if (publicId) uploadOptions.public_id = publicId;
+
+    const stream = cloudinary.uploader.upload_stream(
+      uploadOptions,
+      (error, result) => {
+        if (error) return reject(error);
+        resolve({
+          url: result.secure_url,
+          publicId: result.public_id,
+        });
+      },
+    );
+
+    stream.end(file.buffer);
+  });
 };
 
 /**
@@ -63,6 +83,6 @@ export const getTransformedImageUrl = ({
  */
 export const deleteImage = async () => {
   throw new Error(
-    "Image deletion requires a secure backend (not safe on client)"
+    "Image deletion requires a secure backend (not safe on client)",
   );
 };
