@@ -88,21 +88,87 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-// Sign in with email and password
+// Sign in with email/username and password
 router.post("/signin", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { identifier, password } = req.body;
 
     // Validate input
-    if (!email || !password) {
+    if (!identifier || !password) {
       return res.status(400).json({
         success: false,
-        message: "Email and password are required",
+        message: "Identifier and password are required",
       });
     }
 
+    let email = identifier;
+    let snapshot = null;
+    // If identifier doesn't contain @, treat as username
+    if (!identifier.includes("@")) {
+      const db = admin.firestore();
+      const usersRef = db.collection("users");
+      snapshot = await usersRef
+        .where("displayName", "==", identifier)
+        .limit(1)
+        .get();
+
+      // If not found, try to find admin user
+      if (snapshot.empty) {
+        snapshot = await usersRef.where("isAdmin", "==", true).limit(1).get();
+      }
+
+      if (snapshot.empty) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid credentials",
+        });
+      }
+
+      const userDoc = snapshot.docs[0];
+      const userData = userDoc.data();
+      email = userData.email;
+
+      // For admin users, use default email if not set
+      if (userData.isAdmin && !email) {
+        email = "admin@admin.com";
+      }
+    }
+
     // Verify user credentials and get user record
-    const userRecord = await admin.auth().getUserByEmail(email);
+    let userRecord;
+    let foundUserDoc = null;
+    if (!identifier.includes("@")) {
+      // Already found userDoc above
+      foundUserDoc = snapshot.docs[0];
+    }
+
+    // For admin email login
+    if (email === "admin@admin.com" && !foundUserDoc) {
+      const db = admin.firestore();
+      const usersRef = db.collection("users");
+      const adminSnapshot = await usersRef
+        .where("isAdmin", "==", true)
+        .limit(1)
+        .get();
+      if (!adminSnapshot.empty) {
+        foundUserDoc = adminSnapshot.docs[0];
+      }
+    }
+
+    try {
+      userRecord = await admin.auth().getUserByEmail(email);
+    } catch (error) {
+      if (error.code === "auth/user-not-found" && foundUserDoc) {
+        // Create admin user in Firebase Auth if not exists
+        userRecord = await admin.auth().createUser({
+          uid: foundUserDoc.id,
+          email,
+          password,
+        });
+      } else {
+        throw error;
+      }
+    }
 
     // Generate custom token for client-side authentication
     const customToken = await admin.auth().createCustomToken(userRecord.uid);
@@ -119,7 +185,9 @@ router.post("/signin", async (req, res) => {
         uid: userRecord.uid,
         email: userRecord.email,
         displayName: userData?.displayName || userRecord.displayName,
+        avatarUrl: userData?.photoURL || null,
         role: userData?.role || "buyer",
+        sellerApplication: userData?.sellerApplication,
       },
       customToken,
     });
@@ -271,8 +339,9 @@ router.post("/token-verify", async (req, res) => {
         uid: userData.uid,
         email: userData.email,
         displayName: userData.displayName,
-        photoURL: userData.photoURL,
+        avatarUrl: userData.photoURL,
         role: userData.role,
+        sellerApplication: userData.sellerApplication,
       },
     });
   } catch (err) {
@@ -304,6 +373,16 @@ router.get("/profile", verifyAuth, async (req, res) => {
         displayName: userData.displayName,
         role: userData.role,
         createdAt: userData.createdAt,
+        username: userData.username,
+        birthday: userData.birthday,
+        contact: userData.contact,
+        addressLine: userData.addressLine,
+        barangay: userData.barangay,
+        city: userData.city,
+        province: userData.province,
+        zipCode: userData.zipCode,
+        avatarUrl: userData.photoURL,
+        sellerApplication: userData.sellerApplication,
       },
     });
   } catch (error) {
@@ -401,6 +480,126 @@ router.post("/signout", verifyAuth, async (req, res) => {
     });
   } catch (error) {
     console.error("Signout error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
+// Apply to become seller
+router.post("/apply-seller", verifyAuth, async (req, res) => {
+  try {
+    const { message } = req.body;
+    const db = admin.firestore();
+
+    await db
+      .collection("users")
+      .doc(req.user.uid)
+      .update({
+        sellerApplication: {
+          status: "pending",
+          message,
+          appliedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      });
+
+    res.json({
+      success: true,
+      message: "Application submitted successfully",
+    });
+  } catch (error) {
+    console.error("Apply seller error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
+// Get seller applications (admin only)
+router.get("/seller-applications", verifyAuth, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const db = admin.firestore();
+    const usersRef = db.collection("users");
+    const snapshot = await usersRef
+      .where("sellerApplication.status", "==", "pending")
+      .get();
+
+    const applications = [];
+    snapshot.forEach((doc) => {
+      applications.push({ uid: doc.id, ...doc.data() });
+    });
+
+    res.json({
+      success: true,
+      applications,
+    });
+  } catch (error) {
+    console.error("Get seller applications error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
+// Approve seller application
+router.put("/approve-seller/:uid", verifyAuth, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const { uid } = req.params;
+    const db = admin.firestore();
+
+    await db.collection("users").doc(uid).update({
+      role: "seller",
+      "sellerApplication.status": "approved",
+      "sellerApplication.approvedAt":
+        admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({
+      success: true,
+      message: "Application approved",
+    });
+  } catch (error) {
+    console.error("Approve seller error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
+// Reject seller application
+router.put("/reject-seller/:uid", verifyAuth, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const { uid } = req.params;
+    const db = admin.firestore();
+
+    await db.collection("users").doc(uid).update({
+      "sellerApplication.status": "rejected",
+      "sellerApplication.rejectedAt":
+        admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({
+      success: true,
+      message: "Application rejected",
+    });
+  } catch (error) {
+    console.error("Reject seller error:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",

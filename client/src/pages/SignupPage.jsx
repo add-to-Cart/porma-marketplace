@@ -2,11 +2,14 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { FcGoogle } from "react-icons/fc";
 import { Link, useNavigate } from "react-router-dom";
+import { toast } from "react-hot-toast";
 
 export default function SignupPage() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const { signUp, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
@@ -14,12 +17,23 @@ export default function SignupPage() {
   const handleRegister = async (e) => {
     e.preventDefault();
 
+    if (!username.trim()) return toast.error("Username is required");
+    if (!email.trim()) return toast.error("Email is required");
+    if (!password) return toast.error("Password is required");
+    if (password.length < 6)
+      return toast.error("Password must be at least 6 characters");
+    if (password !== confirmPassword)
+      return toast.error("Passwords do not match");
+
+    setLoading(true);
     try {
       await signUp(email, password, username.trim());
-      alert("Registered successfully! Check your email for verification.");
-      navigate("/login");
+      toast.success("Account created successfully!");
+      navigate("/");
     } catch (error) {
-      alert(error.message);
+      toast.error(error.message || "Signup failed");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -28,7 +42,7 @@ export default function SignupPage() {
       await signInWithGoogle();
       navigate("/");
     } catch (error) {
-      alert(error.message);
+      toast.error(error.message || "Google sign in failed");
     }
   };
 
@@ -39,20 +53,21 @@ export default function SignupPage() {
           Create Account
         </h2>
 
-        <form onSubmit={handleRegister} className="space-y-3">
+        <form onSubmit={handleRegister} className="space-y-4">
           <input
             type="text"
             placeholder="Username"
-            className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm"
+            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
+            maxLength={50}
           />
 
           <input
             type="email"
             placeholder="Email"
-            className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm"
+            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -60,18 +75,29 @@ export default function SignupPage() {
 
           <input
             type="password"
-            placeholder="Password"
-            className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm"
+            placeholder="Password (min 6 characters)"
+            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            required
+            minLength={6}
+          />
+
+          <input
+            type="password"
+            placeholder="Confirm Password"
+            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
             required
           />
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 rounded font-medium text-sm hover:bg-blue-700"
+            disabled={loading}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white py-3 rounded-md font-medium text-sm transition duration-200"
           >
-            Sign Up
+            {loading ? "Creating Account..." : "Sign Up"}
           </button>
         </form>
 
@@ -79,7 +105,7 @@ export default function SignupPage() {
 
         <button
           onClick={handleGoogleSignIn}
-          className="w-full flex items-center justify-center border border-gray-300 py-2 rounded hover:bg-gray-50 transition text-sm"
+          className="w-full flex items-center justify-center border border-gray-300 py-3 rounded-md hover:bg-gray-50 transition text-sm"
         >
           <FcGoogle className="mr-2 text-lg" />
           Continue with Google

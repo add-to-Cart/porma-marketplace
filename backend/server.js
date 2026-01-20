@@ -9,11 +9,15 @@ const PORT = 3000;
 app.use(express.json());
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: ["http://localhost:5173", "http://localhost:5174"],
   }),
 );
 
-// mount routes
+// Set Cross-Origin-Opener-Policy to allow popups for Firebase Auth
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  next();
+});
 app.use("/products", productRoutes);
 app.use("/auth", authRoutes);
 

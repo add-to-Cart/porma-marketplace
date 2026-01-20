@@ -19,14 +19,14 @@ export const authAPI = {
     return data;
   },
 
-  signIn: async (email, password) => {
+  signIn: async (identifier, password) => {
     const response = await fetch(`${API_BASE}/signin`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        email,
+        identifier,
         password,
       }),
     });

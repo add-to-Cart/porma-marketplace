@@ -4,6 +4,8 @@ import SellerLayout from "@/layout/SellerLayout";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ProfilePage from "@/pages/ProfilePage";
+import ApplySellerPage from "@/pages/ApplySellerPage";
+import AdminPage from "@/pages/AdminPage";
 
 import MarketPlace from "@/pages/Marketplace";
 import ProductUpdate from "@/pages/ProductUpdate";
@@ -35,6 +37,8 @@ export default function AppRoutes() {
         <Route path="/deals" element={<DealsPage />} />
         <Route path="/cart" element={<Cart />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/apply-seller" element={<ApplySellerPage />} />
+        <Route path="/admin" element={<AdminPage />} />
       </Route>
 
       {/* Seller Layout */}

@@ -147,6 +147,15 @@ export default function Navbar() {
                   <p className="text-[10px] text-gray-500">{user?.email}</p>
                 </div>
               </button>
+              {user?.isAdmin && (
+                <button
+                  onClick={() => navigate("/admin")}
+                  className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"
+                  title="Admin Panel"
+                >
+                  <LayoutGrid size={20} />
+                </button>
+              )}
               <button
                 onClick={handleSignOut}
                 className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"

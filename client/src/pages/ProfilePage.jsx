@@ -18,6 +18,7 @@ export default function ProfilePage() {
   const [province, setProvince] = useState("");
   const [zipCode, setZipCode] = useState("");
   const [loading, setLoading] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -37,6 +38,7 @@ export default function ProfilePage() {
     const file = e.target.files[0];
     if (!file) return;
 
+    setAvatarLoading(true);
     try {
       const token = localStorage.getItem("authToken");
       const response = await authAPI.uploadAvatar(token, file);
@@ -49,6 +51,8 @@ export default function ProfilePage() {
       }
     } catch (error) {
       toast.error("Failed to upload avatar.");
+    } finally {
+      setAvatarLoading(false);
     }
   };
 
@@ -56,6 +60,8 @@ export default function ProfilePage() {
     if (!username.trim()) return toast.error("Username is required");
     if (!birthday.trim()) return toast.error("Birthday is required");
     if (!contact.trim()) return toast.error("Contact is required");
+    if (!/^\d{10,11}$/.test(contact.trim()))
+      return toast.error("Contact must be 10-11 digits");
     if (!addressLine.trim()) return toast.error("Street address is required");
     if (!barangay.trim()) return toast.error("Barangay is required");
     if (!city.trim()) return toast.error("City is required");
@@ -79,8 +85,9 @@ export default function ProfilePage() {
       const res = await updateProfile(data);
       if (res.success) {
         toast.success("Profile updated!");
+        await refreshProfile(); // Ensure latest data
       } else {
-        toast.error("Update failed.");
+        toast.error(res.message || "Update failed.");
       }
     } catch (err) {
       toast.error("Update failed.");
@@ -110,9 +117,13 @@ export default function ProfilePage() {
           <div className="flex flex-col items-center md:items-start gap-2">
             <label
               htmlFor="avatar-upload"
-              className="inline-block px-4 py-1.5 bg-white border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-100 cursor-pointer transition"
+              className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-md cursor-pointer transition duration-200"
             >
-              {avatarUrl ? "Change Avatar" : "Upload Avatar"}
+              {avatarLoading
+                ? "Uploading..."
+                : avatarUrl
+                  ? "Change Avatar"
+                  : "Upload Avatar"}
             </label>
             <input
               id="avatar-upload"
@@ -133,7 +144,9 @@ export default function ProfilePage() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded"
+              placeholder="Enter your username"
+              maxLength={50}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
@@ -145,7 +158,7 @@ export default function ProfilePage() {
               type="date"
               value={birthday}
               onChange={(e) => setBirthday(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded"
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
@@ -157,7 +170,9 @@ export default function ProfilePage() {
               type="tel"
               value={contact}
               onChange={(e) => setContact(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded"
+              placeholder="Enter 10-11 digit contact number"
+              maxLength={11}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
@@ -169,7 +184,9 @@ export default function ProfilePage() {
               type="text"
               value={addressLine}
               onChange={(e) => setAddressLine(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded"
+              placeholder="Enter street address"
+              maxLength={100}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
@@ -182,7 +199,9 @@ export default function ProfilePage() {
                 type="text"
                 value={barangay}
                 onChange={(e) => setBarangay(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded"
+                placeholder="Enter barangay"
+                maxLength={50}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
@@ -193,7 +212,9 @@ export default function ProfilePage() {
                 type="text"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded"
+                placeholder="Enter city/municipality"
+                maxLength={50}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
@@ -204,7 +225,9 @@ export default function ProfilePage() {
                 type="text"
                 value={province}
                 onChange={(e) => setProvince(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded"
+                placeholder="Enter province"
+                maxLength={50}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
@@ -215,7 +238,9 @@ export default function ProfilePage() {
                 type="text"
                 value={zipCode}
                 onChange={(e) => setZipCode(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded"
+                placeholder="Enter 4-digit ZIP code"
+                maxLength={4}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
@@ -223,17 +248,27 @@ export default function ProfilePage() {
           <button
             onClick={handleSave}
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-md font-medium"
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white p-3 rounded-md font-medium transition duration-200"
           >
             {loading ? "Saving..." : "Save Changes"}
           </button>
-          {!user?.seller && (
+          {!user?.seller && !user?.sellerApplication && (
             <Link
               to="/apply-seller"
-              className="block w-full mt-4 text-center bg-green-600 hover:bg-green-700 text-white p-2 rounded-md font-medium"
+              className="block w-full mt-4 text-center bg-green-600 hover:bg-green-700 text-white p-3 rounded-md font-medium transition duration-200"
             >
               Apply as Seller
             </Link>
+          )}
+          {user?.sellerApplication?.status === "pending" && (
+            <div className="block w-full mt-4 text-center bg-yellow-100 border border-yellow-300 text-yellow-800 p-3 rounded-md">
+              Seller application pending approval
+            </div>
+          )}
+          {user?.sellerApplication?.status === "rejected" && (
+            <div className="block w-full mt-4 text-center bg-red-100 border border-red-300 text-red-800 p-3 rounded-md">
+              Seller application rejected. You can apply again.
+            </div>
           )}
         </div>
       </div>

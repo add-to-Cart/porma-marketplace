@@ -4,6 +4,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
+  signInWithCustomToken,
   signOut as firebaseSignOut,
 } from "firebase/auth";
 import { authAPI } from "@/api/auth";
@@ -65,23 +66,29 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const signIn = async (email, password) => {
+  const signIn = async (identifier, password) => {
     try {
       setLoading(true);
       setError(null);
 
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
-        email,
-        password,
-      );
-      const idToken = await userCredential.user.getIdToken();
-
-      const response = await authAPI.verifyToken(idToken);
+      const response = await authAPI.signIn(identifier, password);
       if (response.success) {
-        localStorage.setItem("authToken", idToken);
-        setUser(response.user);
-        return { success: true };
+        // Sign in with custom token
+        const userCredential = await signInWithCustomToken(
+          auth,
+          response.customToken,
+        );
+        const idToken = await userCredential.user.getIdToken();
+
+        // Verify and get user data
+        const verifyResponse = await authAPI.verifyToken(idToken);
+        if (verifyResponse.success) {
+          localStorage.setItem("authToken", idToken);
+          setUser(verifyResponse.user);
+          return { success: true };
+        }
+        setError(verifyResponse.message);
+        return { success: false, message: verifyResponse.message };
       }
       setError(response.message);
       return { success: false, message: response.message };

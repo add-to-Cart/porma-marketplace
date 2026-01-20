@@ -20,13 +20,19 @@ async function authMiddleware(req, res, next) {
     // Verify token
     const decoded = await admin.auth().verifyIdToken(idToken);
 
+    // Fetch user data from Firestore
+    const db = admin.firestore();
+    const userDoc = await db.collection("users").doc(decoded.uid).get();
+    const userData = userDoc.exists ? userDoc.data() : {};
+
     // Attach user info to request
     req.user = {
       uid: decoded.uid,
       email: decoded.email,
       name: decoded.name,
-      isAdmin: decoded.admin === true || decoded.role === "admin",
-      raw: decoded,
+      isAdmin: userData.isAdmin === true || userData.role === "admin",
+      role: userData.role || "buyer",
+      ...userData,
     };
 
     next();
