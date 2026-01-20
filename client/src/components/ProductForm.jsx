@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createProduct } from "@/api/products";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Info,
   Truck,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 
 export default function ProductForm() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
@@ -136,6 +138,11 @@ export default function ProductForm() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!user) {
+      alert("You must be logged in to create products");
+      return;
+    }
+
     setLoading(true);
     try {
       const data = new FormData();
@@ -145,6 +152,13 @@ export default function ProductForm() {
           data.append(key, formData[key]);
         }
       });
+
+      // Add seller information
+      data.append("sellerId", user.uid);
+      data.append(
+        "storeName",
+        user.storeName || user.displayName || "Unknown Store",
+      );
 
       // Prepare Vehicle Compatibility
       const vehicleCompatibility = {

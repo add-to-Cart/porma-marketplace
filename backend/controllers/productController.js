@@ -95,6 +95,50 @@ export const getTrendingProducts = async (req, res) => {
   }
 };
 
+export const getProductsBySeller = async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+
+    if (!sellerId) {
+      return res
+        .status(400)
+        .json({ message: "sellerId parameter is required" });
+    }
+
+    // Try to query ordered by createdAt first. If Firestore requires a composite index
+    // this may throw — fall back to a simple where() query to avoid 500 for missing index.
+    let snapshot;
+    try {
+      snapshot = await db
+        .collection("products")
+        .where("sellerId", "==", sellerId)
+        .orderBy("createdAt", "desc")
+        .get();
+    } catch (queryErr) {
+      console.warn(
+        "getProductsBySeller: ordered query failed, falling back to unordered query:",
+        queryErr.message,
+      );
+      snapshot = await db
+        .collection("products")
+        .where("sellerId", "==", sellerId)
+        .get();
+    }
+
+    const products = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    return res.json(products);
+  } catch (err) {
+    console.error("Failed to fetch seller products:", err);
+    return res
+      .status(500)
+      .json({ message: "Failed to fetch seller products", error: err.message });
+  }
+};
+
 export const getRelatedProducts = async (req, res) => {
   try {
     const { id } = req.params; // The current product ID to exclude

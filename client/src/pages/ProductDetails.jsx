@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 import {
   getProductById,
@@ -23,6 +24,8 @@ import {
   Snowflake,
   ListChecks,
 } from "lucide-react";
+import toast from "react-hot-toast";
+import { createSimulatedOrder } from "@/utils/orders";
 
 export default function ProductDetails() {
   const { id } = useParams();
@@ -33,6 +36,7 @@ export default function ProductDetails() {
   const [related, setRelated] = useState([]);
   const [trending, setTrending] = useState([]);
   const { addToCart } = useCart();
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -98,6 +102,25 @@ export default function ProductDetails() {
         {/* 3. Buying Section (Standard font sizes) */}
         <div className="lg:col-span-6 flex flex-col">
           <div className="flex flex-col gap-2">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900">
+                {product.name}
+              </h1>
+              <div className="text-sm text-gray-600 mt-1">
+                Sold by:{" "}
+                {product.storeName ? (
+                  <Link
+                    to={product.owner ? `/seller/${product.owner}` : "#"}
+                    className="text-blue-600 font-bold hover:underline"
+                  >
+                    {product.storeName}
+                  </Link>
+                ) : (
+                  <span className="font-medium">Unknown Seller</span>
+                )}
+              </div>
+            </div>
+
             <div className="flex items-baseline gap-4">
               {product.isBundle && product.compareAtPrice && (
                 <span className="text-2xl text-zinc-400 line-through font-bold decoration-red-500/50">
@@ -107,6 +130,12 @@ export default function ProductDetails() {
               <span className="text-5xl font-black tracking-tighter">
                 ₱{product.price?.toLocaleString()}
               </span>
+              <div className="ml-4 text-sm text-gray-500">
+                Sold:{" "}
+                <button className="text-blue-600 font-bold hover:underline">
+                  {product.soldCount || 0}
+                </button>
+              </div>
               {product.isBundle && product.compareAtPrice && (
                 <span className="text-lg font-bold text-green-600">
                   Save ₱
@@ -171,13 +200,32 @@ export default function ProductDetails() {
             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
               Compatibility
             </h3>
-            <p className="text-sm text-gray-700 font-semibold">
-              {isUniversal
-                ? "Fits all standard vehicle types"
-                : `${product.vehicleCompatibility?.makes?.join(
-                    ", ",
-                  )} ${product.vehicleCompatibility?.models?.join(", ")}`}
-            </p>
+            {isUniversal ? (
+              <p className="text-sm text-gray-700 font-semibold">
+                Fits all standard vehicle types
+              </p>
+            ) : (
+              <div className="text-sm text-gray-700 font-semibold space-y-1">
+                {product.vehicleCompatibility?.type && (
+                  <div>
+                    <strong className="font-bold">Type:</strong>{" "}
+                    {product.vehicleCompatibility.type}
+                  </div>
+                )}
+                {product.vehicleCompatibility?.makes && (
+                  <div>
+                    <strong className="font-bold">Makes:</strong>{" "}
+                    {product.vehicleCompatibility.makes.join(", ")}
+                  </div>
+                )}
+                {product.vehicleCompatibility?.models && (
+                  <div>
+                    <strong className="font-bold">Models:</strong>{" "}
+                    {product.vehicleCompatibility.models.join(", ")}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           {/* Quantity and Actions (Slimmer) */}
           <div className="space-y-3 mb-8">
@@ -207,7 +255,24 @@ export default function ProductDetails() {
                 Add to Cart
               </button>
             </div>
-            <button className="w-full h-12 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-all text-sm">
+            <button
+              onClick={() => {
+                // Create a simulated single-item order
+                const order = createSimulatedOrder({
+                  buyerId: user?.uid || null,
+                  items: [{ ...product, quantity }],
+                  subtotal: product.price * quantity,
+                  deliveryFee: 150,
+                  total: product.price * quantity + 150,
+                });
+                toast.success(
+                  `Order placed — est. delivery ${order.estimatedDays} days`,
+                );
+                // navigate to orders
+                navigate("/orders");
+              }}
+              className="w-full h-12 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-all text-sm mt-2"
+            >
               Buy Now
             </button>
           </div>
@@ -230,14 +295,6 @@ export default function ProductDetails() {
               </span>
             </div>
           </div>
-          {/* Admin Edit Shortcut (RESTORED) */}
-          <button
-            onClick={() => navigate(`/products/update/${id}`)}
-            className="mt-12 flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-blue-600 transition-colors uppercase tracking-widest border-t border-gray-50 pt-6"
-          >
-            <Settings size={14} />
-            Manage Listing
-          </button>
         </div>
       </div>
 
@@ -249,6 +306,38 @@ export default function ProductDetails() {
         <div className="prose prose-sm max-w-none text-gray-600 leading-relaxed">
           {product.description}
         </div>
+      </div>
+
+      {/* 5. Reviews Section */}
+      <div className="mt-12 pt-8 border-t border-gray-100">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold">Reviews</h3>
+          <div className="text-sm text-gray-600">
+            <Rating
+              productId={product.id}
+              averageRating={product.rating || product.averageRating || 0}
+              numRatings={product.ratingsCount || product.numRatings || 0}
+            />
+          </div>
+        </div>
+
+        {product.reviews && product.reviews.length > 0 ? (
+          <ul className="space-y-4">
+            {product.reviews.map((r, idx) => (
+              <li key={idx} className="p-4 border rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-bold">
+                    {r.reviewerName || r.user || "Anonymous"}
+                  </div>
+                  <div className="text-sm text-gray-500">{r.rating} / 5</div>
+                </div>
+                <div className="text-sm text-gray-700">{r.comment}</div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="text-sm text-gray-500">No reviews yet.</div>
+        )}
       </div>
 
       {/* 5. Recommended Sections (RESTORED) */}
@@ -267,7 +356,11 @@ export default function ProductDetails() {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {related.map((item) => (
-              <ProductCard key={item.id} product={item} />
+              <ProductCard
+                key={item.id}
+                product={item}
+                onClick={() => navigate(`/products/${item.id}`)}
+              />
             ))}
           </div>
         </section>

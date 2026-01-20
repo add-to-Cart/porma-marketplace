@@ -2,10 +2,19 @@ import { useCart } from "@/contexts/CartContext";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { createSimulatedOrder } from "@/utils/orders";
+import toast from "react-hot-toast";
 
 export default function Cart() {
-  const { cart, updateQuantity, removeFromCart, subtotal, deliveryFee, total } =
-    useCart();
+  const {
+    cart,
+    updateQuantity,
+    removeFromCart,
+    subtotal,
+    deliveryFee,
+    total,
+    clearCart,
+  } = useCart();
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
 
@@ -107,14 +116,25 @@ export default function Cart() {
 
         <button
           onClick={() => {
-            if (isAuthenticated) {
-              // TODO: Navigate to actual checkout page when implemented
-              alert(
-                "Checkout functionality coming soon! Your order will be processed.",
-              );
-            } else {
-              navigate("/login");
-            }
+            if (!isAuthenticated) return navigate("/login");
+
+            // Create simulated order
+            const order = createSimulatedOrder({
+              buyerId: user?.uid || user?.id || null,
+              items: cart,
+              subtotal,
+              deliveryFee,
+              total,
+            });
+
+            // Clear cart stored in localStorage so CartContext picks it up on next load
+            // Clear cart via context so UI updates
+            clearCart();
+
+            toast.success(
+              `Order placed — est. delivery ${order.estimatedDays} days`,
+            );
+            navigate("/orders");
           }}
           className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold"
         >

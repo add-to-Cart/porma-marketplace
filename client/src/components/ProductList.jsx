@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearch } from "@/contexts/SearchContext";
 import { getAllProducts } from "@/api/products";
 import ProductCard from "./ProductCard";
+import { useNavigate } from "react-router-dom";
 
 export default function ProductList() {
   // 1. Get Global Search state from Context
@@ -10,6 +11,7 @@ export default function ProductList() {
   // 2. Local state for initial/all products
   const [allProducts, setAllProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   // Load initial products on mount
   useEffect(() => {
@@ -77,7 +79,7 @@ export default function ProductList() {
           <ProductCard
             key={product.id}
             product={product}
-            onClick={(p) => console.log("Clicked:", p.name)}
+            onClick={() => navigate(`/products/${product.id}`)}
           />
         ))}
       </div>

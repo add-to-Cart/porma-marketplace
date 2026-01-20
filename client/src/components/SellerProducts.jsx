@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
-import { getAllProducts } from "@/api/products";
+import { getProductsBySeller } from "@/api/products";
 import { Package, ArrowUpRight, MoreHorizontal } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function SellerProducts() {
+  const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchMyProducts = async () => {
+      if (!user?.uid) return;
+
       try {
-        const data = await getAllProducts(); // Adjust filters if needed for "my products"
+        const data = await getProductsBySeller(user.uid);
         setProducts(data);
       } catch (err) {
         console.error(err);
@@ -18,7 +22,7 @@ export default function SellerProducts() {
       }
     };
     fetchMyProducts();
-  }, []);
+  }, [user?.uid]);
 
   return (
     <div className="border-2 border-zinc-900 bg-zinc-50 min-h-[600px] overflow-hidden">

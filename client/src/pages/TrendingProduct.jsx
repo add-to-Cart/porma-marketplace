@@ -15,10 +15,16 @@ export default function TrendingProduct() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    setLoading(true);
-    getTrendingProducts()
-      .then((data) => setTrending(data || []))
-      .finally(() => setLoading(false));
+    const loadTrending = async () => {
+      setLoading(true);
+      try {
+        const data = await getTrendingProducts();
+        setTrending(data || []);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadTrending();
   }, []);
 
   const isUserSearching = searchQuery.trim().length > 1;

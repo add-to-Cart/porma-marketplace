@@ -8,7 +8,8 @@ import {
   createProduct,
   searchProducts,
   getRelatedProducts,
-  getProductsByTag, // Import the new controller function
+  getProductsByTag,
+  getProductsBySeller, // Add import
 } from "../controllers/productController.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -18,6 +19,7 @@ const router = express.Router();
 router.get("/", getAllProducts);
 router.get("/search", searchProducts);
 router.get("/trending", getTrendingProducts);
+router.get("/seller/:sellerId", getProductsBySeller); // Add seller products route
 
 // FIX: Ensure the ID is passed as a parameter for related products
 router.get("/:id/related", getRelatedProducts);

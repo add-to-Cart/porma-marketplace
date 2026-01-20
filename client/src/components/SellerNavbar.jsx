@@ -34,7 +34,7 @@ export default function SellerNavbar() {
           </button>
 
           <button
-            onClick={() => navigate("/seller/create-product")}
+            onClick={() => navigate("/seller/product")}
             className="bg-zinc-900 text-white px-6 py-2.5 rounded-sm text-[10px] font-black uppercase tracking-widest hover:bg-amber-600 transition-all shadow-lg active:translate-y-0.5"
           >
             New Entry

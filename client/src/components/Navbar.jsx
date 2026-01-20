@@ -80,20 +80,6 @@ export default function Navbar() {
             <Tag size={18} />
             Deals
           </NavLink>
-
-          <NavLink
-            to="/cart"
-            className={({ isActive }) =>
-              `flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                isActive
-                  ? "bg-white text-blue-600 shadow-sm"
-                  : "text-gray-500 hover:text-gray-900"
-              }`
-            }
-          >
-            <ShoppingCart size={18} />
-            Cart
-          </NavLink>
         </div>
 
         {/* 3. Search - Takes up remaining space */}

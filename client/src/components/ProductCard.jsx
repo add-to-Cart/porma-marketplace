@@ -1,12 +1,10 @@
-import { ShoppingCart } from "lucide-react";
-import { useCart } from "@/contexts/CartContext";
-import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function ProductCard({ product, onClick }) {
-  const { addToCart } = useCart();
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [quantity, setQuantity] = useState(1);
-  const [showQuantity, setShowQuantity] = useState(false);
+  const { user } = useAuth();
+
+  // Check if current user is the seller of this product
+  const isOwnProduct = user && product.sellerId === user.id;
 
   // Extract compatibility data for cleaner code
   const vc = product.vehicleCompatibility;
@@ -21,14 +19,6 @@ export default function ProductCard({ product, onClick }) {
     const years = vc.yearRange ? `${vc.yearRange.from}-${vc.yearRange.to}` : "";
 
     return `${makes} ${models} (${years})`.trim();
-  };
-  const handleAddToCart = (e) => {
-    e.stopPropagation(); // Prevent triggering the onClick
-    addToCart({ ...product, quantity: quantity });
-    setShowSuccess(true);
-    setShowQuantity(false);
-    setQuantity(1); // Reset quantity after adding
-    setTimeout(() => setShowSuccess(false), 2000); // Hide after 2 seconds
   };
   return (
     <div
@@ -65,51 +55,6 @@ export default function ProductCard({ product, onClick }) {
             </span>
           )}
         </div>
-
-        {/* Add to Cart Button */}
-        {/* Quantity Selector */}
-        {showQuantity ? (
-          <div className="absolute bottom-2 right-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 p-2 flex items-center gap-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setQuantity(Math.max(1, quantity - 1));
-              }}
-              className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
-            >
-              -
-            </button>
-            <span className="w-8 text-center text-sm font-semibold">
-              {quantity}
-            </span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setQuantity(quantity + 1);
-              }}
-              className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
-            >
-              +
-            </button>
-            <button
-              onClick={handleAddToCart}
-              className="ml-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-semibold"
-            >
-              Add
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowQuantity(true);
-            }}
-            className="absolute bottom-2 right-2 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg z-10 transition-all duration-300 border-2 border-white"
-            title="Add to Cart"
-          >
-            <ShoppingCart size={18} />
-          </button>
-        )}
       </div>
 
       {/* Content */}
@@ -176,13 +121,6 @@ export default function ProductCard({ product, onClick }) {
           </div>
         </div>
       </div>
-
-      {/* Success Message */}
-      {showSuccess && (
-        <div className="absolute top-2 left-2 right-2 bg-green-500 text-white text-xs font-semibold py-1 px-2 rounded-md shadow-lg z-20 animate-fade-in">
-          ✓ Added to cart!
-        </div>
-      )}
     </div>
   );
 }
