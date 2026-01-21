@@ -490,8 +490,26 @@ router.post("/signout", verifyAuth, async (req, res) => {
 // Apply to become seller
 router.post("/apply-seller", verifyAuth, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { storeName, storeDescription } = req.body;
     const db = admin.firestore();
+
+    // Prevent already-approved sellers from applying again
+    if (req.user && req.user.role === "seller") {
+      return res
+        .status(400)
+        .json({ success: false, message: "You are already a seller" });
+    }
+
+    // Prevent duplicate pending applications
+    if (
+      req.user &&
+      req.user.sellerApplication &&
+      req.user.sellerApplication.status === "pending"
+    ) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Application already pending" });
+    }
 
     await db
       .collection("users")
@@ -499,7 +517,8 @@ router.post("/apply-seller", verifyAuth, async (req, res) => {
       .update({
         sellerApplication: {
           status: "pending",
-          message,
+          storeName: storeName || null,
+          storeDescription: storeDescription || null,
           appliedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
       });
@@ -545,6 +564,105 @@ router.get("/seller-applications", verifyAuth, async (req, res) => {
       success: false,
       message: "Internal server error",
     });
+  }
+});
+
+// Seller update requests (admin can fetch pending requests)
+router.get("/seller-update-requests", verifyAuth, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const db = admin.firestore();
+    const usersRef = db.collection("users");
+    const snapshot = await usersRef
+      .where("sellerUpdateRequest.status", "==", "pending")
+      .get();
+
+    const requests = [];
+    snapshot.forEach((doc) => {
+      requests.push({ uid: doc.id, ...doc.data() });
+    });
+
+    res.json({ success: true, requests });
+  } catch (error) {
+    console.error("Get seller update requests error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// Seller submits an update request
+router.post("/request-seller-update", verifyAuth, async (req, res) => {
+  try {
+    const { requestedFields } = req.body || {};
+    const db = admin.firestore();
+
+    if (!requestedFields || Object.keys(requestedFields).length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No fields provided" });
+    }
+
+    // Save request under user's document
+    await db
+      .collection("users")
+      .doc(req.user.uid)
+      .update({
+        sellerUpdateRequest: {
+          status: "pending",
+          requestedFields,
+          requestedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      });
+
+    res.json({ success: true, message: "Update request submitted" });
+  } catch (error) {
+    console.error("Request seller update error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+// Admin approves a seller update request and applies changes
+router.put("/approve-seller-update/:uid", verifyAuth, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const { uid } = req.params;
+    const db = admin.firestore();
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (!userDoc.exists)
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+
+    const userData = userDoc.data();
+    const request = userData.sellerUpdateRequest;
+    if (!request || request.status !== "pending") {
+      return res
+        .status(400)
+        .json({ success: false, message: "No pending request" });
+    }
+
+    const updates = request.requestedFields || {};
+
+    // Apply updates to user document and mark request approved
+    await db
+      .collection("users")
+      .doc(uid)
+      .update({
+        ...updates,
+        "sellerUpdateRequest.status": "approved",
+        "sellerUpdateRequest.approvedAt":
+          admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    res.json({ success: true, message: "Update approved" });
+  } catch (error) {
+    console.error("Approve seller update error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 

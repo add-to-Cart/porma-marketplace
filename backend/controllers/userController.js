@@ -15,7 +15,7 @@ export const createOrUpdateUser = async (req, res) => {
         ...payload,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
-      { merge: true }
+      { merge: true },
     );
     const snap = await userRef.get();
     res.json({ id: snap.id, ...snap.data() });
@@ -83,7 +83,7 @@ export const addViewHistory = async (req, res) => {
         viewedAt: admin.firestore.FieldValue.serverTimestamp(),
         ...(payload || {}),
       },
-      { merge: true }
+      { merge: true },
     );
     const snap = await ref.get();
     res.json({ id: snap.id, ...snap.data() });
@@ -292,7 +292,11 @@ export const removeVehicleFromGarage = async (req, res) => {
     const uid = req.user.uid;
     const { vehicleId } = req.params;
     if (!vehicleId) return res.status(400).json({ error: "Missing vehicleId" });
-    const ref = db.collection("users").doc(uid).collection("garage").doc(vehicleId);
+    const ref = db
+      .collection("users")
+      .doc(uid)
+      .collection("garage")
+      .doc(vehicleId);
     await ref.delete();
     res.json({ success: true });
   } catch (err) {
@@ -316,7 +320,14 @@ export const getWishlist = async (req, res) => {
     // Optionally fetch full product details
     const productIds = wishlist.map((item) => item.productId);
     if (productIds.length > 0) {
-      const productsSnap = await db.collection("products").where(admin.firestore.FieldPath.documentId(), "in", productIds.slice(0, 10)).get();
+      const productsSnap = await db
+        .collection("products")
+        .where(
+          admin.firestore.FieldPath.documentId(),
+          "in",
+          productIds.slice(0, 10),
+        )
+        .get();
       const productsMap = {};
       productsSnap.docs.forEach((doc) => {
         productsMap[doc.id] = { id: doc.id, ...doc.data() };
@@ -339,7 +350,11 @@ export const addToWishlist = async (req, res) => {
     const uid = req.user.uid;
     const { productId } = req.body || {};
     if (!productId) return res.status(400).json({ error: "Missing productId" });
-    const ref = db.collection("users").doc(uid).collection("wishlist").doc(productId);
+    const ref = db
+      .collection("users")
+      .doc(uid)
+      .collection("wishlist")
+      .doc(productId);
     await ref.set({
       productId,
       addedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -358,11 +373,65 @@ export const removeFromWishlist = async (req, res) => {
     const uid = req.user.uid;
     const { productId } = req.params;
     if (!productId) return res.status(400).json({ error: "Missing productId" });
-    const ref = db.collection("users").doc(uid).collection("wishlist").doc(productId);
+    const ref = db
+      .collection("users")
+      .doc(uid)
+      .collection("wishlist")
+      .doc(productId);
     await ref.delete();
     res.json({ success: true });
   } catch (err) {
     console.error("Error removing from wishlist:", err);
     res.status(500).json({ error: "Failed to remove from wishlist" });
+  }
+};
+
+export const applySeller = async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const uid = req.user.uid;
+    const { storeName, storeDescription } = req.body;
+
+    if (!storeName) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Store name is required" });
+    }
+
+    // Prevent already-approved sellers from applying again
+    if (req.user && req.user.role === "seller") {
+      return res
+        .status(400)
+        .json({ success: false, message: "You are already a seller" });
+    }
+
+    // Prevent duplicate pending applications
+    if (
+      req.user &&
+      req.user.sellerApplication &&
+      req.user.sellerApplication.status === "pending"
+    ) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Application already pending" });
+    }
+
+    // Persist application on the user's document for admin review
+    await db
+      .collection("users")
+      .doc(uid)
+      .update({
+        sellerApplication: {
+          status: "pending",
+          storeName,
+          storeDescription: storeDescription || null,
+          appliedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      });
+
+    res.json({ success: true, message: "Application submitted" });
+  } catch (err) {
+    console.error("Apply Seller Error:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 };

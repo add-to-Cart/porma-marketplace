@@ -110,3 +110,65 @@ export function getOrdersBySeller(sellerId) {
     order.items.some((item) => item.sellerId === sellerId),
   );
 }
+
+export function generateShippingInfo(orderId, sellerId) {
+  const orders = loadOrders();
+  const idx = orders.findIndex((o) => o.id === orderId);
+  if (idx === -1) return null;
+
+  const order = orders[idx];
+
+  // Ensure order contains items for this seller
+  const hasSellerItem = order.items.some((i) => i.sellerId === sellerId);
+  if (!hasSellerItem) return null;
+
+  // Random processing between 1 and 5 days
+  const processingDays = Math.floor(Math.random() * 5) + 1;
+  const shippedInDays = Math.floor(Math.random() * 3) + 1; // extra days until shipped
+
+  const tracking = `TRK-${Math.random().toString(36).slice(2, 9).toUpperCase()}`;
+
+  order.shippingInfo = {
+    tracking,
+    processingDays,
+    shippedInDays,
+    generatedAt: new Date().toISOString(),
+  };
+
+  // Update stages ETAs roughly
+  order.stages = order.stages.map((s) => {
+    if (s.key === "processing") return { ...s, etaHours: processingDays * 24 };
+    if (s.key === "packed") return { ...s, etaHours: processingDays * 24 + 6 };
+    if (s.key === "shipped")
+      return { ...s, etaHours: processingDays * 24 + shippedInDays * 24 };
+    return s;
+  });
+
+  // Advance status to 'packed' when seller generates shipping info
+  order.status = "packed";
+
+  // Save
+  orders[idx] = order;
+  saveOrders(orders);
+
+  // Create a simple notification list in localStorage for the buyer
+  try {
+    const NOTIF_KEY = "mock_notifications_v1";
+    const raw = localStorage.getItem(NOTIF_KEY);
+    const notifs = raw ? JSON.parse(raw) : [];
+    const notif = {
+      id: `n_${Date.now().toString(36)}`,
+      userId: order.buyerId,
+      type: "order_update",
+      message: `Your order ${order.id} has an update: processing ${processingDays} day(s), tracking ${tracking}`,
+      createdAt: new Date().toISOString(),
+      orderId: order.id,
+    };
+    notifs.unshift(notif);
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(notifs));
+  } catch (e) {
+    console.warn("Failed to save notification", e);
+  }
+
+  return order;
+}

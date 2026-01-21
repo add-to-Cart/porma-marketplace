@@ -18,6 +18,7 @@ import Cart from "@/pages/Cart";
 import SellerDashboard from "@/pages/SellerDashboard";
 import AnalyticsPage from "@/pages/AnalyticsPage";
 import OrdersPage from "@/pages/OrdersPage";
+import SellerAccount from "@/pages/SellerAccount";
 
 export default function AppRoutes() {
   return (
@@ -47,6 +48,7 @@ export default function AppRoutes() {
         <Route path="/seller/product" element={<InventoryPage />} />
         <Route path="/seller/analytics" element={<AnalyticsPage />} />
         <Route path="/seller/orders" element={<OrdersPage />} />
+        <Route path="/seller/account" element={<SellerAccount />} />
       </Route>
 
       {/* Fallback */}

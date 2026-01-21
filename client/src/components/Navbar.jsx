@@ -142,6 +142,15 @@ export default function Navbar() {
                   <LayoutGrid size={20} />
                 </button>
               )}
+              {user?.role === "seller" && (
+                <button
+                  onClick={() => navigate("/seller/dashboard")}
+                  className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"
+                  title="Seller Dashboard"
+                >
+                  <TrendingUp size={20} />
+                </button>
+              )}
               <button
                 onClick={handleSignOut}
                 className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"

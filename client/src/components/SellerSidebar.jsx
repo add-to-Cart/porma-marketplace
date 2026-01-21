@@ -7,11 +7,20 @@ import {
   LogOut,
   ShieldCheck,
   Activity,
+  User,
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function SellerSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   const menuItems = [
     {
@@ -100,37 +109,42 @@ export default function SellerSidebar() {
       {/* FOOTER SECTION */}
       <div className="mt-auto p-6 border-t border-zinc-800 bg-black/20">
         <div className="space-y-4">
+          {/* Account Info */}
+          <div className="flex items-center gap-3 px-3 py-2">
+            <div className="w-8 h-8 bg-zinc-700 border border-zinc-600 flex items-center justify-center rounded-sm">
+              <User size={16} className="text-zinc-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-black text-white leading-none uppercase truncate">
+                {user?.displayName || "Seller"}
+              </p>
+              <p className="text-[9px] font-bold text-amber-500 uppercase truncate">
+                {user?.sellerApplication?.storeName ||
+                  user?.seller?.storeName ||
+                  user?.email}
+              </p>
+            </div>
+          </div>
+
           {/* Action Links */}
           <div className="space-y-1">
-            <button className="w-full flex items-center gap-3 px-3 py-2 text-[9px] font-black text-zinc-600 hover:text-white transition-colors tracking-widest uppercase group">
+            <button
+              onClick={() => navigate("/seller/account")}
+              className="w-full flex items-center gap-3 px-3 py-2 text-[9px] font-black text-zinc-600 hover:text-white transition-colors tracking-widest uppercase group"
+            >
               <Settings
                 size={14}
                 className="group-hover:rotate-45 transition-transform"
               />
-              Terminal Config
+              Account
             </button>
-            <button className="w-full flex items-center gap-3 px-3 py-2 text-[9px] font-black text-zinc-600 hover:text-red-500 transition-colors tracking-widest uppercase">
-              <LogOut size={14} /> Kill Process
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-3 px-3 py-2 text-[9px] font-black text-zinc-600 hover:text-red-500 transition-colors tracking-widest uppercase"
+            >
+              <LogOut size={14} />
+              Sign Out
             </button>
-          </div>
-
-          {/* Diagnostic Display */}
-          <div className="border border-zinc-800 p-3 bg-zinc-900/40">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[7px] font-bold text-zinc-600 uppercase tracking-[0.2em]">
-                Core Link
-              </span>
-              <div className="flex gap-1">
-                <div className="w-1 h-1 bg-amber-500 animate-pulse"></div>
-                <div className="w-1 h-1 bg-amber-500 animate-pulse [animation-delay:200ms]"></div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Activity size={10} className="text-emerald-500" />
-              <span className="text-[9px] font-mono text-emerald-600 font-bold uppercase tracking-tighter">
-                System: Authenticated
-              </span>
-            </div>
           </div>
         </div>
       </div>

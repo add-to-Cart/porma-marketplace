@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
-import { getOrdersBySeller } from "@/utils/orders";
+import { getOrdersBySeller, generateShippingInfo } from "@/utils/orders";
 import { useAuth } from "@/contexts/AuthContext";
 import DeliveryTracker from "@/components/DeliveryTracker";
 import SellerProducts from "@/components/SellerProducts";
+import SearchBar from "@/components/SearchBar";
+import AccountSidebar from "@/components/AccountSidebar";
 import { Package, ShoppingCart, TrendingUp } from "lucide-react";
 
 export default function SellerDashboard() {
@@ -33,6 +35,22 @@ export default function SellerDashboard() {
     };
   }, [user?.uid]);
 
+  const handleGenerateShipping = (orderId) => {
+    if (!user?.uid) return;
+    const updated = generateShippingInfo(orderId, user.uid);
+    if (updated) {
+      setOrders((prev) => prev.map((o) => (o.id === updated.id ? updated : o)));
+      // notify seller via toast
+      try {
+        // lazy import toast to avoid top-level dependency in this file
+        const { toast } = require("react-hot-toast");
+        toast.success("Shipping info generated and buyer notified.");
+      } catch (e) {
+        console.log("Shipping generated");
+      }
+    }
+  };
+
   const tabs = [
     { id: "orders", label: "Orders", icon: ShoppingCart },
     { id: "products", label: "Products", icon: Package },
@@ -40,8 +58,9 @@ export default function SellerDashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto p-6">
+    <div className="min-h-screen bg-gray-50 flex">
+      <AccountSidebar />
+      <div className="flex-1 p-6">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Seller Dashboard</h1>
           <p className="text-gray-600 mt-2">
@@ -78,6 +97,11 @@ export default function SellerDashboard() {
                 <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
                   {orders.length} orders
                 </span>
+              </div>
+
+              {/* SEARCH BAR */}
+              <div className="mb-6">
+                <SearchBar placeholder="Search orders..." />
               </div>
 
               {orders.length === 0 ? (
@@ -150,6 +174,23 @@ export default function SellerDashboard() {
 
                       <div className="p-6">
                         <DeliveryTracker order={order} />
+
+                        <div className="mt-4 flex gap-2">
+                          <button
+                            onClick={() => handleGenerateShipping(order.id)}
+                            className="bg-amber-600 text-white px-4 py-2 rounded-md text-sm"
+                          >
+                            Generate Shipping Info
+                          </button>
+                          <button
+                            onClick={() =>
+                              navigator.clipboard.writeText(order.id)
+                            }
+                            className="bg-gray-100 px-4 py-2 rounded-md text-sm"
+                          >
+                            Copy Order ID
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}

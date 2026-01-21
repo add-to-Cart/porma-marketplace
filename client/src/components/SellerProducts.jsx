@@ -3,7 +3,7 @@ import { getProductsBySeller } from "@/api/products";
 import { Package, ArrowUpRight, MoreHorizontal } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
-export default function SellerProducts() {
+export default function SellerProducts({ onSelect }) {
   const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +30,7 @@ export default function SellerProducts() {
         <div className="flex items-center gap-2">
           <Package size={16} className="text-amber-500" />
           <h2 className="text-[10px] font-black uppercase tracking-widest">
-            Active Inventory
+            Your Products
           </h2>
         </div>
         <span className="bg-amber-500 text-zinc-900 px-2 py-0.5 text-[10px] font-black rounded-full">
@@ -52,6 +52,7 @@ export default function SellerProducts() {
             <div
               key={p.id}
               className="p-4 bg-white hover:bg-zinc-100 transition-colors group cursor-pointer relative"
+              onClick={() => onSelect && onSelect(p)}
             >
               <div className="flex gap-4 items-start">
                 <div className="w-12 h-12 bg-zinc-100 border border-zinc-200 shrink-0">

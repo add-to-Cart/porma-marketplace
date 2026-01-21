@@ -1,8 +1,15 @@
-import { Bell, Search, Plus, User } from "lucide-react";
+import { Bell, Plus, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function SellerNavbar() {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   return (
     <header className="h-20 bg-white border-b border-zinc-200 px-10 flex items-center justify-between sticky top-0 z-20">
@@ -17,16 +24,7 @@ export default function SellerNavbar() {
       </div>
 
       <div className="flex items-center gap-8">
-        <div className="relative group hidden lg:block">
-          <Search
-            size={16}
-            className="absolute left-0 top-1/2 -translate-y-1/2 text-zinc-400"
-          />
-          <input
-            placeholder="SEARCH INVENTORY..."
-            className="bg-transparent border-none py-2 pl-7 pr-4 text-xs font-bold w-48 focus:ring-0 placeholder:text-zinc-300 uppercase tracking-tight"
-          />
-        </div>
+        {/* Removed global search - search should live in Inventory/Orders pages */}
 
         <div className="flex items-center gap-4">
           <button className="p-2 text-zinc-400 hover:text-zinc-900 transition-colors">
@@ -41,17 +39,12 @@ export default function SellerNavbar() {
           </button>
 
           <div className="flex items-center gap-3 border-l border-zinc-200 pl-6">
-            <div className="text-right hidden sm:block">
-              <p className="text-[10px] font-black text-zinc-900 leading-none uppercase">
-                Admin User
-              </p>
-              <p className="text-[9px] font-bold text-amber-600 uppercase">
-                Verified Shop
-              </p>
-            </div>
-            <div className="w-10 h-10 bg-zinc-100 border border-zinc-200 flex items-center justify-center rounded-sm">
-              <User size={20} className="text-zinc-400" />
-            </div>
+            <button
+              onClick={handleSignOut}
+              className="text-xs text-gray-600 hover:text-gray-900"
+            >
+              Sign Out
+            </button>
           </div>
         </div>
       </div>

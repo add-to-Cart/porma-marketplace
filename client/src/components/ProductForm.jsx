@@ -1,5 +1,9 @@
-import { useState } from "react";
-import { createProduct } from "@/api/products";
+import { useState, useEffect } from "react";
+import {
+  createProduct,
+  getProductsBySeller,
+  updateProduct,
+} from "@/api/products";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Info,
@@ -14,10 +18,9 @@ import {
   Tag,
 } from "lucide-react";
 
-export default function ProductForm() {
+export default function ProductForm({ selectedProduct }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [tagInput, setTagInput] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
   const [imageFile, setImageFile] = useState(null);
 
@@ -83,20 +86,81 @@ export default function ProductForm() {
     category: "",
     description: "",
     price: "",
-    stock: "",
+    stock: "1",
     isUniversalFit: false,
-    isBundle: false,
     isSeasonal: false,
+    seasonalCategory: "",
     compareAtPrice: "",
     bundleContents: "",
     vehicleType: "",
-    vehicleMakes: "", // Renamed from 'make' for consistency
-    vehicleModels: "", // Changed from [] to "" to support .split() logic
+    vehicleMake: "",
+    models: [],
     yearFrom: "",
     yearTo: "",
     imageUrl: "",
     tags: [],
   });
+
+  const [sellerProducts, setSellerProducts] = useState([]);
+  const [editingProductId, setEditingProductId] = useState(null);
+
+  useEffect(() => {
+    if (user) fetchSellerProducts();
+  }, [user]);
+
+  const fetchSellerProducts = async () => {
+    try {
+      const data = await getProductsBySeller(user.uid);
+      setSellerProducts(data || []);
+    } catch (err) {
+      console.error("Failed to fetch seller products:", err);
+    }
+  };
+
+  const populateFromProduct = (product) => {
+    if (!product) return;
+    setFormData({
+      name: product.name || "",
+      category: product.category || "",
+      description: product.description || "",
+      price: product.price != null ? String(product.price) : "",
+      stock: product.stock != null ? String(product.stock) : "1",
+      isUniversalFit: product.vehicleCompatibility?.isUniversalFit || false,
+      isSeasonal: !!product.isSeasonal,
+      seasonalCategory: product.seasonalCategory || "",
+      compareAtPrice:
+        product.compareAtPrice != null ? String(product.compareAtPrice) : "",
+      bundleContents: product.bundleContents || "",
+      vehicleType: product.vehicleCompatibility?.type || "",
+      vehicleMake:
+        product.vehicleCompatibility?.makes &&
+        product.vehicleCompatibility.makes.length
+          ? product.vehicleCompatibility.makes[0]
+          : "",
+      models: product.vehicleCompatibility?.models || [],
+      yearFrom:
+        product.vehicleCompatibility?.yearRange?.from != null
+          ? String(product.vehicleCompatibility.yearRange.from)
+          : "",
+      yearTo:
+        product.vehicleCompatibility?.yearRange?.to != null
+          ? String(product.vehicleCompatibility.yearRange.to)
+          : "",
+      imageUrl: product.imageUrl || product.image || "",
+      tags: product.tags || [],
+    });
+    setImagePreview(product.imageUrl || product.image || null);
+    setImageFile(null);
+  };
+
+  useEffect(() => {
+    if (selectedProduct) {
+      setEditingProductId(selectedProduct.id);
+      populateFromProduct(selectedProduct);
+    } else {
+      setEditingProductId(null);
+    }
+  }, [selectedProduct]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -114,26 +178,87 @@ export default function ProductForm() {
     }
   };
 
+  const handleSelectProduct = (e) => {
+    const id = e.target.value;
+    if (!id) {
+      // new product
+      setEditingProductId(null);
+      setFormData((prev) => ({
+        ...prev,
+        name: "",
+        category: "",
+        description: "",
+        price: "",
+        stock: "1",
+        isUniversalFit: false,
+        isSeasonal: false,
+        seasonalCategory: "",
+        compareAtPrice: "",
+        bundleContents: "",
+        vehicleType: "",
+        vehicleMakes: "",
+        vehicleModels: "",
+        yearFrom: "",
+        yearTo: "",
+        imageUrl: "",
+        tags: [],
+      }));
+      setImagePreview(null);
+      setImageFile(null);
+      return;
+    }
+    const product = sellerProducts.find((p) => p.id === id);
+    if (product) {
+      setEditingProductId(id);
+      populateFromProduct(product);
+    }
+  };
+
   const toggleModel = (modelName) => {
     setFormData((prev) => ({
       ...prev,
-      models: prev.models.includes(modelName)
+      models: prev.models?.includes(modelName)
         ? prev.models.filter((m) => m !== modelName)
-        : [...prev.models, modelName],
+        : [...(prev.models || []), modelName],
     }));
   };
 
-  const handleTagAdd = (e) => {
-    if (e.key === "Enter" && tagInput.trim()) {
-      e.preventDefault();
-      if (!formData.tags.includes(tagInput.trim().toLowerCase())) {
-        setFormData((prev) => ({
-          ...prev,
-          tags: [...prev.tags, tagInput.trim().toLowerCase()],
-        }));
-      }
-      setTagInput("");
+  const generateTags = (data) => {
+    const tags = new Set();
+
+    // Add name parts
+    if (data.name) {
+      data.name
+        .toLowerCase()
+        .split(/\s+/)
+        .forEach((word) => {
+          if (word.length > 1) tags.add(word);
+        });
     }
+
+    // Add category
+    if (data.category) tags.add(data.category.toLowerCase());
+
+    // Add vehicle details
+    if (data.vehicleCompatibility) {
+      const comp = data.vehicleCompatibility;
+      if (comp.isUniversalFit) {
+        tags.add("universal");
+      } else {
+        comp.makes?.forEach((make) => tags.add(make.toLowerCase()));
+        comp.models?.forEach((model) => tags.add(model.toLowerCase()));
+      }
+      if (comp.type && comp.type !== "GENERAL / ALL TYPES")
+        tags.add(comp.type.toLowerCase());
+    }
+
+    // Add seasonal tags
+    if (data.seasonalCategory) {
+      tags.add("seasonal");
+      tags.add(data.seasonalCategory.toLowerCase());
+    }
+
+    return Array.from(tags);
   };
 
   const handleSubmit = async (e) => {
@@ -145,11 +270,40 @@ export default function ProductForm() {
 
     setLoading(true);
     try {
+      // Prepare Vehicle Compatibility
+      const vehicleCompatibility = {
+        type: formData.vehicleType || "Universal",
+        isUniversalFit: formData.isUniversalFit,
+        makes: formData.vehicleMake ? [formData.vehicleMake] : [],
+        models: Array.isArray(formData.models) ? formData.models : [],
+        yearRange: {
+          from: Number(formData.yearFrom),
+          to: Number(formData.yearTo),
+        },
+      };
+
+      // Generate tags automatically
+      const productDataForTags = {
+        ...formData,
+        vehicleCompatibility,
+        isSeasonal: formData.seasonalCategory ? true : formData.isSeasonal,
+      };
+      const generatedTags = generateTags(productDataForTags);
+
       const data = new FormData();
       // Append standard fields
       Object.keys(formData).forEach((key) => {
-        if (!["tags", "vehicleCompatibility"].includes(key)) {
-          data.append(key, formData[key]);
+        if (
+          !["tags", "vehicleCompatibility", "seasonalCategory"].includes(key)
+        ) {
+          if (key === "isSeasonal") {
+            data.append(
+              key,
+              formData.seasonalCategory ? "true" : formData.isSeasonal,
+            );
+          } else {
+            data.append(key, formData[key]);
+          }
         }
       });
 
@@ -160,25 +314,19 @@ export default function ProductForm() {
         user.storeName || user.displayName || "Unknown Store",
       );
 
-      // Prepare Vehicle Compatibility
-      const vehicleCompatibility = {
-        type: formData.vehicleType || "Universal",
-        isUniversalFit: formData.isUniversalFit,
-        makes: formData.vehicleMake ? [formData.vehicleMake] : [],
-        models: formData.vehicleModel ? [formData.vehicleModel] : [],
-        yearRange: {
-          from: Number(formData.yearFrom),
-          to: Number(formData.yearTo),
-        },
-      };
-
       data.append("vehicleCompatibility", JSON.stringify(vehicleCompatibility));
-      data.append("tags", JSON.stringify(formData.tags));
+      data.append("tags", JSON.stringify(generatedTags));
 
       if (imageFile) data.append("image", imageFile);
 
-      await createProduct(data);
-      alert("Product/Bundle Registered Successfully!");
+      if (editingProductId) {
+        await updateProduct(editingProductId, data);
+        alert("Product updated successfully!");
+        fetchSellerProducts && fetchSellerProducts();
+      } else {
+        await createProduct(data);
+        alert("Product/Bundle Registered Successfully!");
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -197,17 +345,29 @@ export default function ProductForm() {
           <div className="flex items-center gap-3">
             <Package size={16} className="text-amber-500" />
             <h2 className="text-xs font-black uppercase tracking-[0.2em]">
-              Master Specification Registry
+              Product Form
             </h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[9px] font-mono text-zinc-500">
-              AUTH_REQ: GRANTED
-            </span>
           </div>
         </div>
 
         <div className="p-8 space-y-10">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">
+              Edit Existing Product
+            </label>
+            <select
+              onChange={handleSelectProduct}
+              value={editingProductId || ""}
+              className="w-full border-2 border-zinc-100 p-2 text-xs font-bold outline-none bg-white"
+            >
+              <option value="">-- Create New Product --</option>
+              {sellerProducts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.category})
+                </option>
+              ))}
+            </select>
+          </div>
           {/* PRIMARY DATA GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
             {/* Visual Column */}
@@ -237,119 +397,18 @@ export default function ProductForm() {
                   </label>
                 )}
               </div>
-
-              <div className="border-2 border-zinc-900 p-4 bg-zinc-50">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="isBundle"
-                    checked={formData.isBundle}
-                    onChange={handleChange}
-                    className="w-4 h-4 accent-zinc-900"
-                  />
-                  <span className="text-xs font-black uppercase italic">
-                    Activate Bundle/Seasonal Kit Logic
-                  </span>
-                </label>
-
-                {formData.isBundle && (
-                  <div className="p-6 bg-amber-50 border-2 border-zinc-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] space-y-4">
-                    <div className="flex items-center gap-2">
-                      <Package size={20} className="text-zinc-900" />
-                      <h3 className="text-xs font-black uppercase tracking-widest">
-                        Kit Manifest & Price Anchoring
-                      </h3>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase">
-                          Original Combined Price (PHP)
-                        </label>
-                        <input
-                          name="compareAtPrice"
-                          type="number"
-                          value={formData.compareAtPrice}
-                          onChange={handleChange}
-                          className="w-full border-2 border-zinc-900 p-3 font-mono"
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase">
-                          Kit Contents (Comma Separated)
-                        </label>
-                        <input
-                          name="bundleContents"
-                          value={formData.bundleContents}
-                          onChange={handleChange}
-                          className="w-full border-2 border-zinc-900 p-3"
-                          placeholder="e.g. Front Pads, Rear Pads, Cleaner"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-2 border-zinc-900 p-4 bg-zinc-50">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="isSeasonal"
-                    checked={formData.isSeasonal}
-                    onChange={handleChange}
-                    className="w-4 h-4 accent-zinc-900"
-                  />
-                  <span className="text-xs font-black uppercase italic">
-                    Seasonal Item
-                  </span>
-                </label>
-              </div>
-
-              {/* Tag System */}
-              <div className="space-y-3">
-                <label className="text-[10px] font-black uppercase text-zinc-500 tracking-widest flex items-center gap-2">
-                  <Tag size={12} /> Search Metadata
-                </label>
-                <input
-                  value={tagInput}
-                  onKeyDown={handleTagAdd}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  placeholder="Type & Enter..."
-                  className="w-full border-b border-zinc-200 py-1 text-xs font-bold outline-none focus:border-amber-600 uppercase"
-                />
-                <div className="flex flex-wrap gap-1.5">
-                  {formData.tags.map((t) => (
-                    <span
-                      key={t}
-                      className="bg-zinc-100 text-[8px] font-black px-2 py-1 flex items-center gap-1 border border-zinc-200 uppercase"
-                    >
-                      {t}{" "}
-                      <X
-                        size={10}
-                        className="cursor-pointer"
-                        onClick={() =>
-                          setFormData((p) => ({
-                            ...p,
-                            tags: p.tags.filter((tag) => tag !== t),
-                          }))
-                        }
-                      />
-                    </span>
-                  ))}
-                </div>
-              </div>
             </div>
 
             {/* Fields Column */}
             <div className="lg:col-span-8 space-y-8">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">
-                  Component Name
+                  Product Name
                 </label>
                 <input
                   required
                   name="name"
+                  value={formData.name}
                   onChange={handleChange}
                   className="w-full border-b-2 border-zinc-100 focus:border-amber-600 outline-none p-2 text-xl font-black uppercase transition-colors"
                   placeholder="E.G. RCB S1 FORGED BRAKE CALIPER"
@@ -364,6 +423,7 @@ export default function ProductForm() {
                   <select
                     required
                     name="category"
+                    value={formData.category}
                     onChange={handleChange}
                     className="w-full border-b-2 border-zinc-100 p-2 text-xs font-bold outline-none bg-transparent"
                   >
@@ -383,11 +443,42 @@ export default function ProductForm() {
                     required
                     name="price"
                     type="number"
+                    value={formData.price}
                     onChange={handleChange}
                     className="w-full border-b-2 border-zinc-100 p-2 text-lg font-mono font-bold outline-none"
                     placeholder="0.00"
                   />
                 </div>
+              </div>
+
+              {/* SEASONAL CHECKBOX AND CATEGORY */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="isSeasonal"
+                    checked={formData.isSeasonal}
+                    onChange={handleChange}
+                    className="w-4 h-4 accent-zinc-900 cursor-pointer"
+                  />
+                  <label className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">
+                    Is Seasonal?
+                  </label>
+                </div>
+                {formData.isSeasonal && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">
+                      Seasonal Category
+                    </label>
+                    <input
+                      name="seasonalCategory"
+                      value={formData.seasonalCategory}
+                      onChange={handleChange}
+                      className="w-full border-b-2 border-zinc-100 focus:border-amber-600 outline-none p-2 text-sm font-bold uppercase"
+                      placeholder="E.G. WET SEASON, HOLIDAY SALE"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -396,6 +487,7 @@ export default function ProductForm() {
                 </label>
                 <textarea
                   name="description"
+                  value={formData.description}
                   onChange={handleChange}
                   className="w-full border-2 border-zinc-50 p-4 min-h-[120px] text-sm font-medium leading-relaxed outline-none focus:border-amber-600"
                   placeholder="Material composition, performance metrics, installation notes..."
@@ -415,28 +507,32 @@ export default function ProductForm() {
                 </h3>
               </div>
 
-              {/* NEW: Universal Toggle */}
-              <div className="flex items-center gap-3 bg-zinc-50 px-4 py-2 border-2 border-zinc-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-                <input
-                  type="checkbox"
-                  name="isUniversalFit"
-                  checked={formData.isUniversalFit}
-                  onChange={handleChange}
-                  className="w-4 h-4 accent-zinc-900 cursor-pointer"
-                />
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                  Universal Fitment
-                </span>
-              </div>
+              {/* Universal Toggle - only show if not GENERAL/ALL TYPES */}
+              {formData.vehicleType &&
+                formData.vehicleType !== "GENERAL / ALL TYPES" && (
+                  <div className="flex items-center gap-3 bg-zinc-50 px-4 py-2 border-2 border-zinc-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                    <input
+                      type="checkbox"
+                      name="isUniversalFit"
+                      checked={formData.isUniversalFit}
+                      onChange={handleChange}
+                      className="w-4 h-4 accent-zinc-900 cursor-pointer"
+                    />
+                    <span className="text-[10px] font-black uppercase tracking-widest">
+                      Universal Fitment
+                    </span>
+                  </div>
+                )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="space-y-2">
                 <label className="text-[9px] font-black text-zinc-400 uppercase">
-                  Class (Optional for items like Tools)
+                  Vehicle Type
                 </label>
                 <select
                   name="vehicleType"
+                  value={formData.vehicleType}
                   onChange={handleChange}
                   className="w-full border-2 border-zinc-100 p-3 text-[10px] font-black uppercase outline-none focus:border-zinc-900"
                 >
@@ -457,9 +553,14 @@ export default function ProductForm() {
                       Make
                     </label>
                     <select
-                      name="make"
+                      name="vehicleMake"
+                      value={formData.vehicleMake}
                       disabled={!formData.vehicleType}
-                      onChange={handleChange}
+                      onChange={(e) => {
+                        // reset models when make changes
+                        handleChange(e);
+                        setFormData((prev) => ({ ...prev, models: [] }));
+                      }}
                       className="w-full border-2 border-zinc-100 p-3 text-[10px] font-black uppercase outline-none focus:border-zinc-900 disabled:opacity-30"
                     >
                       <option value="">SELECT MAKE</option>
@@ -475,11 +576,40 @@ export default function ProductForm() {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[9px] font-black text-zinc-400 uppercase">
+                      Models
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.vehicleType &&
+                        formData.vehicleMake &&
+                        VEHICLE_DATA[formData.vehicleType][
+                          formData.vehicleMake
+                        ].map((model) => {
+                          const active = formData.models?.includes(model);
+                          return (
+                            <button
+                              key={model}
+                              type="button"
+                              onClick={() => toggleModel(model)}
+                              className={`px-3 py-1 text-xs border rounded-full uppercase font-bold ${
+                                active
+                                  ? "bg-amber-600 text-white border-amber-600"
+                                  : "bg-white text-zinc-900 border-zinc-200"
+                              }`}
+                            >
+                              {model}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-zinc-400 uppercase">
                       Year Range
                     </label>
                     <div className="flex gap-2">
                       <input
                         name="yearFrom"
+                        value={formData.yearFrom}
                         type="number"
                         placeholder="FROM"
                         onChange={handleChange}
@@ -487,6 +617,7 @@ export default function ProductForm() {
                       />
                       <input
                         name="yearTo"
+                        value={formData.yearTo}
                         type="number"
                         placeholder="TO"
                         onChange={handleChange}
@@ -497,44 +628,9 @@ export default function ProductForm() {
                 </>
               )}
             </div>
-
-            {/* Only show models if NOT universal and a make is selected */}
-            {!formData.isUniversalFit && formData.make && (
-              <div className="mt-6 bg-zinc-50 p-6 border-2 border-zinc-100">
-                {/* ... Model buttons logic ... */}
-              </div>
-            )}
           </div>
           {/* FINAL CONTROLS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6">
-            <div className="bg-amber-500 border-2 border-zinc-900 p-6 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-[10px] font-black uppercase tracking-widest">
-                  Promo Logic
-                </h3>
-                <CloudRain size={16} />
-              </div>
-              <select
-                name="dealType"
-                onChange={handleChange}
-                className="w-full bg-zinc-900 text-white p-3 text-[10px] font-black mb-4 uppercase outline-none"
-              >
-                <option value="none">STANDARD LISTING</option>
-                <option value="rainy-deal">RAINY SEASON BUNDLE</option>
-              </select>
-              <label className="flex items-center gap-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  name="isBundle"
-                  onChange={handleChange}
-                  className="w-4 h-4 border-2 border-zinc-900 bg-transparent checked:bg-zinc-900 cursor-pointer"
-                />
-                <span className="text-[10px] font-black uppercase">
-                  Bundle / Parts Kit
-                </span>
-              </label>
-            </div>
-
             <div className="space-y-4">
               <div className="border-2 border-zinc-900 p-4 flex items-center justify-between bg-zinc-50">
                 <span className="text-[10px] font-black uppercase text-zinc-500">
@@ -544,9 +640,11 @@ export default function ProductForm() {
                   required
                   name="stock"
                   type="number"
+                  min="1"
+                  value={formData.stock}
                   onChange={handleChange}
                   className="w-20 bg-transparent text-right text-lg font-mono font-black outline-none"
-                  placeholder="0"
+                  placeholder="1"
                 />
               </div>
               <button
@@ -554,7 +652,11 @@ export default function ProductForm() {
                 disabled={loading}
                 className="w-full bg-zinc-900 text-amber-500 py-6 text-sm font-black uppercase tracking-[0.4em] border-b-8 border-amber-700 active:border-b-0 active:translate-y-1 transition-all flex items-center justify-center gap-3"
               >
-                {loading ? "AUTHORIZING..." : "REGISTER TO CATALOG"}
+                {loading
+                  ? "AUTHORIZING..."
+                  : editingProductId
+                    ? "UPDATE PRODUCT"
+                    : "REGISTER PRODUCT"}
                 <ChevronRight size={18} />
               </button>
             </div>
