@@ -37,6 +37,7 @@ export default function AppRoutes() {
         <Route path="/trending" element={<TrendingProduct />} />
         <Route path="/deals" element={<DealsPage />} />
         <Route path="/cart" element={<Cart />} />
+        <Route path="/orders" element={<OrdersPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/apply-seller" element={<ApplySellerPage />} />
         <Route path="/admin" element={<AdminPage />} />
@@ -47,7 +48,6 @@ export default function AppRoutes() {
         <Route path="/seller/dashboard" element={<SellerDashboard />} />
         <Route path="/seller/product" element={<InventoryPage />} />
         <Route path="/seller/analytics" element={<AnalyticsPage />} />
-        <Route path="/seller/orders" element={<OrdersPage />} />
         <Route path="/seller/account" element={<SellerAccount />} />
       </Route>
 

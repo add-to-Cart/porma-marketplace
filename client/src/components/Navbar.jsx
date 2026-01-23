@@ -112,6 +112,14 @@ export default function Navbar() {
 
           {isAuthenticated ? (
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate("/orders")}
+                className="p-2.5 hover:bg-blue-50 rounded-full text-blue-600 transition-colors group relative"
+                title="My Orders"
+              >
+                <ShoppingCart size={20} />
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
               <NavLink
                 to="/seller/dashboard"
                 className="p-2.5 hover:bg-purple-50 rounded-full text-purple-600 transition-colors group relative"
@@ -137,7 +145,7 @@ export default function Navbar() {
                 </div>
                 <div className="hidden sm:block text-left">
                   <p className="text-xs font-bold text-gray-900 leading-none">
-                    {user?.displayName || "User"}
+                    {user?.username || user?.displayName || "User"}
                   </p>
                   <p className="text-[10px] text-gray-500">{user?.email}</p>
                 </div>

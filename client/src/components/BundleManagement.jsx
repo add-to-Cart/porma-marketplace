@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getProductsBySeller } from "@/api/products";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProductContext } from "@/contexts/ProductContext";
 import { createProduct } from "@/api/products";
 import {
   Package,
@@ -12,9 +13,11 @@ import {
   X,
   CloudRain,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function BundleManagement() {
   const { user } = useAuth();
+  const { addProductToList } = useProductContext();
   const [products, setProducts] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -118,7 +121,7 @@ export default function BundleManagement() {
       if (imageFile) bundleData.append("image", imageFile);
 
       await createProduct(bundleData);
-      alert("Bundle created successfully!");
+      toast.success("Bundle created successfully!");
       setSelectedProducts([]);
       setBundleForm({
         name: "",
@@ -131,7 +134,7 @@ export default function BundleManagement() {
       fetchProducts();
     } catch (err) {
       console.error(err);
-      alert("Failed to create bundle");
+      toast.error("Failed to create bundle");
     } finally {
       setLoading(false);
     }

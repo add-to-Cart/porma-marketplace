@@ -2,7 +2,7 @@ import { useCart } from "@/contexts/CartContext";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { createSimulatedOrder } from "@/utils/orders";
+import { createOrder } from "@/api/orders";
 import toast from "react-hot-toast";
 
 export default function Cart() {
@@ -115,28 +115,43 @@ export default function Cart() {
         )}
 
         <button
-          onClick={() => {
+          onClick={async () => {
             if (!isAuthenticated) return navigate("/login");
 
-            // Create simulated order
-            const order = createSimulatedOrder({
-              buyerId: user?.uid || user?.id || null,
-              items: cart,
-              subtotal,
-              deliveryFee,
-              total,
-            });
+            try {
+              // Create real order in Firestore
+              const orderData = {
+                buyerId: user?.uid,
+                items: cart.map((item) => ({
+                  id: item.id,
+                  name: item.name,
+                  price: item.price,
+                  quantity: item.quantity,
+                  imageUrl: item.imageUrl,
+                  sellerId: item.sellerId,
+                  storeName: item.storeName || "Unknown Seller",
+                })),
+                subtotal,
+                deliveryFee,
+                total,
+              };
 
-            // Clear cart stored in localStorage so CartContext picks it up on next load
-            // Clear cart via context so UI updates
-            clearCart();
+              const order = await createOrder(orderData);
 
-            toast.success(
-              `Order placed — est. delivery ${order.estimatedDays} days`,
-            );
-            navigate("/orders");
+              // Clear cart
+              clearCart();
+
+              toast.success(
+                `Order placed successfully! Order #${order.id.slice(-8)}`,
+              );
+              navigate("/orders");
+            } catch (err) {
+              console.error("Failed to place order:", err);
+              toast.error("Failed to place order. Please try again.");
+            }
           }}
-          className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold"
+          className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={cart.length === 0}
         >
           {isAuthenticated ? "Complete Purchase" : "Proceed to Checkout"}
         </button>

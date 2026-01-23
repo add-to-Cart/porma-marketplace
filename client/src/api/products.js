@@ -62,3 +62,12 @@ export const updateProduct = async (id, productData) => {
   const res = await api.patch(`/products/${id}`, productData);
   return res.data;
 };
+
+export const incrementViewCount = async (id) => {
+  try {
+    const res = await api.patch(`/products/${id}/view`);
+    return res.data;
+  } catch (err) {
+    console.error("Failed to update view count:", err);
+  }
+};

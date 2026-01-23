@@ -42,6 +42,11 @@ export default function ProductCard({ product, onClick }) {
           >
             {vc?.type || "Universal"}
           </span>
+          {product.viewCount && (
+            <span className="px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md bg-gray-800/90 text-white flex items-center gap-1">
+              👁 {product.viewCount}
+            </span>
+          )}
           {product.isBundle && (
             <span className="px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md bg-green-500/90 text-white">
               Bundle

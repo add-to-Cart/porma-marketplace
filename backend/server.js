@@ -1,6 +1,7 @@
 import express from "express";
 import productRoutes from "./routes/productRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
 import cors from "cors";
 
 const app = express();
@@ -20,6 +21,7 @@ app.use((req, res, next) => {
 });
 app.use("/products", productRoutes);
 app.use("/auth", authRoutes);
+app.use("/orders", orderRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

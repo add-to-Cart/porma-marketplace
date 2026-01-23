@@ -5,6 +5,7 @@ import {
   updateProduct,
 } from "@/api/products";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProductContext } from "@/contexts/ProductContext";
 import {
   Info,
   Truck,
@@ -14,9 +15,12 @@ import {
   Package,
   AlertCircle,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function ProductForm({ selectedProduct }) {
   const { user } = useAuth();
+  const { addProductToList, updateProductInList, clearSelection } =
+    useProductContext();
   const [loading, setLoading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
   const [imageFile, setImageFile] = useState(null);
@@ -275,38 +279,41 @@ export default function ProductForm({ selectedProduct }) {
       }
 
       if (editingProductId) {
-        await updateProduct(editingProductId, data);
-        alert("Product updated successfully!");
-        fetchSellerProducts();
+        const result = await updateProduct(editingProductId, data);
+        toast.success("Product updated successfully!");
+        updateProductInList(editingProductId, result);
+        clearSelection();
       } else {
-        await createProduct(data);
-        alert("Product Registered Successfully!");
-        // Reset form
-        setFormData({
-          name: "",
-          category: "",
-          description: "",
-          price: "",
-          stock: "1",
-          isUniversalFit: false,
-          isSeasonal: false,
-          seasonalCategory: "",
-          compareAtPrice: "",
-          bundleContents: "",
-          vehicleType: "",
-          vehicleMake: "",
-          models: [],
-          yearFrom: "",
-          yearTo: "",
-          imageUrl: "",
-        });
-        setImagePreview(null);
-        setImageFile(null);
-        fetchSellerProducts();
+        const result = await createProduct(data);
+        toast.success("Product Registered Successfully!");
+        addProductToList(result);
       }
+
+      // Reset form
+      setFormData({
+        name: "",
+        category: "",
+        description: "",
+        price: "",
+        stock: "1",
+        isUniversalFit: false,
+        isSeasonal: false,
+        seasonalCategory: "",
+        compareAtPrice: "",
+        bundleContents: "",
+        vehicleType: "",
+        vehicleMake: "",
+        models: [],
+        yearFrom: "",
+        yearTo: "",
+        imageUrl: "",
+      });
+      setImagePreview(null);
+      setImageFile(null);
+      fetchSellerProducts();
     } catch (err) {
       console.error(err);
-      alert("Failed to save product");
+      toast.error("Failed to save product");
     } finally {
       setLoading(false);
     }
@@ -556,6 +563,7 @@ export default function ProductForm({ selectedProduct }) {
                     >
                       <option value="">SELECT MAKE</option>
                       {formData.vehicleType &&
+                        VEHICLE_DATA[formData.vehicleType] &&
                         Object.keys(VEHICLE_DATA[formData.vehicleType]).map(
                           (m) => (
                             <option key={m} value={m}>
@@ -572,6 +580,10 @@ export default function ProductForm({ selectedProduct }) {
                     <div className="flex flex-wrap gap-2">
                       {formData.vehicleType &&
                         formData.vehicleMake &&
+                        VEHICLE_DATA[formData.vehicleType] &&
+                        VEHICLE_DATA[formData.vehicleType][
+                          formData.vehicleMake
+                        ] &&
                         VEHICLE_DATA[formData.vehicleType][
                           formData.vehicleMake
                         ].map((model) => {

@@ -254,7 +254,7 @@ export const getProductsBySeller = async (req, res) => {
 export const getRelatedProducts = async (req, res) => {
   try {
     const { id } = req.params;
-    const { category, make } = req.query;
+    const { category, make, sellerId } = req.query;
 
     let query = db.collection("products").where("isBundle", "==", false); // Exclude bundles
 
@@ -262,22 +262,31 @@ export const getRelatedProducts = async (req, res) => {
       query = query.where("category", "==", category);
     }
 
-    const snapshot = await query.limit(10).get();
+    const snapshot = await query.limit(50).get();
 
     let related = snapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .filter((p) => p.id !== id);
 
-    // Prioritize products with same make
-    if (make) {
-      related.sort((a, b) => {
-        const aMatch = a.vehicleCompatibility?.makes?.includes(make);
-        const bMatch = b.vehicleCompatibility?.makes?.includes(make);
-        return (bMatch ? 1 : 0) - (aMatch ? 1 : 0);
-      });
-    }
+    // Prioritize products from the same store first
+    related.sort((a, b) => {
+      // Same store has highest priority
+      const aSameStore = a.sellerId === sellerId ? 1 : 0;
+      const bSameStore = b.sellerId === sellerId ? 1 : 0;
+      if (aSameStore !== bSameStore) return bSameStore - aSameStore;
 
-    res.json(related.slice(0, 4));
+      // Then prioritize by make
+      if (make) {
+        const aMatch = a.vehicleCompatibility?.makes?.includes(make) ? 1 : 0;
+        const bMatch = b.vehicleCompatibility?.makes?.includes(make) ? 1 : 0;
+        if (aMatch !== bMatch) return bMatch - aMatch;
+      }
+
+      // Finally, sort by soldCount (most popular)
+      return (b.soldCount || 0) - (a.soldCount || 0);
+    });
+
+    res.json(related.slice(0, 8));
   } catch (err) {
     res.status(500).json({
       message: "Failed to fetch related products",
@@ -291,12 +300,6 @@ export const getProductById = async (req, res) => {
   try {
     const { id } = req.params;
     const docRef = db.collection("products").doc(id);
-
-    // Increment view count
-    await docRef.update({
-      viewCount: admin.firestore.FieldValue.increment(1),
-    });
-
     const snapshot = await docRef.get();
 
     if (!snapshot.exists) {
@@ -526,5 +529,32 @@ export const getProductsByTag = async (req, res) => {
     res.json(products);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch products by tag" });
+  }
+};
+
+export const incrementViewCount = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const docRef = db.collection("products").doc(id);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    const currentViewCount = doc.data().viewCount || 0;
+
+    await docRef.update({
+      viewCount: currentViewCount + 1,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({
+      id,
+      viewCount: currentViewCount + 1,
+    });
+  } catch (err) {
+    console.error("Increment View Count Error:", err);
+    res.status(500).json({ message: "Failed to update view count" });
   }
 };

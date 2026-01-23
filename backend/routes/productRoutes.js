@@ -11,6 +11,7 @@ import {
   getRelatedProducts,
   getProductsByTag,
   getProductsBySeller,
+  incrementViewCount,
 } from "../controllers/productController.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -31,6 +32,7 @@ router.get("/:id/related", getRelatedProducts);
 
 // Product CRUD
 router.get("/:id", getProductById);
+router.patch("/:id/view", incrementViewCount);
 router.post("/", upload.single("image"), createProduct);
 router.patch("/:id", upload.single("image"), updateProduct);
 
