@@ -2,9 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAllProducts } from "@/api/products.js";
 import ProductCard from "@/components/ProductCard";
-
 import { useFilters } from "@/contexts/FilterContext";
-import { useSearch } from "@/contexts/SearchContext"; // 1. Import Search Context
+import { useSearch } from "@/contexts/SearchContext";
 
 export default function Marketplace() {
   const [products, setProducts] = useState([]);
@@ -16,7 +15,7 @@ export default function Marketplace() {
 
   useEffect(() => {
     const fetchMarketplace = async () => {
-      // If a search is active, don't waste resources fetching the general feed
+      // If a search is active, don't fetch the general feed
       if (searchQuery.trim().length > 1) return;
 
       setLoading(true);
@@ -30,45 +29,14 @@ export default function Marketplace() {
       }
     };
     fetchMarketplace();
-  }, [filters, searchQuery]); // Add searchQuery to dependencies
-
-  const baseFilteredProducts = products.filter((p) => {
-    let match = true;
-
-    // Exclude bundles from marketplace by default
-    if (p.isBundle) return false;
-
-    // Existing Filters
-    if (filters.category) match = match && p.category === filters.category;
-    if (filters.vehicleType) {
-      match =
-        match &&
-        (p.vehicleCompatibility?.type === filters.vehicleType ||
-          p.vehicleCompatibility?.type === "Universal");
-    }
-
-    // ADD THESE: Filter by specific Make/Model from your Sidebar
-    if (filters.vehicle?.make) {
-      match =
-        match && p.vehicleCompatibility?.makes?.includes(filters.vehicle.make);
-    }
-    if (filters.vehicle?.model) {
-      match =
-        match &&
-        p.vehicleCompatibility?.models?.includes(filters.vehicle.model);
-    }
-
-    // Filter by bundle/seasonal
-    if (filters.isSeasonal) match = match && p.isSeasonal;
-
-    return match;
-  });
+  }, [filters, searchQuery]);
 
   const isUserSearching = searchQuery.trim().length > 1;
-  const finalDisplay = isUserSearching ? searchResults : baseFilteredProducts;
+  const finalDisplay = isUserSearching ? searchResults : products;
 
-  if (loading || isSearching)
+  if (loading || isSearching) {
     return <p className="p-4 text-center">Loading Discovery Feed...</p>;
+  }
 
   return (
     <div className="flex flex-col gap-6 p-6 min-h-screen">

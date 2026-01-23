@@ -2,58 +2,111 @@ import admin from "../config/firebaseAdmin.js";
 const db = admin.firestore();
 import { uploadProductImage } from "../services/cloudinary_service.js";
 
-// productController.js
+// Helper to generate comprehensive search tags
+const generateSearchTags = (data) => {
+  const tags = new Set();
 
-// 1. MARKETPLACE: Global Discovery with Metadata Awareness
+  // 1. Add name parts
+  if (data.name) {
+    data.name
+      .toLowerCase()
+      .split(/\s+/)
+      .forEach((word) => {
+        if (word.length > 1) tags.add(word);
+      });
+  }
+
+  // 2. Add category
+  if (data.category) tags.add(data.category.toLowerCase());
+
+  // 3. Add vehicle details
+  const comp = data.vehicleCompatibility;
+  if (comp) {
+    if (comp.isUniversalFit) {
+      tags.add("universal");
+    } else {
+      comp.makes?.forEach((make) => tags.add(make.toLowerCase()));
+      comp.models?.forEach((model) => tags.add(model.toLowerCase()));
+    }
+    if (comp.type && comp.type !== "Universal") {
+      tags.add(comp.type.toLowerCase());
+    }
+  }
+
+  // 4. Add bundle/seasonal flags
+  if (data.isBundle) tags.add("bundle");
+  if (data.isSeasonal) tags.add("seasonal");
+
+  // 5. Add seasonal category if exists
+  if (data.seasonalCategory) {
+    tags.add(data.seasonalCategory.toLowerCase());
+  }
+
+  return Array.from(tags).filter((tag) => tag && tag.length > 1);
+};
+
+// 1. MARKETPLACE: Latest to Oldest (exclude bundles)
 export const getAllProducts = async (req, res) => {
   try {
     const { category, vehicleType, make, model, isBundle, isSeasonal } =
       req.query;
     let query = db.collection("products");
 
-    // Metadata Filtering (Marketplace Constraints)
-    if (category) query = query.where("category", "==", category);
-    if (vehicleType)
-      query = query.where("vehicleCompatibility.type", "==", vehicleType);
-    // For specific vehicle filtering without a search keyword
-    if (make)
-      query = query.where("vehicleCompatibility.makes", "array-contains", make);
+    // Filter out bundles for marketplace
+    if (isBundle !== "true") {
+      query = query.where("isBundle", "==", false);
+    }
 
-    // Default: Sort by newest (limit to reasonable number to avoid performance issues)
+    // Metadata Filtering
+    if (category) query = query.where("category", "==", category);
+    if (vehicleType) {
+      query = query.where("vehicleCompatibility.type", "==", vehicleType);
+    }
+
+    // Sort by newest first (latest to oldest)
     const snapshot = await query.orderBy("createdAt", "desc").limit(100).get();
 
-    let products = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let products = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
 
-    // In-memory filter for Model (since Firestore handles only 1 array-contains per query)
+    // In-memory filters for complex queries
+    if (make) {
+      products = products.filter((p) =>
+        p.vehicleCompatibility?.makes?.includes(make),
+      );
+    }
+
     if (model) {
       products = products.filter((p) =>
         p.vehicleCompatibility?.models?.includes(model),
       );
     }
 
-    // In-memory filter for bundle/seasonal to avoid complex Firestore indexing
-    if (isBundle === "true") {
-      products = products.filter((p) => p.isBundle === true);
-    }
     if (isSeasonal === "true") {
       products = products.filter((p) => p.isSeasonal === true);
     }
 
     res.json(products);
   } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Failed to fetch marketplace", error: err.message });
+    console.error("Marketplace Error:", err);
+    res.status(500).json({
+      message: "Failed to fetch marketplace",
+      error: err.message,
+    });
   }
 };
 
+// 2. TRENDING: Refined algorithm using normalized metrics
 export const getTrendingProducts = async (req, res) => {
   try {
     const snapshot = await db
       .collection("products")
       .where("isAvailable", "==", true)
-      .orderBy("soldCount", "desc") // Start with top sold
-      .limit(50) // Fetch more to compute
+      // Remove or comment the line below if you want "Wasalak" (a bundle) to appear in Trending
+      // .where("isBundle", "==", false)
+      .limit(100)
       .get();
 
     let products = snapshot.docs.map((doc) => ({
@@ -61,40 +114,111 @@ export const getTrendingProducts = async (req, res) => {
       ...doc.data(),
     }));
 
-    // Compute trending score
     products = products.map((p) => {
+      // 1. Ensure we use the normalized metrics
       const sold = p.soldCount || 0;
       const views = p.viewCount || 0;
-      const avgRating = p.rating || 0;
       const numRatings = p.ratingsCount || 0;
 
-      // Credibility factor for ratings (based on number of ratings)
-      const credibility = Math.min(numRatings / 5, 1); // Max at 5 ratings
-
-      // Base score
-      let score = sold * 1.0 + avgRating * 0.8 * credibility + views * 0.6;
-
-      // Penalize bad products with high sales
-      if (avgRating < 2.5 && sold > 20) {
-        score *= 0.7;
+      // Calculate average from ratings array if ratingAverage is missing
+      let avgRating = p.ratingAverage || 0;
+      if (!avgRating && p.ratings && p.ratings.length > 0) {
+        avgRating = p.ratings.reduce((a, b) => a + b, 0) / p.ratings.length;
       }
 
-      return { ...p, trendingScore: score };
+      // 2. Credibility factor (more ratings = more reliable score)
+      const credibility = Math.min(numRatings / 10, 1);
+
+      // 3. Engagement rate (Conversion)
+      const engagementRate = views > 0 ? sold / views : 0;
+
+      // 4. Weighted Scoring Algorithm
+      // We give higher weight to sales and the rating/credibility combo
+      let trendingScore =
+        sold * 5.0 + // Sales are the strongest indicator
+        views * 0.2 + // Views show interest but not intent
+        avgRating * 3.0 * credibility + // High ratings only matter if there are enough of them
+        engagementRate * 50; // Bonus for high-conversion products
+
+      // Boost for Recency (Created in the last 30 days)
+      const createdAt = p.createdAt?._seconds
+        ? new Date(p.createdAt._seconds * 1000)
+        : new Date(p.createdAt);
+
+      const daysOld = (Date.now() - createdAt) / (1000 * 60 * 60 * 24);
+      if (daysOld <= 30) {
+        trendingScore *= 1.2; // 20% boost for new arrivals
+      }
+
+      // Penalty for poor performance
+      if (avgRating < 3.0 && sold > 10) {
+        trendingScore *= 0.5; // "Bad" trending items are pushed down
+      }
+
+      return {
+        ...p,
+        ratingAverage: parseFloat(avgRating.toFixed(1)),
+        trendingScore,
+      };
     });
 
-    // Sort by score descending
+    // Sort by score (Highest first)
     products.sort((a, b) => b.trendingScore - a.trendingScore);
 
-    // Return top 8
-    res.json(products.slice(0, 8));
+    // Return top 20 trending items
+    res.json(products.slice(0, 20));
   } catch (err) {
-    console.error("TRENDING_ERROR:", err.message);
-    res
-      .status(500)
-      .json({ message: "Failed to fetch trending", error: err.message });
+    console.error("Trending Error:", err);
+    res.status(500).json({
+      message: "Failed to fetch trending products",
+      error: err.message,
+    });
   }
 };
 
+// 3. DEALS PAGE: Bundles and Seasonal Items
+export const getDealsProducts = async (req, res) => {
+  try {
+    const bundlesSnapshot = await db
+      .collection("products")
+      .where("isBundle", "==", true)
+      .where("isAvailable", "==", true)
+      .orderBy("createdAt", "desc")
+      .limit(50)
+      .get();
+
+    const seasonalSnapshot = await db
+      .collection("products")
+      .where("isSeasonal", "==", true)
+      .where("isAvailable", "==", true)
+      .orderBy("createdAt", "desc")
+      .limit(50)
+      .get();
+
+    const bundles = bundlesSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    const seasonal = seasonalSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    res.json({
+      bundles,
+      seasonal,
+    });
+  } catch (err) {
+    console.error("Deals Error:", err);
+    res.status(500).json({
+      message: "Failed to fetch deals",
+      error: err.message,
+    });
+  }
+};
+
+// Get products by seller
 export const getProductsBySeller = async (req, res) => {
   try {
     const { sellerId } = req.params;
@@ -105,25 +229,11 @@ export const getProductsBySeller = async (req, res) => {
         .json({ message: "sellerId parameter is required" });
     }
 
-    // Try to query ordered by createdAt first. If Firestore requires a composite index
-    // this may throw — fall back to a simple where() query to avoid 500 for missing index.
-    let snapshot;
-    try {
-      snapshot = await db
-        .collection("products")
-        .where("sellerId", "==", sellerId)
-        .orderBy("createdAt", "desc")
-        .get();
-    } catch (queryErr) {
-      console.warn(
-        "getProductsBySeller: ordered query failed, falling back to unordered query:",
-        queryErr.message,
-      );
-      snapshot = await db
-        .collection("products")
-        .where("sellerId", "==", sellerId)
-        .get();
-    }
+    const snapshot = await db
+      .collection("products")
+      .where("sellerId", "==", sellerId)
+      .orderBy("createdAt", "desc")
+      .get();
 
     const products = snapshot.docs.map((doc) => ({
       id: doc.id,
@@ -133,34 +243,33 @@ export const getProductsBySeller = async (req, res) => {
     return res.json(products);
   } catch (err) {
     console.error("Failed to fetch seller products:", err);
-    return res
-      .status(500)
-      .json({ message: "Failed to fetch seller products", error: err.message });
+    return res.status(500).json({
+      message: "Failed to fetch seller products",
+      error: err.message,
+    });
   }
 };
 
+// Get related products
 export const getRelatedProducts = async (req, res) => {
   try {
-    const { id } = req.params; // The current product ID to exclude
+    const { id } = req.params;
     const { category, make } = req.query;
 
-    let query = db.collection("products");
+    let query = db.collection("products").where("isBundle", "==", false); // Exclude bundles
 
-    // 1. Filter by Category
     if (category) {
       query = query.where("category", "==", category);
     }
 
     const snapshot = await query.limit(10).get();
 
-    // 2. Map results and Filter out the current product in memory
-    // and prioritize items that match the vehicle 'make'
     let related = snapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .filter((p) => p.id !== id);
 
+    // Prioritize products with same make
     if (make) {
-      // Sort so products matching the same brand appear first
       related.sort((a, b) => {
         const aMatch = a.vehicleCompatibility?.makes?.includes(make);
         const bMatch = b.vehicleCompatibility?.makes?.includes(make);
@@ -168,7 +277,7 @@ export const getRelatedProducts = async (req, res) => {
       });
     }
 
-    res.json(related.slice(0, 4)); // Return top 4
+    res.json(related.slice(0, 4));
   } catch (err) {
     res.status(500).json({
       message: "Failed to fetch related products",
@@ -177,25 +286,7 @@ export const getRelatedProducts = async (req, res) => {
   }
 };
 
-export const getProductsByTag = async (req, res) => {
-  try {
-    const { tag } = req.query;
-    const snapshot = await db
-      .collection("products")
-      .where("tags", "array-contains", tag.toLowerCase())
-      .limit(8)
-      .get();
-
-    const products = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    res.json(products);
-  } catch (err) {
-    res.status(500).json({ message: "Failed to fetch deals" });
-  }
-};
-
+// Get product by ID
 export const getProductById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -221,83 +312,112 @@ export const getProductById = async (req, res) => {
   }
 };
 
-// Helper to generate search keywords for the Inverted Index
-const generateSearchIndex = (data) => {
-  const words = new Set();
+// Search products
+export const searchProducts = async (req, res) => {
+  try {
+    const { query, category, vehicleType, make, model, isBundle, isSeasonal } =
+      req.query;
 
-  // 1. Add name parts
-  data.name
-    ?.toLowerCase()
-    .split(/\s+/)
-    .forEach((word) => words.add(word));
-
-  // 2. Add category
-  words.add(data.category?.toLowerCase());
-
-  // 3. Add tags
-  data.tags?.forEach((tag) => words.add(tag.toLowerCase()));
-
-  // 4. Add vehicle details (Makes & Models)
-  const comp = data.vehicleCompatibility;
-  if (comp) {
-    if (comp.isUniversalFit) {
-      words.add("universal");
-    } else {
-      comp.makes?.forEach((make) => words.add(make.toLowerCase()));
-      comp.models?.forEach((model) => words.add(model.toLowerCase()));
+    if (!query || query.trim().length < 2) {
+      return res.json([]);
     }
-    if (comp.type) words.add(comp.type.toLowerCase());
+
+    const keywords = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((k) => k.length > 0);
+
+    let firestoreQuery = db.collection("products");
+
+    // Simple equality filters
+    if (category) {
+      firestoreQuery = firestoreQuery.where("category", "==", category);
+    }
+    if (vehicleType) {
+      firestoreQuery = firestoreQuery.where(
+        "vehicleCompatibility.type",
+        "==",
+        vehicleType,
+      );
+    }
+
+    // Search using searchTags
+    firestoreQuery = firestoreQuery.where(
+      "searchTags",
+      "array-contains-any",
+      keywords.slice(0, 10),
+    );
+
+    const snapshot = await firestoreQuery.get();
+    let products = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+    // In-memory filters
+    if (make) {
+      products = products.filter((p) =>
+        p.vehicleCompatibility?.makes?.includes(make),
+      );
+    }
+    if (model) {
+      products = products.filter((p) =>
+        p.vehicleCompatibility?.models?.includes(model),
+      );
+    }
+    if (isBundle === "true") {
+      products = products.filter((p) => p.isBundle === true);
+    } else if (isBundle === "false") {
+      products = products.filter((p) => p.isBundle !== true);
+    }
+    if (isSeasonal === "true") {
+      products = products.filter((p) => p.isSeasonal === true);
+    }
+
+    res.json(products);
+  } catch (err) {
+    console.error("Search Error:", err);
+    res.status(500).json({ message: "Search failed", error: err.message });
   }
-
-  // 5. Add marketing flags
-  if (data.isBundle) words.add("bundle");
-  if (data.isSeasonal) words.add("seasonal");
-
-  return Array.from(words).filter((word) => word && word.length > 1);
 };
 
-// Inside productController.js
+// Create product
 export const createProduct = async (req, res) => {
   try {
-    // req.body contains text fields; req.file contains the image
     const productData = { ...req.body };
 
-    // Parse stringified nested objects if you sent them that way
+    // Parse stringified objects
     if (typeof productData.vehicleCompatibility === "string") {
       productData.vehicleCompatibility = JSON.parse(
         productData.vehicleCompatibility,
       );
     }
-    if (typeof productData.tags === "string") {
-      productData.tags = JSON.parse(productData.tags);
+
+    // Parse boolean fields
+    if (productData.isBundle) {
+      productData.isBundle = productData.isBundle === "true";
+    }
+    if (productData.isSeasonal) {
+      productData.isSeasonal = productData.isSeasonal === "true";
+    }
+    if (productData.compareAtPrice) {
+      productData.compareAtPrice = Number(productData.compareAtPrice);
     }
 
-    // Parse boolean and number fields
-    if (productData.isBundle)
-      productData.isBundle = productData.isBundle === "true";
-    if (productData.isSeasonal)
-      productData.isSeasonal = productData.isSeasonal === "true";
-    if (productData.compareAtPrice)
-      productData.compareAtPrice = Number(productData.compareAtPrice);
-
-    // Initialize ratings
+    // Initialize metrics
     productData.rating = 0;
+    productData.ratingAverage = 0;
     productData.ratingsCount = 0;
     productData.totalRating = 0;
     productData.viewCount = 0;
     productData.soldCount = 0;
-    productData.isApproved = true; // For now, auto-approve
+    productData.isAvailable = true;
 
-    // Generate search index
-    productData.searchIndex = generateSearchIndex(productData);
+    // Generate searchTags (unified field)
+    productData.searchTags = generateSearchTags(productData);
 
-    // Handle the image upload to Cloudinary
+    // Handle image upload
     if (req.file) {
-      // Generate custom publicId - use a default userId or from body
       const userId = productData.sellerId || "anonymous";
       const sanitizedName = productData.name.replace(/\s+/g, "-").toLowerCase();
       const publicId = `products/${userId}-${sanitizedName}`;
-      // You need to pass the file buffer to your Cloudinary service
       const uploadResult = await uploadProductImage(req.file, publicId);
       productData.imageUrl = uploadResult.url;
       productData.cloudinaryId = uploadResult.publicId;
@@ -315,99 +435,31 @@ export const createProduct = async (req, res) => {
   }
 };
 
-export const searchProducts = async (req, res) => {
-  try {
-    const { query, category, vehicleType, make, model, isBundle, isSeasonal } =
-      req.query;
-
-    if (!query || query.trim().length < 2) {
-      return res.json([]);
-    }
-
-    const keywords = query
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((k) => k.length > 0);
-    let firestoreQuery = db.collection("products");
-
-    // 1. Apply simple equality filters (These work fine with array-contains-any)
-    if (category)
-      firestoreQuery = firestoreQuery.where("category", "==", category);
-    if (vehicleType)
-      firestoreQuery = firestoreQuery.where(
-        "vehicleCompatibility.type",
-        "==",
-        vehicleType,
-      );
-
-    // 2. APPLY SEARCH (Uses array-contains-any)
-    firestoreQuery = firestoreQuery.where(
-      "searchIndex",
-      "array-contains-any",
-      keywords.slice(0, 10),
-    );
-
-    const snapshot = await firestoreQuery.get();
-    let products = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-
-    // 3. APPLY VEHICLE FILTERS IN-MEMORY
-    // This bypasses the Firestore "multiple array filter" limitation
-    if (make) {
-      products = products.filter((p) =>
-        p.vehicleCompatibility?.makes?.includes(make),
-      );
-    }
-    if (model) {
-      products = products.filter((p) =>
-        p.vehicleCompatibility?.models?.includes(model),
-      );
-    }
-
-    // 4. APPLY BUNDLE/SEASONAL FILTERS IN-MEMORY
-    if (isBundle === "true") {
-      products = products.filter((p) => p.isBundle === true);
-    }
-    if (isSeasonal === "true") {
-      products = products.filter((p) => p.isSeasonal === true);
-    }
-
-    if (model) {
-      products = products.filter((p) =>
-        p.vehicleCompatibility?.models?.includes(model),
-      );
-    }
-
-    res.json(products);
-  } catch (err) {
-    console.error("Search Error:", err);
-    res.status(500).json({ message: "Search failed", error: err.message });
-  }
-};
-
+// Update product
 export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = { ...req.body };
 
-    // Parse stringified nested objects
+    // Parse stringified objects
     if (typeof updateData.vehicleCompatibility === "string") {
       updateData.vehicleCompatibility = JSON.parse(
         updateData.vehicleCompatibility,
       );
     }
-    if (typeof updateData.tags === "string") {
-      updateData.tags = JSON.parse(updateData.tags);
+
+    // Parse boolean fields
+    if (updateData.isBundle !== undefined) {
+      updateData.isBundle = updateData.isBundle === "true";
+    }
+    if (updateData.isSeasonal !== undefined) {
+      updateData.isSeasonal = updateData.isSeasonal === "true";
+    }
+    if (updateData.compareAtPrice) {
+      updateData.compareAtPrice = Number(updateData.compareAtPrice);
     }
 
-    // Parse boolean and number fields
-    if (updateData.isBundle !== undefined)
-      updateData.isBundle = updateData.isBundle === "true";
-    if (updateData.isSeasonal !== undefined)
-      updateData.isSeasonal = updateData.isSeasonal === "true";
-    if (updateData.compareAtPrice)
-      updateData.compareAtPrice = Number(updateData.compareAtPrice);
-
-    // 1. Get the existing product first to ensure we have the full data context
+    // Get existing product
     const docRef = db.collection("products").doc(id);
     const snapshot = await docRef.get();
 
@@ -417,34 +469,62 @@ export const updateProduct = async (req, res) => {
 
     const currentData = snapshot.data();
 
-    // 2. Merge current data with incoming updates
-    // This ensures generateSearchIndex has access to name/tags even if they weren't updated
-    const fullDataForIndexing = {
+    // Merge data for searchTags generation
+    const fullData = {
       ...currentData,
       ...updateData,
-      // Ensure compatibility is merged properly if it's a nested update
       vehicleCompatibility: {
         ...(currentData.vehicleCompatibility || {}),
         ...(updateData.vehicleCompatibility || {}),
       },
     };
 
-    // 3. Re-generate the Search Index based on the merged data
-    const updatedSearchIndex = generateSearchIndex(fullDataForIndexing);
+    // Regenerate searchTags
+    const updatedSearchTags = generateSearchTags(fullData);
 
-    // 4. Prepare the final update payload
+    // Handle image upload if new file provided
+    if (req.file) {
+      const userId = updateData.sellerId || currentData.sellerId || "anonymous";
+      const sanitizedName = (updateData.name || currentData.name)
+        .replace(/\s+/g, "-")
+        .toLowerCase();
+      const publicId = `products/${userId}-${sanitizedName}`;
+      const uploadResult = await uploadProductImage(req.file, publicId);
+      updateData.imageUrl = uploadResult.url;
+      updateData.cloudinaryId = uploadResult.publicId;
+    }
+
+    // Prepare final update
     const finalUpdate = {
       ...updateData,
-      searchIndex: updatedSearchIndex,
+      searchTags: updatedSearchTags,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
-    // 5. Save to Firestore
     await docRef.update(finalUpdate);
 
     res.json({ id, ...finalUpdate });
   } catch (err) {
     console.error("Update Product Error:", err);
     res.status(500).json({ message: "Failed to update product" });
+  }
+};
+
+export const getProductsByTag = async (req, res) => {
+  try {
+    const { tag } = req.query;
+    const snapshot = await db
+      .collection("products")
+      .where("searchTags", "array-contains", tag.toLowerCase())
+      .limit(8)
+      .get();
+
+    const products = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    res.json(products);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch products by tag" });
   }
 };

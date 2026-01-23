@@ -3,34 +3,35 @@ import multer from "multer";
 import {
   getAllProducts,
   getTrendingProducts,
+  getDealsProducts,
   updateProduct,
   getProductById,
   createProduct,
   searchProducts,
   getRelatedProducts,
   getProductsByTag,
-  getProductsBySeller, // Add import
+  getProductsBySeller,
 } from "../controllers/productController.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
-
 const router = express.Router();
 
+// Main routes
 router.get("/", getAllProducts);
 router.get("/search", searchProducts);
 router.get("/trending", getTrendingProducts);
-router.get("/seller/:sellerId", getProductsBySeller); // Add seller products route
+router.get("/deals", getDealsProducts); // New deals endpoint
+router.get("/tags", getProductsByTag);
 
-// FIX: Ensure the ID is passed as a parameter for related products
+// Seller products
+router.get("/seller/:sellerId", getProductsBySeller);
+
+// Related products
 router.get("/:id/related", getRelatedProducts);
-router.get("/tags", getProductsByTag); // Alternative route for related products
 
+// Product CRUD
 router.get("/:id", getProductById);
-
-// Remove the duplicate first line and keep ONLY the one with Multer
 router.post("/", upload.single("image"), createProduct);
-
-// Fix the extra slash here
-router.patch("/:id", updateProduct);
+router.patch("/:id", upload.single("image"), updateProduct);
 
 export default router;

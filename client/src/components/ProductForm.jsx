@@ -11,11 +11,8 @@ import {
   ChevronRight,
   Camera,
   X,
-  Hash,
-  CloudRain,
   Package,
   AlertCircle,
-  Tag,
 } from "lucide-react";
 
 export default function ProductForm({ selectedProduct }) {
@@ -98,7 +95,6 @@ export default function ProductForm({ selectedProduct }) {
     yearFrom: "",
     yearTo: "",
     imageUrl: "",
-    tags: [],
   });
 
   const [sellerProducts, setSellerProducts] = useState([]);
@@ -132,11 +128,7 @@ export default function ProductForm({ selectedProduct }) {
         product.compareAtPrice != null ? String(product.compareAtPrice) : "",
       bundleContents: product.bundleContents || "",
       vehicleType: product.vehicleCompatibility?.type || "",
-      vehicleMake:
-        product.vehicleCompatibility?.makes &&
-        product.vehicleCompatibility.makes.length
-          ? product.vehicleCompatibility.makes[0]
-          : "",
+      vehicleMake: product.vehicleCompatibility?.makes?.[0] || "",
       models: product.vehicleCompatibility?.models || [],
       yearFrom:
         product.vehicleCompatibility?.yearRange?.from != null
@@ -147,7 +139,6 @@ export default function ProductForm({ selectedProduct }) {
           ? String(product.vehicleCompatibility.yearRange.to)
           : "",
       imageUrl: product.imageUrl || product.image || "",
-      tags: product.tags || [],
     });
     setImagePreview(product.imageUrl || product.image || null);
     setImageFile(null);
@@ -173,18 +164,16 @@ export default function ProductForm({ selectedProduct }) {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      setImageFile(file); // Store the actual file object
-      setImagePreview(URL.createObjectURL(file)); // Store the preview for the UI
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
     }
   };
 
   const handleSelectProduct = (e) => {
     const id = e.target.value;
     if (!id) {
-      // new product
       setEditingProductId(null);
-      setFormData((prev) => ({
-        ...prev,
+      setFormData({
         name: "",
         category: "",
         description: "",
@@ -196,13 +185,12 @@ export default function ProductForm({ selectedProduct }) {
         compareAtPrice: "",
         bundleContents: "",
         vehicleType: "",
-        vehicleMakes: "",
-        vehicleModels: "",
+        vehicleMake: "",
+        models: [],
         yearFrom: "",
         yearTo: "",
         imageUrl: "",
-        tags: [],
-      }));
+      });
       setImagePreview(null);
       setImageFile(null);
       return;
@@ -221,44 +209,6 @@ export default function ProductForm({ selectedProduct }) {
         ? prev.models.filter((m) => m !== modelName)
         : [...(prev.models || []), modelName],
     }));
-  };
-
-  const generateTags = (data) => {
-    const tags = new Set();
-
-    // Add name parts
-    if (data.name) {
-      data.name
-        .toLowerCase()
-        .split(/\s+/)
-        .forEach((word) => {
-          if (word.length > 1) tags.add(word);
-        });
-    }
-
-    // Add category
-    if (data.category) tags.add(data.category.toLowerCase());
-
-    // Add vehicle details
-    if (data.vehicleCompatibility) {
-      const comp = data.vehicleCompatibility;
-      if (comp.isUniversalFit) {
-        tags.add("universal");
-      } else {
-        comp.makes?.forEach((make) => tags.add(make.toLowerCase()));
-        comp.models?.forEach((model) => tags.add(model.toLowerCase()));
-      }
-      if (comp.type && comp.type !== "GENERAL / ALL TYPES")
-        tags.add(comp.type.toLowerCase());
-    }
-
-    // Add seasonal tags
-    if (data.seasonalCategory) {
-      tags.add("seasonal");
-      tags.add(data.seasonalCategory.toLowerCase());
-    }
-
-    return Array.from(tags);
   };
 
   const handleSubmit = async (e) => {
@@ -282,30 +232,32 @@ export default function ProductForm({ selectedProduct }) {
         },
       };
 
-      // Generate tags automatically
-      const productDataForTags = {
-        ...formData,
-        vehicleCompatibility,
-        isSeasonal: formData.seasonalCategory ? true : formData.isSeasonal,
-      };
-      const generatedTags = generateTags(productDataForTags);
-
       const data = new FormData();
+
       // Append standard fields
-      Object.keys(formData).forEach((key) => {
-        if (
-          !["tags", "vehicleCompatibility", "seasonalCategory"].includes(key)
-        ) {
-          if (key === "isSeasonal") {
-            data.append(
-              key,
-              formData.seasonalCategory ? "true" : formData.isSeasonal,
-            );
-          } else {
-            data.append(key, formData[key]);
-          }
-        }
-      });
+      data.append("name", formData.name);
+      data.append("category", formData.category);
+      data.append("description", formData.description);
+      data.append("price", formData.price);
+      data.append("stock", formData.stock);
+      data.append("isUniversalFit", formData.isUniversalFit);
+
+      // Seasonal handling
+      data.append(
+        "isSeasonal",
+        formData.seasonalCategory ? "true" : formData.isSeasonal,
+      );
+      if (formData.seasonalCategory) {
+        data.append("seasonalCategory", formData.seasonalCategory);
+      }
+
+      // Bundle handling
+      if (formData.compareAtPrice) {
+        data.append("compareAtPrice", formData.compareAtPrice);
+      }
+      if (formData.bundleContents) {
+        data.append("bundleContents", formData.bundleContents);
+      }
 
       // Add seller information
       data.append("sellerId", user.uid);
@@ -314,21 +266,47 @@ export default function ProductForm({ selectedProduct }) {
         user.storeName || user.displayName || "Unknown Store",
       );
 
+      // Add vehicle compatibility
       data.append("vehicleCompatibility", JSON.stringify(vehicleCompatibility));
-      data.append("tags", JSON.stringify(generatedTags));
 
-      if (imageFile) data.append("image", imageFile);
+      // Add image if provided
+      if (imageFile) {
+        data.append("image", imageFile);
+      }
 
       if (editingProductId) {
         await updateProduct(editingProductId, data);
         alert("Product updated successfully!");
-        fetchSellerProducts && fetchSellerProducts();
+        fetchSellerProducts();
       } else {
         await createProduct(data);
-        alert("Product/Bundle Registered Successfully!");
+        alert("Product Registered Successfully!");
+        // Reset form
+        setFormData({
+          name: "",
+          category: "",
+          description: "",
+          price: "",
+          stock: "1",
+          isUniversalFit: false,
+          isSeasonal: false,
+          seasonalCategory: "",
+          compareAtPrice: "",
+          bundleContents: "",
+          vehicleType: "",
+          vehicleMake: "",
+          models: [],
+          yearFrom: "",
+          yearTo: "",
+          imageUrl: "",
+        });
+        setImagePreview(null);
+        setImageFile(null);
+        fetchSellerProducts();
       }
     } catch (err) {
       console.error(err);
+      alert("Failed to save product");
     } finally {
       setLoading(false);
     }
@@ -345,12 +323,13 @@ export default function ProductForm({ selectedProduct }) {
           <div className="flex items-center gap-3">
             <Package size={16} className="text-amber-500" />
             <h2 className="text-xs font-black uppercase tracking-[0.2em]">
-              Product Form
+              {editingProductId ? "Edit Product" : "Product Form"}
             </h2>
           </div>
         </div>
 
         <div className="p-8 space-y-10">
+          {/* Edit Existing Product Dropdown */}
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">
               Edit Existing Product
@@ -368,17 +347,30 @@ export default function ProductForm({ selectedProduct }) {
               ))}
             </select>
           </div>
+
           {/* PRIMARY DATA GRID */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
             {/* Visual Column */}
             <div className="lg:col-span-4 space-y-6">
               <div className="group relative aspect-square border-2 border-dashed border-zinc-200 hover:border-amber-500 transition-colors flex flex-col items-center justify-center bg-zinc-50 overflow-hidden">
                 {imagePreview ? (
-                  <img
-                    src={imagePreview}
-                    className="w-full h-full object-cover"
-                    alt="Preview"
-                  />
+                  <div className="relative w-full h-full">
+                    <img
+                      src={imagePreview}
+                      className="w-full h-full object-cover"
+                      alt="Preview"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImagePreview(null);
+                        setImageFile(null);
+                      }}
+                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
                 ) : (
                   <label className="cursor-pointer flex flex-col items-center">
                     <Camera
@@ -392,6 +384,7 @@ export default function ProductForm({ selectedProduct }) {
                     <input
                       type="file"
                       className="hidden"
+                      accept="image/*"
                       onChange={handleFileChange}
                     />
                   </label>
@@ -495,7 +488,8 @@ export default function ProductForm({ selectedProduct }) {
               </div>
             </div>
           </div>
-          {/* 2. In the JSX (Vehicle Compatibility Matrix section) */}
+
+          {/* VEHICLE COMPATIBILITY MATRIX */}
           <div className="border-t-2 border-zinc-900 border-dashed pt-10">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-3">
@@ -507,7 +501,6 @@ export default function ProductForm({ selectedProduct }) {
                 </h3>
               </div>
 
-              {/* Universal Toggle - only show if not GENERAL/ALL TYPES */}
               {formData.vehicleType &&
                 formData.vehicleType !== "GENERAL / ALL TYPES" && (
                   <div className="flex items-center gap-3 bg-zinc-50 px-4 py-2 border-2 border-zinc-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
@@ -545,7 +538,6 @@ export default function ProductForm({ selectedProduct }) {
                 </select>
               </div>
 
-              {/* Conditionally hide Make and Year if Universal is checked */}
               {!formData.isUniversalFit && (
                 <>
                   <div className="space-y-2">
@@ -557,7 +549,6 @@ export default function ProductForm({ selectedProduct }) {
                       value={formData.vehicleMake}
                       disabled={!formData.vehicleType}
                       onChange={(e) => {
-                        // reset models when make changes
                         handleChange(e);
                         setFormData((prev) => ({ ...prev, models: [] }));
                       }}
@@ -629,6 +620,7 @@ export default function ProductForm({ selectedProduct }) {
               )}
             </div>
           </div>
+
           {/* FINAL CONTROLS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-6">
             <div className="space-y-4">

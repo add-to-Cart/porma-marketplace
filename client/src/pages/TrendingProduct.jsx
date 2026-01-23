@@ -1,15 +1,12 @@
-// src/pages/TrendingProduct.jsx
 import { useState, useEffect } from "react";
 import { getTrendingProducts } from "@/api/products";
 import ProductCard from "@/components/ProductCard";
 import { TrendingUp } from "lucide-react";
-import { useFilters } from "@/contexts/FilterContext";
 import { useSearch } from "@/contexts/SearchContext";
 import { useNavigate } from "react-router-dom";
 
 export default function TrendingProduct() {
-  const { filters } = useFilters();
-  const { searchResults, searchQuery, isSearching } = useSearch(); // Consume Search
+  const { searchResults, searchQuery, isSearching } = useSearch();
   const [trending, setTrending] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -28,36 +25,11 @@ export default function TrendingProduct() {
   }, []);
 
   const isUserSearching = searchQuery.trim().length > 1;
+  const displayItems = isUserSearching ? searchResults : trending;
 
-  // Determine what to show: Global Search Results or Local Trending Feed
-  const displayItems = isUserSearching
-    ? searchResults
-    : trending.filter((p) => {
-        let match = true;
-
-        // Exclude bundles from trending by default
-        if (p.isBundle) return false;
-
-        if (filters.category) match = match && p.category === filters.category;
-        if (filters.vehicleType) {
-          match =
-            match &&
-            (p.vehicleCompatibility?.type === filters.vehicleType ||
-              p.vehicleCompatibility?.type === "Universal");
-        }
-        if (filters.vehicle.make)
-          match =
-            match &&
-            p.vehicleCompatibility?.makes?.includes(filters.vehicle.make);
-        if (filters.vehicle.model)
-          match =
-            match &&
-            p.vehicleCompatibility?.models?.includes(filters.vehicle.model);
-        return match;
-      });
-
-  if (loading || isSearching)
-    return <div className="p-10 text-center">Loading...</div>;
+  if (loading || isSearching) {
+    return <div className="p-10 text-center">Loading trending products...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -79,7 +51,6 @@ export default function TrendingProduct() {
                 </div>
               )}
               <ProductCard
-                key={product.id}
                 product={product}
                 onClick={() => navigate(`/products/${product.id}`)}
               />
