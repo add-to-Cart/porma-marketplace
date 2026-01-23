@@ -35,6 +35,9 @@ export default function Marketplace() {
   const baseFilteredProducts = products.filter((p) => {
     let match = true;
 
+    // Exclude bundles from marketplace by default
+    if (p.isBundle) return false;
+
     // Existing Filters
     if (filters.category) match = match && p.category === filters.category;
     if (filters.vehicleType) {
@@ -56,7 +59,6 @@ export default function Marketplace() {
     }
 
     // Filter by bundle/seasonal
-    if (filters.isBundle) match = match && p.isBundle;
     if (filters.isSeasonal) match = match && p.isSeasonal;
 
     return match;

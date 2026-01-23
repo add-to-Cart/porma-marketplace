@@ -34,6 +34,10 @@ export default function TrendingProduct() {
     ? searchResults
     : trending.filter((p) => {
         let match = true;
+
+        // Exclude bundles from trending by default
+        if (p.isBundle) return false;
+
         if (filters.category) match = match && p.category === filters.category;
         if (filters.vehicleType) {
           match =

@@ -1,24 +1,22 @@
 import { useAuth } from "@/contexts/AuthContext";
 
 export default function ProductCard({ product, onClick }) {
-  const { user } = useAuth();
-
-  // Check if current user is the seller of this product
-  const isOwnProduct = user && product.sellerId === user.id;
-
   // Extract compatibility data for cleaner code
   const vc = product.vehicleCompatibility;
 
   // Helper to format the display string for compatibility
   const getCompatibilityText = () => {
-    if (!vc) return "Universal Fit";
-    if (vc.isUniversalFit) return "Universal Accessories";
+    if (!vc || vc.isUniversalFit) return "Universal Fit";
 
     const makes = vc.makes?.join(", ") || "";
     const models = vc.models?.join(", ") || "";
     const years = vc.yearRange ? `${vc.yearRange.from}-${vc.yearRange.to}` : "";
 
-    return `${makes} ${models} (${years})`.trim();
+    const makeModel = `${makes} ${models}`.trim();
+    const yearText = years ? ` (${years})` : "";
+    const fullText = makeModel ? `${makeModel}${yearText}` : "";
+
+    return fullText || "Universal Fit";
   };
   return (
     <div
@@ -92,12 +90,14 @@ export default function ProductCard({ product, onClick }) {
                 </span>
               )}
               <span className="text-lg font-black text-gray-900">
-                ₱{product.price?.toLocaleString()}
+                ₱{product.basePrice?.toLocaleString()}
               </span>
               {product.isBundle && product.compareAtPrice && (
                 <span className="text-[10px] font-bold text-green-600">
                   Save ₱
-                  {(product.compareAtPrice - product.price)?.toLocaleString()}
+                  {(
+                    product.compareAtPrice - product.basePrice
+                  )?.toLocaleString()}
                 </span>
               )}
             </div>
