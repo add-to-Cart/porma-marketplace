@@ -1,0 +1,70 @@
+[
+  {
+    "id": "4ngBET8qMoZK7EoK2FMpx5V3Uun1",
+    "uid": "4ngBET8qMoZK7EoK2FMpx5V3Uun1",
+    "email": "poypipss627@gmail.com",
+    "displayName": "Rabbit me Nabong",
+    "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocJGmPlkcqsD79-_jKcXaljTpkZQiGeveGs6rkdjQ9cpA33UXsM=s96-c",
+    "role": "buyer",
+    "provider": "google.com",
+    "createdAt": {
+      "_seconds": 1769184181,
+      "_nanoseconds": 186000000
+    }
+  },
+  {
+    "id": "7w3cl2PwOZaPEMz7VZQGtcLZUwR2",
+    "uid": "7w3cl2PwOZaPEMz7VZQGtcLZUwR2",
+    "email": "melvindemesa0905@gmail.com",
+    "emailVerified": true,
+    "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocK_0SUyMhBVjuPzYMFvPNXoT_H6CZxqYe-zdYYvDQ2H_jPMKw=s96-c",
+    "createdAt": {
+      "_seconds": 1750667648,
+      "_nanoseconds": 499000000
+    },
+    "username": "melvin",
+    "birthday": "2025-06-23",
+    "zipCode": "1772",
+    "province": "435635643",
+    "avatarUrl": "",
+    "city": "1254373475456",
+    "contact": "2132132131",
+    "addressLine": "12312312",
+    "barangay": "21321321312",
+    "isSeller": true
+  },
+  {
+    "id": "ClCriXvcK2hqsBOrylHXJQawsjn1",
+    "uid": "ClCriXvcK2hqsBOrylHXJQawsjn1",
+    "email": "christianconsulta9@gmail.com",
+    "emailVerified": true,
+    "createdAt": {
+      "_seconds": 1757732161,
+      "_nanoseconds": 218000000
+    },
+    "zipCode": "1772",
+    "province": "Metro Manila",
+    "avatarUrl": "https://res.cloudinary.com/dirp2do2b/image/upload/v1758334223/b9lri4ye6ubmvyes6zrv.png",
+    "city": "Muntinlupa",
+    "barangay": "Bayanan",
+    "name": "Christian Consulta",
+    "contact": "1234567890",
+    "addressLine": "123 Block 3 Purok 1",
+    "username": "christian",
+    "birthday": "2002-03-07",
+    "photoPublicId": "porma_avatars/j4knx1artpbiym8yomnu",
+    "photoURL": "https://lh3.googleusercontent.com/a/ACg8ocKr17t4cDG4mTQS8EAmihieQZ7R1IyQPwaNQ1m2fTWwevsxVes=s96-c",
+    "updatedAt": {
+      "_seconds": 1768909597,
+      "_nanoseconds": 367000000
+    },
+    "isSeller": true
+  },
+  {
+    "id": "GAozyFsywTa043XWG7Fk",
+    "username": "admin1",
+    "password": "admin1",
+    "isAdmin": true,
+    "email": "admin@gmail.com"
+  }
+]

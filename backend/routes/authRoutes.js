@@ -341,6 +341,7 @@ router.post("/token-verify", async (req, res) => {
         displayName: userData.displayName,
         avatarUrl: userData.photoURL,
         role: userData.role,
+        isSeller: userData.role === "seller",
         sellerApplication: userData.sellerApplication,
       },
     });
@@ -372,6 +373,7 @@ router.get("/profile", verifyAuth, async (req, res) => {
         email: req.user.email,
         displayName: userData.displayName,
         role: userData.role,
+        isSeller: userData.role === "seller",
         createdAt: userData.createdAt,
         username: userData.username,
         birthday: userData.birthday,

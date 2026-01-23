@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import MarketPlaceLayout from "@/layout/MarketplaceLayout";
 import SellerLayout from "@/layout/SellerLayout";
+import ProtectedSellerRoute from "@/components/ProtectedSellerRoute";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ProfilePage from "@/pages/ProfilePage";
@@ -16,6 +17,7 @@ import TrendingProduct from "@/pages/TrendingProduct";
 import DealsPage from "@/pages/DealsPage";
 import Cart from "@/pages/Cart";
 import SellerDashboard from "@/pages/SellerDashboard";
+import SellerOrdersPage from "@/pages/SellerOrdersPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
 import OrdersPage from "@/pages/OrdersPage";
 import SellerAccount from "@/pages/SellerAccount";
@@ -43,10 +45,17 @@ export default function AppRoutes() {
         <Route path="/admin" element={<AdminPage />} />
       </Route>
 
-      {/* Seller Layout */}
-      <Route element={<SellerLayout />}>
+      {/* Seller Layout - Protected Routes */}
+      <Route
+        element={
+          <ProtectedSellerRoute>
+            <SellerLayout />
+          </ProtectedSellerRoute>
+        }
+      >
         <Route path="/seller/dashboard" element={<SellerDashboard />} />
         <Route path="/seller/product" element={<InventoryPage />} />
+        <Route path="/seller/orders" element={<SellerOrdersPage />} />
         <Route path="/seller/analytics" element={<AnalyticsPage />} />
         <Route path="/seller/account" element={<SellerAccount />} />
       </Route>
