@@ -15,9 +15,8 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-export default function BundleManagement() {
+export default function BundleManagement({ onBundleCreate }) {
   const { user } = useAuth();
-  const { addProductToList } = useProductContext();
   const [products, setProducts] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -132,6 +131,7 @@ export default function BundleManagement() {
       setImagePreview(null);
       setImageFile(null);
       fetchProducts();
+      onBundleCreate && onBundleCreate();
     } catch (err) {
       console.error(err);
       toast.error("Failed to create bundle");

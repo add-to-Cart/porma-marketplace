@@ -2,10 +2,12 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import MarketPlaceLayout from "@/layout/MarketplaceLayout";
 import SellerLayout from "@/layout/SellerLayout";
 import ProtectedSellerRoute from "@/components/ProtectedSellerRoute";
+import ProtectedAdminRoute from "@/components/ProtectedAdminRoute";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ProfilePage from "@/pages/ProfilePage";
 import AdminPage from "@/pages/AdminPage";
+import AdminLogin from "@/pages/AdminLogin";
 
 import MarketPlace from "@/pages/Marketplace";
 import ProductUpdate from "@/pages/ProductUpdate";
@@ -29,6 +31,17 @@ export default function AppRoutes() {
       {/* Auth Routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/admin-login" element={<AdminLogin />} />
+
+      {/* Admin Route - Protected */}
+      <Route
+        path="/admin"
+        element={
+          <ProtectedAdminRoute>
+            <AdminPage />
+          </ProtectedAdminRoute>
+        }
+      />
 
       {/* Marketplace Layout */}
       <Route element={<MarketPlaceLayout />}>
@@ -44,7 +57,6 @@ export default function AppRoutes() {
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/apply-seller" element={<SellerApplication />} />
-        <Route path="/admin" element={<AdminPage />} />
       </Route>
 
       {/* Seller Layout - Protected Routes */}

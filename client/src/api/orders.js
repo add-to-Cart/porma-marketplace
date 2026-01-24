@@ -30,9 +30,28 @@ export const completeOrder = async (orderId) => {
   return res.data;
 };
 
-export const uploadPaymentProof = async (orderId, paymentProofUrl) => {
+export const uploadPaymentProof = async (
+  orderId,
+  paymentProofUrl,
+  referenceNumber,
+) => {
   const res = await api.post(`/orders/${orderId}/payment-proof`, {
     paymentProofUrl,
+    referenceNumber,
+  });
+  return res.data;
+};
+
+export const verifyPayment = async (
+  orderId,
+  verified,
+  sellerId,
+  rejectionReason,
+) => {
+  const res = await api.post(`/orders/${orderId}/verify-payment`, {
+    verified,
+    sellerId,
+    rejectionReason,
   });
   return res.data;
 };

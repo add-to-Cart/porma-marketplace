@@ -32,13 +32,22 @@ export const createOrder = async (req, res) => {
       subtotal,
       deliveryFee,
       total,
-      paymentMethod: paymentMethod || "cod", // cod, bank, gcash
-      paymentProofUrl: null, // Will be filled when seller uploads QR
-      deliveryDetails: deliveryDetails || {}, // Contains fullName, email, phone, address, city, province, zipCode
+      paymentMethod: paymentMethod || "cod",
+      // Payment proof fields
+      paymentProofUrl: null,
+      paymentReferenceNumber: null,
+      paymentProofUploadedAt: null,
+      paymentVerifiedAt: null,
+      paymentVerifiedBy: null,
+      // Delivery details
+      deliveryDetails: deliveryDetails || {},
+      // Timestamps
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      status: "pending", // pending, accepted, shipped, delivered, completed
-      deliveryStatus: "processing", // processing, packed, shipped, out_for_delivery, delivered
+      // Status fields
+      status: paymentMethod === "cod" ? "pending" : "awaiting_payment",
+      paymentStatus: paymentMethod === "cod" ? "cod" : "pending_proof",
+      deliveryStatus: "processing",
       buyerNotified: false,
     };
 
@@ -51,6 +60,120 @@ export const createOrder = async (req, res) => {
   } catch (err) {
     console.error("Create Order Error:", err);
     res.status(500).json({ message: "Failed to create order" });
+  }
+};
+
+// Upload payment proof with reference number
+export const uploadPaymentProof = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { paymentProofUrl, referenceNumber } = req.body;
+
+    if (!paymentProofUrl) {
+      return res
+        .status(400)
+        .json({ message: "Payment proof image is required" });
+    }
+
+    if (!referenceNumber || !referenceNumber.trim()) {
+      return res
+        .status(400)
+        .json({ message: "Transaction reference number is required" });
+    }
+
+    const orderDoc = await db.collection("orders").doc(orderId).get();
+    if (!orderDoc.exists) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    const order = orderDoc.data();
+
+    // Only allow uploads for online payment methods
+    if (order.paymentMethod === "cod") {
+      return res.status(400).json({
+        message: "Cannot upload payment proof for Cash on Delivery orders",
+      });
+    }
+
+    // Update the order with payment proof
+    await db.collection("orders").doc(orderId).update({
+      paymentProofUrl,
+      paymentReferenceNumber: referenceNumber.trim(),
+      paymentProofUploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+      paymentStatus: "pending_verification",
+      status: "payment_submitted",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const updatedDoc = await db.collection("orders").doc(orderId).get();
+    res.json({
+      id: updatedDoc.id,
+      ...updatedDoc.data(),
+    });
+  } catch (err) {
+    console.error("Upload Payment Proof Error:", err);
+    res.status(500).json({ message: "Failed to upload payment proof" });
+  }
+};
+
+// Seller verifies payment (accepts or rejects)
+export const verifyPayment = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { verified, sellerId, rejectionReason } = req.body;
+
+    const orderDoc = await db.collection("orders").doc(orderId).get();
+    if (!orderDoc.exists) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    const order = orderDoc.data();
+
+    // Check if seller owns this order
+    const sellerOwnsOrder = order.items.some(
+      (item) => item.sellerId === sellerId,
+    );
+    if (!sellerOwnsOrder) {
+      return res
+        .status(403)
+        .json({ message: "Unauthorized to verify this order" });
+    }
+
+    if (verified) {
+      // Payment accepted
+      await db.collection("orders").doc(orderId).update({
+        paymentStatus: "verified",
+        status: "pending", // Order now ready for processing
+        paymentVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+        paymentVerifiedBy: sellerId,
+        buyerNotified: false, // Will trigger notification
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } else {
+      // Payment rejected
+      await db
+        .collection("orders")
+        .doc(orderId)
+        .update({
+          paymentStatus: "rejected",
+          status: "payment_rejected",
+          paymentRejectionReason:
+            rejectionReason || "Payment could not be verified",
+          paymentRejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+          paymentRejectedBy: sellerId,
+          buyerNotified: false,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    }
+
+    const updatedDoc = await db.collection("orders").doc(orderId).get();
+    res.json({
+      id: updatedDoc.id,
+      ...updatedDoc.data(),
+    });
+  } catch (err) {
+    console.error("Verify Payment Error:", err);
+    res.status(500).json({ message: "Failed to verify payment" });
   }
 };
 
@@ -75,6 +198,8 @@ export const getBuyerOrders = async (req, res) => {
         paymentProofUploadedAt:
           data.paymentProofUploadedAt?.toDate?.() ||
           data.paymentProofUploadedAt,
+        paymentVerifiedAt:
+          data.paymentVerifiedAt?.toDate?.() || data.paymentVerifiedAt,
       };
     });
 
@@ -196,11 +321,18 @@ export const completeOrder = async (req, res) => {
     }
 
     // Mark order as completed
-    await db.collection("orders").doc(orderId).update({
-      status: "completed",
-      deliveryStatus: "delivered",
-      completedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    await db
+      .collection("orders")
+      .doc(orderId)
+      .update({
+        status: "completed",
+        deliveryStatus: "delivered",
+        paymentStatus:
+          order.paymentMethod === "cod"
+            ? "cod_completed"
+            : "verified_completed",
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
     const updatedDoc = await db.collection("orders").doc(orderId).get();
     res.json({
@@ -210,47 +342,5 @@ export const completeOrder = async (req, res) => {
   } catch (err) {
     console.error("Complete Order Error:", err);
     res.status(500).json({ message: "Failed to complete order" });
-  }
-};
-
-// Upload QR code payment proof
-export const uploadPaymentProof = async (req, res) => {
-  try {
-    const { orderId } = req.params;
-    const { paymentProofUrl } = req.body;
-
-    if (!paymentProofUrl) {
-      return res.status(400).json({ message: "Payment proof URL is required" });
-    }
-
-    const orderDoc = await db.collection("orders").doc(orderId).get();
-    if (!orderDoc.exists) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    const order = orderDoc.data();
-
-    // Only allow QR uploads for online payment methods
-    if (order.paymentMethod === "cod") {
-      return res.status(400).json({
-        message: "Cannot upload payment proof for Cash on Delivery orders",
-      });
-    }
-
-    // Update the order with payment proof
-    await db.collection("orders").doc(orderId).update({
-      paymentProofUrl,
-      paymentProofUploadedAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    const updatedDoc = await db.collection("orders").doc(orderId).get();
-    res.json({
-      id: updatedDoc.id,
-      ...updatedDoc.data(),
-    });
-  } catch (err) {
-    console.error("Upload Payment Proof Error:", err);
-    res.status(500).json({ message: "Failed to upload payment proof" });
   }
 };

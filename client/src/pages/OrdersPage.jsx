@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { getBuyerOrders } from "@/api/orders";
+import Receipt from "@/components/Receipt";
 import {
   ChevronDown,
   ChevronUp,
@@ -22,6 +23,7 @@ export default function OrdersPage() {
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [ratingOrder, setRatingOrder] = useState(null);
   const [ratingValues, setRatingValues] = useState({});
+  const [receiptOrder, setReceiptOrder] = useState(null);
 
   useEffect(() => {
     if (!user) {
@@ -231,6 +233,30 @@ export default function OrdersPage() {
                   </div>
                 )}
 
+                {/* Receipt Button for Verified Payments */}
+                {order.paymentStatus === "verified" && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-bold text-green-900 flex items-center gap-2">
+                          <CheckCircle2 size={18} />
+                          Payment Verified
+                        </h3>
+                        <p className="text-sm text-green-700 mt-1">
+                          Your payment has been confirmed. Your order is being
+                          prepared.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setReceiptOrder(order)}
+                        className="bg-green-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-green-700 transition-colors"
+                      >
+                        📄 View Receipt
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Order Items */}
                 <div>
                   <h3 className="font-bold text-gray-900 mb-4">Items</h3>
@@ -357,6 +383,11 @@ export default function OrdersPage() {
           </div>
         ))}
       </div>
+
+      {/* Receipt Modal */}
+      {receiptOrder && (
+        <Receipt order={receiptOrder} onClose={() => setReceiptOrder(null)} />
+      )}
     </div>
   );
 }

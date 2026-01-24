@@ -3,26 +3,56 @@ import { getProductsBySeller } from "@/api/products";
 import { Package, ArrowUpRight, MoreHorizontal } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
-export default function SellerProducts({ onSelect }) {
+export default function SellerProducts({
+  onSelect,
+  searchQuery = "",
+  refreshTrigger = 0,
+}) {
   const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  console.log("SellerProducts user:", user);
+
   useEffect(() => {
     const fetchMyProducts = async () => {
-      if (!user?.uid) return;
+      if (!user?.uid) {
+        console.log("No user UID available");
+        return;
+      }
+
+      console.log(
+        "Fetching products for user:",
+        user.uid,
+        "isSeller:",
+        user.isSeller,
+        "role:",
+        user.role,
+      );
 
       try {
         const data = await getProductsBySeller(user.uid);
+        console.log("Fetched products:", data);
         setProducts(data);
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching products:", err);
       } finally {
         setLoading(false);
       }
     };
     fetchMyProducts();
-  }, [user?.uid]);
+  }, [user?.uid, refreshTrigger]);
+
+  // Filter products based on search query
+  const filteredProducts = products.filter((product) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      product.name?.toLowerCase().includes(query) ||
+      product.category?.toLowerCase().includes(query) ||
+      product.description?.toLowerCase().includes(query)
+    );
+  });
 
   return (
     <div className="border-2 border-zinc-900 bg-zinc-50 min-h-[600px] overflow-hidden">
@@ -34,7 +64,7 @@ export default function SellerProducts({ onSelect }) {
           </h2>
         </div>
         <span className="bg-amber-500 text-zinc-900 px-2 py-0.5 text-[10px] font-black rounded-full">
-          {products.length}
+          {filteredProducts.length}
         </span>
       </div>
 
@@ -43,12 +73,12 @@ export default function SellerProducts({ onSelect }) {
           <div className="p-10 text-center animate-pulse text-[10px] font-black uppercase text-zinc-400">
             Querying DB...
           </div>
-        ) : products.length === 0 ? (
+        ) : filteredProducts.length === 0 ? (
           <div className="p-10 text-center text-[10px] font-black uppercase text-zinc-400">
-            Inventory Empty
+            {searchQuery ? "No products match your search" : "Inventory Empty"}
           </div>
         ) : (
-          products.map((p) => (
+          filteredProducts.map((p) => (
             <div
               key={p.id}
               className="p-4 bg-white hover:bg-zinc-100 transition-colors group cursor-pointer relative"
@@ -67,7 +97,10 @@ export default function SellerProducts({ onSelect }) {
                   </h3>
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-[10px] font-mono font-bold text-amber-600">
-                      ₱{p.basePrice?.toLocaleString() || "0"}
+                      ₱
+                      {p.price?.toLocaleString() ||
+                        p.basePrice?.toLocaleString() ||
+                        "0"}
                     </span>
                     <span className="text-[9px] font-black uppercase text-zinc-400">
                       QTY: {p.stock || 0}

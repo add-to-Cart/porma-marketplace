@@ -1,416 +1,451 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { getSellerOrders } from "@/api/orders";
+import { getProductsBySeller } from "@/api/products";
 import {
-  getSellerOrders,
-  updateOrderStatus,
-  completeOrder,
-} from "@/api/orders";
-import AccountSidebar from "@/components/AccountSidebar";
-import {
-  Package,
-  ShoppingCart,
   TrendingUp,
-  ChevronDown,
-  ChevronUp,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
+  Package,
+  DollarSign,
+  ShoppingCart,
+  Eye,
+  Star,
+  Users,
+  Calendar,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-const ORDER_STATUSES = [
-  { key: "pending", label: "Pending", color: "bg-yellow-100 text-yellow-700" },
-  { key: "accepted", label: "Accepted", color: "bg-blue-100 text-blue-700" },
-  { key: "shipped", label: "Shipped", color: "bg-purple-100 text-purple-700" },
-  {
-    key: "delivered",
-    label: "Delivered",
-    color: "bg-green-100 text-green-700",
-  },
-  {
-    key: "completed",
-    label: "Completed",
-    color: "bg-emerald-100 text-emerald-700",
-  },
-];
-
-const DELIVERY_STATUSES = [
-  { key: "processing", label: "Processing" },
-  { key: "packed", label: "Packed" },
-  { key: "shipped", label: "Shipped" },
-  { key: "out_for_delivery", label: "Out for Delivery" },
-  { key: "delivered", label: "Delivered" },
-];
-
 export default function SellerDashboard() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("orders");
-  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [expandedOrder, setExpandedOrder] = useState(null);
-  const [updating, setUpdating] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [stats, setStats] = useState({
+    totalSales: 0,
+    totalOrders: 0,
+    totalProducts: 0,
+    pendingOrders: 0,
+    avgRating: 0,
+    totalViews: 0,
+    totalCustomers: 0,
+    thisMonthSales: 0,
+  });
+
+  const [salesData, setSalesData] = useState([]);
+  const [topProducts, setTopProducts] = useState([]);
 
   useEffect(() => {
-    if (user?.uid) {
-      fetchOrders();
+    if (user) {
+      fetchData();
     }
-  }, [user?.uid]);
+  }, [user]);
 
-  const fetchOrders = async () => {
+  useEffect(() => {
+    if (orders.length > 0) {
+      calculateSalesData();
+    }
+    if (products.length > 0) {
+      calculateTopProducts();
+    }
+  }, [orders, products]);
+
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const data = await getSellerOrders(user.uid);
-      setOrders(Array.isArray(data) ? data : []);
+
+      // Fetch orders and products in parallel
+      const [ordersData, productsData] = await Promise.all([
+        getSellerOrders(user.uid),
+        getProductsBySeller(user.uid),
+      ]);
+
+      setOrders(Array.isArray(ordersData) ? ordersData : []);
+      setProducts(Array.isArray(productsData) ? productsData : []);
+
+      // Calculate statistics
+      calculateStats(ordersData, productsData);
     } catch (err) {
-      console.error("Failed to fetch orders:", err);
-      toast.error("Failed to load orders");
-      setOrders([]);
+      console.error("Error fetching dashboard data:", err);
+      toast.error("Failed to load dashboard data");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStatusUpdate = async (orderId, newStatus) => {
-    try {
-      setUpdating(orderId);
-      await updateOrderStatus(orderId, { status: newStatus });
-      toast.success(`Order status updated to ${newStatus}`);
-      await fetchOrders();
-    } catch (err) {
-      console.error("Failed to update order:", err);
-      toast.error("Failed to update order status");
-    } finally {
-      setUpdating(null);
-    }
+  const calculateStats = (ordersData, productsData) => {
+    // Calculate total sales from completed orders
+    const completedOrders = ordersData.filter((o) => o.status === "completed");
+    const totalSales = completedOrders.reduce(
+      (sum, order) => sum + (order.total || 0),
+      0,
+    );
+
+    // Calculate pending orders (awaiting payment verification)
+    const pendingOrders = ordersData.filter(
+      (o) =>
+        o.paymentStatus === "pending_verification" || o.status === "pending",
+    ).length;
+
+    // Calculate this month's sales
+    const now = new Date();
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thisMonthOrders = completedOrders.filter((order) => {
+      const orderDate =
+        order.completedAt?.toDate?.() ||
+        new Date(order.completedAt || order.createdAt);
+      return orderDate >= thisMonthStart;
+    });
+    const thisMonthSales = thisMonthOrders.reduce(
+      (sum, order) => sum + (order.total || 0),
+      0,
+    );
+
+    // Get unique customers
+    const uniqueCustomers = new Set(ordersData.map((o) => o.buyerId)).size;
+
+    // Calculate total views and average rating from products
+    const totalViews = productsData.reduce(
+      (sum, p) => sum + (p.viewCount || 0),
+      0,
+    );
+    const productsWithRatings = productsData.filter((p) => p.ratingsCount > 0);
+    const avgRating =
+      productsWithRatings.length > 0
+        ? productsWithRatings.reduce(
+            (sum, p) => sum + (p.ratingAverage || 0),
+            0,
+          ) / productsWithRatings.length
+        : 0;
+
+    setStats({
+      totalSales,
+      totalOrders: ordersData.length,
+      totalProducts: productsData.length,
+      pendingOrders,
+      avgRating: Math.round(avgRating * 10) / 10,
+      totalViews,
+      totalCustomers: uniqueCustomers,
+      thisMonthSales,
+    });
   };
 
-  const handleDeliveryUpdate = async (orderId, newDeliveryStatus) => {
-    try {
-      setUpdating(orderId);
-      await updateOrderStatus(orderId, { deliveryStatus: newDeliveryStatus });
-      toast.success(`Delivery status updated`);
-      await fetchOrders();
-    } catch (err) {
-      console.error("Failed to update delivery:", err);
-      toast.error("Failed to update delivery status");
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const handleCompleteOrder = async (orderId) => {
-    try {
-      setUpdating(orderId);
-      await completeOrder(orderId);
-      toast.success("Order completed! Product metrics updated.");
-      await fetchOrders();
-    } catch (err) {
-      console.error("Failed to complete order:", err);
-      toast.error("Failed to complete order");
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const getNextStatus = (currentStatus) => {
-    const statuses = [
-      "pending",
-      "accepted",
-      "shipped",
-      "delivered",
-      "completed",
+  const calculateSalesData = () => {
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
     ];
-    const currentIndex = statuses.indexOf(currentStatus);
-    return currentIndex < statuses.length - 1
-      ? statuses[currentIndex + 1]
-      : null;
+    const now = new Date();
+    const last5Months = [];
+
+    for (let i = 4; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+      const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+
+      const monthOrders = orders.filter((order) => {
+        if (order.status !== "completed") return false;
+        const orderDate =
+          order.completedAt?.toDate?.() ||
+          new Date(order.completedAt || order.createdAt);
+        return orderDate >= monthStart && orderDate <= monthEnd;
+      });
+
+      const monthSales = monthOrders.reduce(
+        (sum, order) => sum + (order.total || 0),
+        0,
+      );
+
+      last5Months.push({
+        month: monthNames[date.getMonth()],
+        sales: monthSales,
+      });
+    }
+
+    setSalesData(last5Months);
   };
 
-  const getNextDeliveryStatus = (currentStatus) => {
-    const statuses = [
-      "processing",
-      "packed",
-      "shipped",
-      "out_for_delivery",
-      "delivered",
-    ];
-    const currentIndex = statuses.indexOf(currentStatus);
-    return currentIndex < statuses.length - 1
-      ? statuses[currentIndex + 1]
-      : null;
+  const calculateTopProducts = () => {
+    // Sort products by soldCount and take top 3
+    const sorted = [...products]
+      .sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0))
+      .slice(0, 3)
+      .map((product) => ({
+        name: product.name,
+        sold: product.soldCount || 0,
+        revenue:
+          (product.soldCount || 0) * (product.basePrice || product.price || 0),
+      }));
+
+    setTopProducts(sorted);
   };
 
-  const tabs = [
-    { id: "orders", label: "Orders", icon: ShoppingCart },
-    { id: "products", label: "Products", icon: Package },
-    { id: "analytics", label: "Analytics", icon: TrendingUp },
-  ];
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center py-20">
+            <p className="text-gray-500 animate-pulse">Loading dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <AccountSidebar />
-      <div className="flex-1 p-6">
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Seller Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Dashboard Overview
+          </h1>
           <p className="text-gray-600 mt-2">
-            Manage your products and track orders
+            Welcome back! Here's your store performance
           </p>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex space-x-1 mb-8 bg-white p-1 rounded-lg shadow-sm border">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-6 py-3 rounded-md font-medium transition-all ${
-                activeTab === tab.id
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-              }`}
-            >
-              <tab.icon size={18} />
-              {tab.label}
-            </button>
-          ))}
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {/* Total Sales */}
+          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <DollarSign size={24} />
+              </div>
+              <TrendingUp size={20} className="opacity-80" />
+            </div>
+            <p className="text-blue-100 text-sm font-semibold mb-1">
+              Total Sales
+            </p>
+            <p className="text-3xl font-black">
+              ₱{stats.totalSales.toLocaleString()}
+            </p>
+            <p className="text-blue-100 text-xs mt-2">From completed orders</p>
+          </div>
+
+          {/* Total Orders */}
+          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <ShoppingCart size={24} />
+              </div>
+              <div className="px-2 py-1 bg-white/20 rounded-full text-xs font-bold">
+                {stats.pendingOrders} pending
+              </div>
+            </div>
+            <p className="text-green-100 text-sm font-semibold mb-1">
+              Total Orders
+            </p>
+            <p className="text-3xl font-black">{stats.totalOrders}</p>
+            <p className="text-green-100 text-xs mt-2">All time</p>
+          </div>
+
+          {/* Total Products */}
+          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <Package size={24} />
+              </div>
+            </div>
+            <p className="text-purple-100 text-sm font-semibold mb-1">
+              Active Products
+            </p>
+            <p className="text-3xl font-black">{stats.totalProducts}</p>
+            <p className="text-purple-100 text-xs mt-2">In your catalog</p>
+          </div>
+
+          {/* Average Rating */}
+          <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-6 text-white shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-3 bg-white/20 rounded-lg">
+                <Star size={24} />
+              </div>
+            </div>
+            <p className="text-amber-100 text-sm font-semibold mb-1">
+              Average Rating
+            </p>
+            <p className="text-3xl font-black">{stats.avgRating}/5.0</p>
+            <p className="text-amber-100 text-xs mt-2">
+              Based on customer reviews
+            </p>
+          </div>
         </div>
 
-        {/* Tab Content */}
-        <div className="space-y-6">
-          {activeTab === "orders" && (
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  Your Orders
-                </h2>
-                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                  {orders.length} orders
-                </span>
+        {/* Secondary Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <Eye size={24} className="text-blue-600" />
               </div>
+              <div>
+                <p className="text-gray-600 text-sm">Total Views</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {stats.totalViews.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
 
-              {loading ? (
-                <div className="bg-white rounded-lg p-12 text-center">
-                  <p className="text-gray-500 animate-pulse">
-                    Loading orders...
-                  </p>
-                </div>
-              ) : orders.length === 0 ? (
-                <div className="bg-white rounded-lg p-12 text-center">
-                  <AlertCircle
-                    size={48}
-                    className="mx-auto text-gray-400 mb-4"
-                  />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No orders yet
-                  </h3>
-                  <p className="text-gray-500">
-                    Orders from your products will appear here
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {orders.map((order) => (
-                    <div
-                      key={order.id}
-                      className="bg-white rounded-lg border border-gray-200 shadow-sm"
-                    >
-                      {/* Order Header */}
-                      <button
-                        onClick={() =>
-                          setExpandedOrder(
-                            expandedOrder === order.id ? null : order.id,
-                          )
-                        }
-                        className="w-full p-6 flex items-center justify-between hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="text-left flex-1">
-                          <h3 className="font-bold text-gray-900">
-                            Order #{order.id.slice(-8).toUpperCase()}
-                          </h3>
-                          <p className="text-sm text-gray-500 mt-1">
-                            {new Date(
-                              order.createdAt?.toDate?.() || order.createdAt,
-                            ).toLocaleDateString()}
-                          </p>
-                        </div>
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-green-50 rounded-lg">
+                <Users size={24} className="text-green-600" />
+              </div>
+              <div>
+                <p className="text-gray-600 text-sm">Total Customers</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {stats.totalCustomers}
+                </p>
+              </div>
+            </div>
+          </div>
 
-                        <div className="flex items-center gap-4">
-                          <div className="text-right">
-                            <p className="font-bold text-lg">
-                              ₱{order.total?.toLocaleString()}
-                            </p>
-                            <span
-                              className={`inline-block px-3 py-1 rounded text-xs font-bold mt-1 ${
-                                ORDER_STATUSES.find(
-                                  (s) => s.key === order.status,
-                                )?.color
-                              }`}
-                            >
-                              {order.status?.charAt(0).toUpperCase() +
-                                order.status?.slice(1)}
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-purple-50 rounded-lg">
+                <Calendar size={24} className="text-purple-600" />
+              </div>
+              <div>
+                <p className="text-gray-600 text-sm">This Month</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  ₱{stats.thisMonthSales.toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Sales Chart */}
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <h2 className="text-lg font-bold text-gray-900 mb-6">
+              Sales Trend (Last 5 Months)
+            </h2>
+            <div className="space-y-4">
+              {salesData.length > 0 ? (
+                salesData.map((item, index) => {
+                  const maxSales = Math.max(
+                    ...salesData.map((d) => d.sales),
+                    1,
+                  );
+                  const percentage = (item.sales / maxSales) * 100;
+
+                  return (
+                    <div key={index} className="flex items-center gap-4">
+                      <span className="text-sm font-semibold text-gray-700 w-12">
+                        {item.month}
+                      </span>
+                      <div className="flex-1 h-8 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-end pr-3"
+                          style={{ width: `${percentage}%` }}
+                        >
+                          {item.sales > 0 && (
+                            <span className="text-xs font-bold text-white">
+                              ₱{item.sales.toLocaleString()}
                             </span>
-                          </div>
-
-                          <div className="text-gray-400">
-                            {expandedOrder === order.id ? (
-                              <ChevronUp size={24} />
-                            ) : (
-                              <ChevronDown size={24} />
-                            )}
-                          </div>
-                        </div>
-                      </button>
-
-                      {/* Expanded Content */}
-                      {expandedOrder === order.id && (
-                        <div className="border-t border-gray-200 p-6 bg-gray-50 space-y-6">
-                          {/* Items */}
-                          <div>
-                            <h4 className="font-bold text-gray-900 mb-3">
-                              Items Ordered
-                            </h4>
-                            <div className="space-y-2">
-                              {order.items?.map((item, idx) => (
-                                <div
-                                  key={idx}
-                                  className="flex gap-3 p-3 bg-white rounded border border-gray-200"
-                                >
-                                  <img
-                                    src={item.imageUrl}
-                                    alt={item.name}
-                                    className="w-12 h-12 object-cover rounded"
-                                  />
-                                  <div className="flex-1">
-                                    <p className="font-semibold text-gray-900">
-                                      {item.name}
-                                    </p>
-                                    <p className="text-sm text-gray-600">
-                                      Qty: {item.quantity}
-                                    </p>
-                                  </div>
-                                  <p className="font-semibold">
-                                    ₱
-                                    {(
-                                      item.price * item.quantity
-                                    ).toLocaleString()}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-
-                          {/* Status Controls */}
-                          <div className="space-y-4 bg-white p-4 rounded border border-gray-200">
-                            {/* Order Status */}
-                            <div>
-                              <label className="block text-sm font-bold text-gray-900 mb-2">
-                                Order Status
-                              </label>
-                              <div className="flex flex-wrap gap-2">
-                                {ORDER_STATUSES.map((status) => (
-                                  <button
-                                    key={status.key}
-                                    onClick={() =>
-                                      handleStatusUpdate(order.id, status.key)
-                                    }
-                                    disabled={updating === order.id}
-                                    className={`px-4 py-2 rounded text-sm font-bold transition-all ${
-                                      order.status === status.key
-                                        ? `${status.color} border-2 border-current`
-                                        : "bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
-                                    }`}
-                                  >
-                                    {status.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* Delivery Status */}
-                            <div>
-                              <label className="block text-sm font-bold text-gray-900 mb-2">
-                                Delivery Status
-                              </label>
-                              <div className="flex flex-wrap gap-2">
-                                {DELIVERY_STATUSES.map((status) => (
-                                  <button
-                                    key={status.key}
-                                    onClick={() =>
-                                      handleDeliveryUpdate(order.id, status.key)
-                                    }
-                                    disabled={updating === order.id}
-                                    className={`px-4 py-2 rounded text-sm font-bold transition-all ${
-                                      order.deliveryStatus === status.key
-                                        ? "bg-blue-600 text-white border-2 border-blue-700"
-                                        : "bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
-                                    }`}
-                                  >
-                                    {status.label}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Complete Order Button */}
-                          {order.status !== "completed" && (
-                            <button
-                              onClick={() => handleCompleteOrder(order.id)}
-                              disabled={updating === order.id}
-                              className="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition-colors disabled:opacity-50"
-                            >
-                              {updating === order.id
-                                ? "Processing..."
-                                : "✓ Complete Order & Update Metrics"}
-                            </button>
-                          )}
-
-                          {order.status === "completed" && (
-                            <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-center">
-                              <CheckCircle2
-                                size={24}
-                                className="mx-auto text-green-600 mb-2"
-                              />
-                              <p className="text-green-700 font-semibold">
-                                Order Completed
-                              </p>
-                              <p className="text-sm text-green-600">
-                                Product metrics have been updated
-                              </p>
-                            </div>
                           )}
                         </div>
-                      )}
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })
+              ) : (
+                <p className="text-gray-500 text-center py-10">
+                  No sales data available
+                </p>
               )}
             </div>
-          )}
+          </div>
 
-          {activeTab === "products" && (
-            <div className="bg-white rounded-lg p-8 text-center">
-              <Package size={48} className="mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Products Coming Soon
-              </h3>
-              <p className="text-gray-500">
-                Product management interface will be available here
-              </p>
+          {/* Top Products */}
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
+            <h2 className="text-lg font-bold text-gray-900 mb-6">
+              Top Selling Products
+            </h2>
+            <div className="space-y-4">
+              {topProducts.length > 0 ? (
+                topProducts.map((product, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-black text-lg">
+                        #{index + 1}
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900">
+                          {product.name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {product.sold} units sold
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-black text-green-600">
+                        ₱{product.revenue.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500 text-center py-10">
+                  No product data available
+                </p>
+              )}
             </div>
-          )}
+          </div>
+        </div>
 
-          {activeTab === "analytics" && (
-            <div className="bg-white rounded-lg p-8 text-center">
-              <TrendingUp size={48} className="mx-auto text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Analytics Coming Soon
-              </h3>
-              <p className="text-gray-500">
-                Detailed analytics and insights will be available here
+        {/* Quick Actions */}
+        <div className="bg-gradient-to-r from-gray-900 to-gray-800 rounded-xl p-6 shadow-lg">
+          <h2 className="text-lg font-bold text-white mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <button
+              onClick={() => (window.location.href = "/seller/product")}
+              className="bg-white/10 hover:bg-white/20 text-white p-4 rounded-lg transition-all border border-white/20 text-left"
+            >
+              <Package size={20} className="mb-2" />
+              <p className="font-bold text-sm">Add Product</p>
+              <p className="text-xs text-gray-300">List new item</p>
+            </button>
+            <button
+              onClick={() => (window.location.href = "/seller/orders")}
+              className="bg-white/10 hover:bg-white/20 text-white p-4 rounded-lg transition-all border border-white/20 text-left"
+            >
+              <ShoppingCart size={20} className="mb-2" />
+              <p className="font-bold text-sm">View Orders</p>
+              <p className="text-xs text-gray-300">
+                {stats.pendingOrders} pending
               </p>
-            </div>
-          )}
+            </button>
+            <button
+              onClick={() => (window.location.href = "/seller/analytics")}
+              className="bg-white/10 hover:bg-white/20 text-white p-4 rounded-lg transition-all border border-white/20 text-left"
+            >
+              <TrendingUp size={20} className="mb-2" />
+              <p className="font-bold text-sm">Analytics</p>
+              <p className="text-xs text-gray-300">View details</p>
+            </button>
+            <button className="bg-white/10 hover:bg-white/20 text-white p-4 rounded-lg transition-all border border-white/20 text-left">
+              <Star size={20} className="mb-2" />
+              <p className="font-bold text-sm">Reviews</p>
+              <p className="text-xs text-gray-300">Manage feedback</p>
+            </button>
+          </div>
         </div>
       </div>
     </div>

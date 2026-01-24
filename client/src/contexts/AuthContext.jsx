@@ -13,7 +13,7 @@ const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -23,14 +23,20 @@ export const AuthProvider = ({ children }) => {
         try {
           setLoading(true);
           const res = await authAPI.getProfile(token);
-          if (res.success) setUser(res.user);
-          else localStorage.removeItem("authToken");
+          if (res.success) {
+            console.log("User loaded:", res.user);
+            setUser(res.user);
+          } else {
+            localStorage.removeItem("authToken");
+          }
         } catch (e) {
           console.warn("Auth init failed", e);
           localStorage.removeItem("authToken");
         } finally {
           setLoading(false);
         }
+      } else {
+        setLoading(false);
       }
     };
     init();
@@ -46,10 +52,8 @@ export const AuthProvider = ({ children }) => {
         email,
         password,
       );
-      // get firebase id token
       const idToken = await userCredential.user.getIdToken();
 
-      // verify with backend and create/get user profile
       const response = await authAPI.verifyToken(idToken);
       if (response.success) {
         localStorage.setItem("authToken", idToken);
@@ -73,19 +77,18 @@ export const AuthProvider = ({ children }) => {
 
       const response = await authAPI.signIn(identifier, password);
       if (response.success) {
-        // Sign in with custom token
         const userCredential = await signInWithCustomToken(
           auth,
           response.customToken,
         );
         const idToken = await userCredential.user.getIdToken();
 
-        // Verify and get user data
         const verifyResponse = await authAPI.verifyToken(idToken);
         if (verifyResponse.success) {
           localStorage.setItem("authToken", idToken);
+          console.log("User signed in:", verifyResponse.user);
           setUser(verifyResponse.user);
-          return { success: true };
+          return { success: true, user: verifyResponse.user };
         }
         setError(verifyResponse.message);
         return { success: false, message: verifyResponse.message };
@@ -94,6 +97,39 @@ export const AuthProvider = ({ children }) => {
       return { success: false, message: response.message };
     } catch (err) {
       setError(err.message || "Sign in failed");
+      return { success: false, message: err.message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signInAdmin = async (username, password) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await authAPI.signInAdmin(username, password);
+      if (response.success) {
+        const userCredential = await signInWithCustomToken(
+          auth,
+          response.customToken,
+        );
+        const idToken = await userCredential.user.getIdToken();
+
+        const verifyResponse = await authAPI.verifyToken(idToken);
+        if (verifyResponse.success) {
+          localStorage.setItem("authToken", idToken);
+          console.log("Admin signed in:", verifyResponse.user);
+          setUser(verifyResponse.user);
+          return { success: true, user: verifyResponse.user };
+        }
+        setError(verifyResponse.message);
+        return { success: false, message: verifyResponse.message };
+      }
+      setError(response.message);
+      return { success: false, message: response.message };
+    } catch (err) {
+      setError(err.message || "Admin sign in failed");
       return { success: false, message: err.message };
     } finally {
       setLoading(false);
@@ -159,7 +195,10 @@ export const AuthProvider = ({ children }) => {
       const token = localStorage.getItem("authToken");
       if (!token) return null;
       const res = await authAPI.getProfile(token);
-      if (res.success) setUser(res.user);
+      if (res.success) {
+        console.log("Profile refreshed:", res.user);
+        setUser(res.user);
+      }
       return res;
     } catch (err) {
       return null;
@@ -172,6 +211,7 @@ export const AuthProvider = ({ children }) => {
     error,
     signUp,
     signIn,
+    signInAdmin,
     signInWithGoogle,
     signOut,
     updateProfile,

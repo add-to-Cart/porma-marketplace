@@ -3,6 +3,62 @@ const db = admin.firestore();
 import { uploadProductImage } from "../services/cloudinary_service.js";
 import { getTrendingProducts as calculateTrendingProducts } from "../utils/trendingAlgorithm.js";
 
+// Helper function to populate seller information for products
+const populateSellerInfo = async (products) => {
+  // Get unique seller IDs
+  const sellerIds = [
+    ...new Set(products.map((p) => p.sellerId).filter((id) => id)),
+  ];
+
+  if (sellerIds.length === 0) return products;
+
+  // Batch fetch seller documents
+  const sellerPromises = sellerIds.map((id) =>
+    db.collection("users").doc(id).get(),
+  );
+  const sellerDocs = await Promise.all(sellerPromises);
+
+  // Create seller info map
+  const sellerMap = {};
+  sellerDocs.forEach((doc, index) => {
+    if (doc.exists) {
+      const sellerData = doc.data();
+      const sellerId = sellerIds[index];
+
+      // Check for approved seller profile first
+      if (sellerData.role === "seller" && sellerData.seller) {
+        sellerMap[sellerId] = {
+          storeName: sellerData.seller.storeName,
+          owner: sellerData.seller.storeName,
+        };
+      }
+      // If no approved seller profile, check for pending application
+      else if (sellerData.sellerApplication?.status === "pending") {
+        sellerMap[sellerId] = {
+          storeName: sellerData.sellerApplication.storeName,
+          owner: sellerData.sellerApplication.storeName,
+        };
+      }
+      // Fallback to display name
+      else {
+        sellerMap[sellerId] = {
+          storeName: sellerData.displayName || "Unknown Seller",
+          owner: sellerData.displayName || "Unknown Seller",
+        };
+      }
+    }
+  });
+
+  // Merge seller info into products
+  return products.map((product) => ({
+    ...product,
+    ...(sellerMap[product.sellerId] || {
+      storeName: "Unknown Seller",
+      owner: "Unknown Seller",
+    }),
+  }));
+};
+
 // Helper to generate comprehensive search tags
 const generateSearchTags = (data) => {
   const tags = new Set();
@@ -89,6 +145,9 @@ export const getAllProducts = async (req, res) => {
       products = products.filter((p) => p.isSeasonal === true);
     }
 
+    // Populate seller information
+    products = await populateSellerInfo(products);
+
     res.json(products);
   } catch (err) {
     console.error("Marketplace Error:", err);
@@ -133,7 +192,10 @@ export const getTrendingProducts = async (req, res) => {
     // Use the new trending algorithm to rank products
     const trendingProducts = calculateTrendingProducts(products, 20);
 
-    res.json(trendingProducts);
+    // Populate seller information
+    const productsWithSellerInfo = await populateSellerInfo(trendingProducts);
+
+    res.json(productsWithSellerInfo);
   } catch (err) {
     console.error("Trending Error:", err);
     res.status(500).json({
@@ -172,9 +234,13 @@ export const getDealsProducts = async (req, res) => {
       ...doc.data(),
     }));
 
+    // Populate seller information
+    const bundlesWithSeller = await populateSellerInfo(bundles);
+    const seasonalWithSeller = await populateSellerInfo(seasonal);
+
     res.json({
-      bundles,
-      seasonal,
+      bundles: bundlesWithSeller,
+      seasonal: seasonalWithSeller,
     });
   } catch (err) {
     console.error("Deals Error:", err);
@@ -199,15 +265,24 @@ export const getProductsBySeller = async (req, res) => {
     const snapshot = await db
       .collection("products")
       .where("sellerId", "==", sellerId)
-      .orderBy("createdAt", "desc")
       .get();
 
-    const products = snapshot.docs.map((doc) => ({
+    let products = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
 
-    return res.json(products);
+    // Sort in memory by createdAt desc
+    products.sort((a, b) => {
+      const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+      const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+      return bTime - aTime;
+    });
+
+    // Populate seller information
+    const productsWithSeller = await populateSellerInfo(products);
+
+    return res.json(productsWithSeller);
   } catch (err) {
     console.error("Failed to fetch seller products:", err);
     return res.status(500).json({
@@ -253,7 +328,10 @@ export const getRelatedProducts = async (req, res) => {
       return (b.soldCount || 0) - (a.soldCount || 0);
     });
 
-    res.json(related.slice(0, 8));
+    // Populate seller information
+    const relatedWithSeller = await populateSellerInfo(related.slice(0, 8));
+
+    res.json(relatedWithSeller);
   } catch (err) {
     res.status(500).json({
       message: "Failed to fetch related products",
@@ -263,6 +341,7 @@ export const getRelatedProducts = async (req, res) => {
 };
 
 // Get product by ID
+// Get product by ID with seller information
 export const getProductById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -273,9 +352,49 @@ export const getProductById = async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
+    const productData = snapshot.data();
+
+    // Fetch seller information if sellerId exists
+    let sellerInfo = null;
+    if (productData.sellerId) {
+      try {
+        const sellerDoc = await db
+          .collection("users")
+          .doc(productData.sellerId)
+          .get();
+        if (sellerDoc.exists) {
+          const sellerData = sellerDoc.data();
+          // Check for approved seller profile first
+          if (sellerData.role === "seller" && sellerData.seller) {
+            sellerInfo = {
+              storeName: sellerData.seller.storeName,
+              owner: sellerData.seller.storeName,
+            };
+          }
+          // If no approved seller profile, check for pending application
+          else if (sellerData.sellerApplication?.status === "pending") {
+            sellerInfo = {
+              storeName: sellerData.sellerApplication.storeName,
+              owner: sellerData.sellerApplication.storeName,
+            };
+          }
+          // Fallback to display name
+          else {
+            sellerInfo = {
+              storeName: sellerData.displayName || "Unknown Seller",
+              owner: sellerData.displayName || "Unknown Seller",
+            };
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching seller info:", error);
+      }
+    }
+
     res.json({
       id: snapshot.id,
-      ...snapshot.data(),
+      ...productData,
+      ...sellerInfo, // Merge seller info into product data
     });
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch product" });
@@ -340,6 +459,9 @@ export const searchProducts = async (req, res) => {
     if (isSeasonal === "true") {
       products = products.filter((p) => p.isSeasonal === true);
     }
+
+    // Populate seller information
+    products = await populateSellerInfo(products);
 
     res.json(products);
   } catch (err) {

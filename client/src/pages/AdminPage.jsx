@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { authAPI } from "@/api/auth";
 
 export default function AdminPage() {
   const [applications, setApplications] = useState([]);
@@ -19,22 +20,15 @@ export default function AdminPage() {
   const fetchApplications = async () => {
     try {
       const token = localStorage.getItem("authToken");
-      const response = await fetch(
-        "http://localhost:3000/auth/seller-applications",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const response = await authAPI.getSellerApplications(token);
 
-      const data = await response.json();
-      if (data.success) {
-        setApplications(data.applications);
+      if (response.success) {
+        setApplications(response.applications);
       } else {
-        toast.error("Failed to fetch applications");
+        toast.error(response.message || "Failed to fetch applications");
       }
     } catch (error) {
+      console.error("Error fetching applications:", error);
       toast.error("Failed to fetch applications");
     } finally {
       setLoading(false);
@@ -44,49 +38,34 @@ export default function AdminPage() {
   const handleApprove = async (uid) => {
     try {
       const token = localStorage.getItem("authToken");
-      const response = await fetch(
-        `http://localhost:3000/auth/approve-seller/${uid}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const response = await authAPI.approveSeller(token, uid);
 
-      const data = await response.json();
-      if (data.success) {
+      if (response.success) {
         toast.success("Application approved!");
         fetchApplications(); // Refresh list
       } else {
-        toast.error(data.message || "Failed to approve");
+        toast.error(response.message || "Failed to approve");
       }
     } catch (error) {
+      console.error("Error approving application:", error);
       toast.error("Failed to approve");
     }
   };
 
   const handleReject = async (uid) => {
+    const reason = prompt("Enter rejection reason (optional):");
     try {
       const token = localStorage.getItem("authToken");
-      const response = await fetch(
-        `http://localhost:3000/auth/reject-seller/${uid}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const response = await authAPI.rejectSeller(token, uid, reason);
 
-      const data = await response.json();
-      if (data.success) {
+      if (response.success) {
         toast.success("Application rejected!");
         fetchApplications(); // Refresh list
       } else {
-        toast.error(data.message || "Failed to reject");
+        toast.error(response.message || "Failed to reject");
       }
     } catch (error) {
+      console.error("Error rejecting application:", error);
       toast.error("Failed to reject");
     }
   };

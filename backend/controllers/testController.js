@@ -1,0 +1,22 @@
+// testController.js
+import admin from "../config/firebaseAdmin.js";
+const db = admin.firestore();
+
+export const getUsers = async (req, res) => {
+  try {
+    const usersRef = db.collection("users");
+    const snapshot = await usersRef.get();
+
+    const users = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+
+    res.status(200).json(users);
+  } catch (err) {
+    console.error("Fetch Error:", err);
+    res
+      .status(500)
+      .json({ message: "Failed to fetch users", error: err.message });
+  }
+};

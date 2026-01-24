@@ -8,8 +8,12 @@ import {
   User,
   AlertCircle,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { authAPI } from "@/api/auth";
+import toast from "react-hot-toast";
 
 export default function SellerApplication() {
+  const { user, refreshProfile } = useAuth();
   const [formData, setFormData] = useState({
     storeName: "",
     storeDescription: "",
@@ -134,41 +138,58 @@ export default function SellerApplication() {
     setLoading(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const token = localStorage.getItem("authToken");
+      if (!token) {
+        toast.error("Please log in to submit an application");
+        return;
+      }
 
-      const applicationData = {
-        storeName: formData.storeName,
-        storeDescription: formData.storeDescription,
-        paymentDetails: {
-          method: formData.paymentMethod,
-          gcash:
-            formData.paymentMethod === "gcash"
-              ? {
-                  number: formData.gcashNumber,
-                  name: formData.gcashName,
-                }
-              : null,
-          bank:
-            formData.paymentMethod === "bank"
-              ? {
-                  bankName: formData.bankName,
-                  accountNumber: formData.accountNumber,
-                  accountName: formData.accountName,
-                }
-              : null,
-          qrCodeUrl: formData.qrCodePreview,
-        },
-        status: "pending",
-        appliedAt: new Date().toISOString(),
-      };
+      // Create FormData for file upload
+      const formDataToSend = new FormData();
+      formDataToSend.append("storeName", formData.storeName);
+      formDataToSend.append("storeDescription", formData.storeDescription);
+      formDataToSend.append("paymentMethod", formData.paymentMethod);
 
-      console.log("Application submitted:", applicationData);
-      alert(
-        "Application submitted successfully! Please wait for admin approval.",
-      );
+      if (formData.paymentMethod === "gcash") {
+        formDataToSend.append("gcashNumber", formData.gcashNumber);
+        formDataToSend.append("gcashName", formData.gcashName);
+      } else if (formData.paymentMethod === "bank") {
+        formDataToSend.append("bankName", formData.bankName);
+        formDataToSend.append("accountNumber", formData.accountNumber);
+        formDataToSend.append("accountName", formData.accountName);
+      }
+
+      if (formData.qrCodeFile) {
+        formDataToSend.append("qrCode", formData.qrCodeFile);
+      }
+
+      const response = await authAPI.applyAsSeller(token, formDataToSend);
+
+      if (response.success) {
+        toast.success(
+          "Application submitted successfully! Please wait for admin approval.",
+        );
+        // Refresh user profile to get updated sellerApplication status
+        await refreshProfile();
+        // Reset form
+        setFormData({
+          storeName: "",
+          storeDescription: "",
+          paymentMethod: "gcash",
+          gcashNumber: "",
+          gcashName: "",
+          bankName: "",
+          accountNumber: "",
+          accountName: "",
+          qrCodeFile: null,
+          qrCodePreview: null,
+        });
+      } else {
+        toast.error(response.message || "Failed to submit application");
+      }
     } catch (error) {
       console.error("Error submitting application:", error);
-      alert("Failed to submit application. Please try again.");
+      toast.error("Failed to submit application. Please try again.");
     } finally {
       setLoading(false);
     }

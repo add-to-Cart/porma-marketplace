@@ -1,55 +1,17 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import {
-  getSellerOrders,
-  updateOrderStatus,
-  completeOrder,
-  uploadPaymentProof,
-} from "@/api/orders";
-import {
-  Package,
-  Truck,
-  CheckCircle2,
-  ChevronDown,
-  Clock,
-  MapPin,
-  Upload,
-  CreditCard,
-} from "lucide-react";
+import { getSellerOrders } from "@/api/orders";
 import toast from "react-hot-toast";
-
-const ORDER_STATUSES = [
-  { key: "pending", label: "Pending", color: "bg-yellow-100 text-yellow-700" },
-  { key: "accepted", label: "Accepted", color: "bg-blue-100 text-blue-700" },
-  { key: "shipped", label: "Shipped", color: "bg-purple-100 text-purple-700" },
-  {
-    key: "delivered",
-    label: "Delivered",
-    color: "bg-green-100 text-green-700",
-  },
-  {
-    key: "completed",
-    label: "Completed",
-    color: "bg-emerald-100 text-emerald-700",
-  },
-];
-
-const DELIVERY_STATUSES = [
-  { key: "processing", label: "Processing", icon: Clock },
-  { key: "packed", label: "Packed", icon: Package },
-  { key: "shipped", label: "Shipped", icon: Truck },
-  { key: "out_for_delivery", label: "Out for Delivery", icon: MapPin },
-  { key: "delivered", label: "Delivered", icon: CheckCircle2 },
-];
 
 export default function SellerOrdersPage() {
   const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState("pending_verification");
+  const [expandedOrder, setExpandedOrder] = useState(null);
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const [rejectModal, setRejectModal] = useState(null);
+  const [rejectionReason, setRejectionReason] = useState("");
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [expandedOrder, setExpandedOrder] = useState(null);
-  const [updating, setUpdating] = useState(null);
-  const [uploadingQR, setUploadingQR] = useState(null);
-  const [qrFileInput, setQRFileInput] = useState({});
 
   useEffect(() => {
     if (user) {
@@ -61,518 +23,527 @@ export default function SellerOrdersPage() {
     try {
       setLoading(true);
       const data = await getSellerOrders(user.uid);
-      setOrders(data || []);
+      setOrders(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Failed to fetch orders:", err);
+      console.error("Error fetching orders:", err);
       toast.error("Failed to load orders");
+      setOrders([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStatusUpdate = async (orderId, newStatus) => {
+  const pendingVerification = orders.filter(
+    (o) => o.paymentStatus === "pending_verification",
+  );
+  const activeOrders = orders.filter(
+    (o) => o.paymentStatus === "verified" && o.status !== "completed",
+  );
+  const completedOrders = orders.filter((o) => o.status === "completed");
+
+  const getStatusColor = (status) => {
+    const colors = {
+      pending: "bg-yellow-100 text-yellow-800",
+      accepted: "bg-blue-100 text-blue-800",
+      shipped: "bg-indigo-100 text-indigo-800",
+      delivered: "bg-green-100 text-green-800",
+      completed: "bg-emerald-100 text-emerald-800",
+    };
+    return colors[status] || "bg-gray-100 text-gray-800";
+  };
+
+  const handleVerifyPayment = async (orderId, verified) => {
+    if (!verified && !rejectionReason.trim()) {
+      toast.error("Please provide a rejection reason");
+      return;
+    }
+
     try {
-      setUpdating(orderId);
-      await updateOrderStatus(orderId, {
-        status: newStatus,
-        buyerNotified: false,
+      const response = await fetch(
+        `http://localhost:3000/orders/${orderId}/verify-payment`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            verified,
+            sellerId: user.uid,
+            rejectionReason: verified ? null : rejectionReason,
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(verified ? "Payment accepted!" : "Payment rejected!");
+        setRejectModal(null);
+        setRejectionReason("");
+        await fetchOrders();
+      } else {
+        toast.error(data.message || "Failed to verify payment");
+      }
+    } catch (err) {
+      console.error("Verify payment error:", err);
+      toast.error("Failed to verify payment");
+    }
+  };
+
+  const handleUpdateDelivery = async (orderId, newStatus) => {
+    try {
+      const response = await fetch(`http://localhost:3000/orders/${orderId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          deliveryStatus: newStatus,
+          status: newStatus === "delivered" ? "completed" : "pending",
+        }),
       });
-      toast.success(`Order status updated to ${newStatus}`);
-      fetchOrders();
-    } catch (err) {
-      console.error("Failed to update order:", err);
-      toast.error("Failed to update order");
-    } finally {
-      setUpdating(null);
-    }
-  };
 
-  const handleDeliveryUpdate = async (orderId, newDeliveryStatus) => {
-    try {
-      setUpdating(orderId);
-      await updateOrderStatus(orderId, { deliveryStatus: newDeliveryStatus });
-      toast.success(`Delivery status updated`);
-      fetchOrders();
+      if (response.ok) {
+        toast.success(`Order marked as ${newStatus}!`);
+        await fetchOrders();
+      } else {
+        toast.error("Failed to update delivery status");
+      }
     } catch (err) {
-      console.error("Failed to update delivery:", err);
+      console.error("Update delivery error:", err);
       toast.error("Failed to update delivery status");
-    } finally {
-      setUpdating(null);
     }
   };
 
-  const handleCompleteOrder = async (orderId) => {
-    try {
-      setUpdating(orderId);
-      await completeOrder(orderId);
-      toast.success("Order completed! Ratings have been updated.");
-      fetchOrders();
-    } catch (err) {
-      console.error("Failed to complete order:", err);
-      toast.error("Failed to complete order");
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const handleQRUpload = async (orderId, file) => {
-    if (!file) return;
-
-    try {
-      setUploadingQR(orderId);
-
-      // Convert file to Base64 for simple implementation
-      // In production, you might want to use Cloudinary or another service
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64String = e.target.result;
-
-        try {
-          await uploadPaymentProof(orderId, base64String);
-          toast.success("Payment proof uploaded successfully!");
-          setQRFileInput({ ...qrFileInput, [orderId]: null });
-          fetchOrders();
-        } catch (err) {
-          console.error("Failed to upload payment proof:", err);
-          toast.error("Failed to upload payment proof");
-        } finally {
-          setUploadingQR(null);
-        }
-      };
-      reader.readAsDataURL(file);
-    } catch (err) {
-      console.error("Error processing file:", err);
-      toast.error("Error processing file");
-      setUploadingQR(null);
-    }
+  const openRejectModal = (orderId) => {
+    setRejectModal(orderId);
+    setRejectionReason("");
   };
 
   if (loading) {
     return (
-      <div className="max-w-5xl mx-auto p-6 text-center">
-        <h1 className="text-3xl font-bold mb-6">Orders to Process</h1>
-        <div className="animate-pulse space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-32 bg-gray-200 rounded-lg" />
-          ))}
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center py-20">
+            <p className="text-gray-500 animate-pulse">Loading orders...</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  if (orders.length === 0) {
+  if (!user) {
     return (
-      <div className="max-w-5xl mx-auto p-6 text-center">
-        <h1 className="text-3xl font-bold mb-4">Orders to Process</h1>
-        <div className="bg-gray-50 rounded-lg p-12 border border-gray-200">
-          <Package size={48} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500 text-lg">
-            No orders to process at the moment.
-          </p>
-        </div>
+      <div className="p-10 text-center">
+        <p className="text-gray-600">Please log in to view your orders.</p>
       </div>
     );
   }
-
-  const getStatusColor = (status) => {
-    return ORDER_STATUSES.find((s) => s.key === status)?.color || "";
-  };
-
-  const getDeliveryProgress = (deliveryStatus) => {
-    const index = DELIVERY_STATUSES.findIndex((s) => s.key === deliveryStatus);
-    return ((index + 1) / DELIVERY_STATUSES.length) * 100;
-  };
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <h1 className="text-3xl font-bold mb-2">Orders to Process</h1>
-      <p className="text-gray-600 mb-6">
-        Manage buyer orders and track deliveries
-      </p>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Order Desk</h1>
+          <p className="text-gray-600 mt-2">
+            Manage customer orders and verify payments
+          </p>
+        </div>
 
-      <div className="space-y-4">
-        {orders.map((order) => (
-          <div
-            key={order.id}
-            className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6 bg-white p-1 rounded-lg border shadow-sm">
+          <button
+            onClick={() => setActiveTab("pending_verification")}
+            className={`flex-1 px-6 py-3 rounded-md font-bold transition-all ${
+              activeTab === "pending_verification"
+                ? "bg-amber-500 text-white shadow-md"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
           >
-            {/* Header */}
-            <div
-              className="p-6 bg-gray-50 cursor-pointer"
-              onClick={() =>
-                setExpandedOrder(expandedOrder === order.id ? null : order.id)
-              }
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-bold text-gray-900">
-                    Order #{order.id.slice(-8).toUpperCase()}
-                  </div>
-                  <div className="text-sm text-gray-600 mt-1">
-                    From: Buyer ID {order.buyerId?.slice(0, 8)}...
-                  </div>
-                </div>
+            🔐 Pending Verification ({pendingVerification.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("active")}
+            className={`flex-1 px-6 py-3 rounded-md font-bold transition-all ${
+              activeTab === "active"
+                ? "bg-blue-500 text-white shadow-md"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            📦 Active Orders ({activeOrders.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("completed")}
+            className={`flex-1 px-6 py-3 rounded-md font-bold transition-all ${
+              activeTab === "completed"
+                ? "bg-green-500 text-white shadow-md"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            ✓ Completed ({completedOrders.length})
+          </button>
+        </div>
 
-                <div className="flex items-center gap-6">
-                  <div className="text-right">
-                    <div className="font-bold text-lg">
-                      ₱{order.total?.toLocaleString()}
-                    </div>
-                    <span
-                      className={`inline-block px-3 py-1 rounded text-xs font-bold mt-1 ${getStatusColor(
-                        order.status,
-                      )}`}
-                    >
-                      {
-                        ORDER_STATUSES.find((s) => s.key === order.status)
-                          ?.label
-                      }
-                    </span>
-                  </div>
-
-                  <ChevronDown
-                    size={20}
-                    className={`transition-transform ${
-                      expandedOrder === order.id ? "rotate-180" : ""
-                    }`}
-                  />
-                </div>
+        {/* Pending Verification Tab */}
+        {activeTab === "pending_verification" && (
+          <div className="space-y-4">
+            {pendingVerification.length === 0 ? (
+              <div className="bg-white rounded-lg p-12 text-center border shadow-sm">
+                <p className="text-gray-500">
+                  No payments waiting for verification
+                </p>
               </div>
-            </div>
-
-            {/* Expanded Content */}
-            {expandedOrder === order.id && (
-              <div className="p-6 border-t border-gray-200 space-y-6">
-                {/* Status Controls */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="font-bold text-gray-900 mb-3">
-                      Order Status
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {ORDER_STATUSES.map((status) => (
-                        <button
-                          key={status.key}
-                          onClick={() =>
-                            handleStatusUpdate(order.id, status.key)
-                          }
-                          disabled={updating === order.id}
-                          className={`px-3 py-2 rounded text-xs font-bold transition-all ${
-                            order.status === status.key
-                              ? status.color
-                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                          } disabled:opacity-50`}
-                        >
-                          {status.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-bold text-gray-900 mb-3">
-                      Delivery Status
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {DELIVERY_STATUSES.map((status) => (
-                        <button
-                          key={status.key}
-                          onClick={() =>
-                            handleDeliveryUpdate(order.id, status.key)
-                          }
-                          disabled={updating === order.id}
-                          className={`px-3 py-2 rounded text-xs font-bold transition-all ${
-                            order.deliveryStatus === status.key
-                              ? "bg-blue-100 text-blue-700"
-                              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                          } disabled:opacity-50`}
-                        >
-                          {status.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Delivery Address Section */}
-                {order.deliveryDetails && (
-                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
-                    <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
-                      <MapPin size={18} />
-                      Delivery Address
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
+            ) : (
+              pendingVerification.map((order) => (
+                <div
+                  key={order.id}
+                  className="bg-white rounded-lg border shadow-sm overflow-hidden"
+                >
+                  {/* Order Header */}
+                  <div className="bg-amber-50 border-b-2 border-amber-200 p-4">
+                    <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-gray-600">Full Name</p>
-                        <p className="font-semibold text-gray-900">
-                          {order.deliveryDetails.fullName || "N/A"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Phone</p>
-                        <p className="font-semibold text-gray-900">
-                          {order.deliveryDetails.phone || "N/A"}
-                        </p>
-                      </div>
-                      <div className="col-span-2">
-                        <p className="text-gray-600">Email</p>
-                        <p className="font-semibold text-gray-900">
-                          {order.deliveryDetails.email || "N/A"}
-                        </p>
-                      </div>
-                      <div className="col-span-2">
-                        <p className="text-gray-600">Address</p>
-                        <p className="font-semibold text-gray-900">
-                          {order.deliveryDetails.address || "N/A"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">City</p>
-                        <p className="font-semibold text-gray-900">
-                          {order.deliveryDetails.city || "N/A"}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">Province</p>
-                        <p className="font-semibold text-gray-900">
-                          {order.deliveryDetails.province || "N/A"}
-                        </p>
-                      </div>
-                      {order.deliveryDetails.zipCode && (
-                        <div>
-                          <p className="text-gray-600">Zip Code</p>
-                          <p className="font-semibold text-gray-900">
-                            {order.deliveryDetails.zipCode}
-                          </p>
+                        <div className="flex items-center gap-3">
+                          <span className="px-3 py-1 bg-amber-500 text-white text-xs font-bold rounded-full">
+                            ⏱️ NEEDS VERIFICATION
+                          </span>
+                          <h3 className="font-bold text-gray-900">
+                            Order #{order.id.slice(-8).toUpperCase()}
+                          </h3>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Delivery Progress */}
-                {order.deliveryStatus && (
-                  <div className="space-y-3">
-                    <h4 className="font-bold text-gray-900">
-                      Delivery Progress
-                    </h4>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-grow h-3 bg-gray-200 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-blue-600 transition-all"
-                          style={{
-                            width: `${getDeliveryProgress(order.deliveryStatus)}%`,
-                          }}
-                        />
+                        <p className="text-sm text-gray-600 mt-1">
+                          From: {order.deliveryDetails?.fullName || "Unknown"}
+                        </p>
                       </div>
-                      <span className="text-sm font-semibold text-gray-700">
-                        {DELIVERY_STATUSES.find(
-                          (s) => s.key === order.deliveryStatus,
-                        )?.label || "Unknown"}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Items */}
-                <div className="space-y-3">
-                  <h4 className="font-bold text-gray-900">Items Ordered</h4>
-                  {order.items.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex gap-4 p-3 bg-gray-50 rounded-lg"
-                    >
-                      <img
-                        src={item.imageUrl}
-                        alt={item.productName}
-                        className="w-20 h-20 object-cover rounded"
-                      />
-                      <div className="flex-grow">
-                        <div className="font-semibold text-gray-900">
-                          {item.productName}
-                        </div>
-                        <div className="text-sm text-gray-600">
-                          Qty: {item.quantity} × ₱{item.price?.toLocaleString()}
-                        </div>
-                      </div>
-                      <div className="text-right font-bold">
-                        ₱{(item.price * item.quantity)?.toLocaleString()}
+                      <div className="text-right">
+                        <p className="text-2xl font-black text-gray-900">
+                          ₱{order.total?.toLocaleString()}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {order.paymentMethod?.toUpperCase()}
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  </div>
 
-                {/* Summary */}
-                <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Subtotal:</span>
-                    <span className="font-semibold">
-                      ₱{order.subtotal?.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Delivery Fee:</span>
-                    <span className="font-semibold">
-                      ₱{order.deliveryFee?.toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="border-t border-gray-200 pt-2 flex justify-between">
-                    <span className="font-bold">Total:</span>
-                    <span className="font-bold text-lg text-blue-600">
-                      ₱{order.total?.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Payment Method Section */}
-                {order.paymentMethod && order.paymentMethod !== "cod" && (
-                  <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
-                    <div className="flex items-center gap-2 mb-4">
-                      <CreditCard size={18} className="text-amber-700" />
-                      <h4 className="font-bold text-amber-900">
-                        Payment Proof Required
+                  {/* Payment Proof Section */}
+                  <div className="p-6 space-y-6">
+                    <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
+                      <h4 className="font-bold text-blue-900 mb-4 flex items-center gap-2">
+                        💳 Payment Proof Submitted
                       </h4>
-                    </div>
-                    <p className="text-sm text-amber-800 mb-3">
-                      Payment Method:{" "}
-                      <span className="font-semibold">
-                        {order.paymentMethod === "bank"
-                          ? "Bank Transfer"
-                          : order.paymentMethod === "gcash"
-                            ? "GCash"
-                            : order.paymentMethod}
-                      </span>
-                    </p>
 
-                    {order.paymentProofUrl ? (
-                      <div className="space-y-2">
-                        <div className="bg-white p-3 rounded border border-amber-200">
-                          <p className="text-xs text-gray-600 mb-2">
-                            Payment Proof (QR/Receipt):
-                          </p>
-                          <img
-                            src={order.paymentProofUrl}
-                            alt="Payment proof"
-                            className="max-w-xs rounded border border-gray-200"
-                          />
-                          <p className="text-xs text-gray-500 mt-2">
-                            Uploaded on{" "}
-                            {order.paymentProofUploadedAt
-                              ? new Date(
-                                  typeof order.paymentProofUploadedAt ===
-                                    "object" &&
-                                    order.paymentProofUploadedAt.toDate
-                                    ? order.paymentProofUploadedAt.toDate()
-                                    : order.paymentProofUploadedAt,
-                                ).toLocaleDateString()
-                              : "Unknown"}
-                          </p>
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Screenshot */}
+                        {order.paymentProofUrl && (
+                          <div>
+                            <p className="text-sm font-semibold text-gray-700 mb-3">
+                              Receipt Screenshot:
+                            </p>
+                            <div
+                              onClick={() =>
+                                setLightboxImage(order.paymentProofUrl)
+                              }
+                              className="relative cursor-pointer group"
+                            >
+                              <img
+                                src={order.paymentProofUrl}
+                                alt="Payment proof"
+                                className="w-full max-w-xs rounded-lg border-2 border-blue-300 shadow-md group-hover:scale-105 transition-transform"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 rounded-lg transition-all flex items-center justify-center">
+                                <span className="opacity-0 group-hover:opacity-100 bg-white/90 px-3 py-1 rounded text-sm font-bold">
+                                  🔍 Click to enlarge
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Details */}
+                        <div className="space-y-4">
+                          <div className="bg-white p-4 rounded-lg border border-blue-200">
+                            <p className="text-xs font-semibold text-gray-600 mb-1">
+                              Transaction Reference:
+                            </p>
+                            <p className="text-2xl font-black text-blue-600 font-mono tracking-wider">
+                              {order.paymentReferenceNumber || "N/A"}
+                            </p>
+                          </div>
+
+                          <div className="bg-white p-4 rounded-lg border border-blue-200">
+                            <p className="text-xs font-semibold text-gray-600 mb-1">
+                              Amount Paid:
+                            </p>
+                            <p className="text-3xl font-black text-green-600">
+                              ₱{order.total?.toLocaleString()}
+                            </p>
+                          </div>
+
+                          <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
+                            <p className="text-xs font-bold text-amber-900 mb-2">
+                              ⚠️ Verification Steps:
+                            </p>
+                            <ol className="text-xs text-amber-800 space-y-1 list-decimal list-inside">
+                              <li>
+                                Check your {order.paymentMethod?.toUpperCase()}{" "}
+                                app/bank
+                              </li>
+                              <li>
+                                Find transaction with ref:{" "}
+                                <strong>{order.paymentReferenceNumber}</strong>
+                              </li>
+                              <li>
+                                Verify amount matches:{" "}
+                                <strong>
+                                  ₱{order.total?.toLocaleString()}
+                                </strong>
+                              </li>
+                              <li>Accept if correct, reject if not found</li>
+                            </ol>
+                          </div>
                         </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-3 mt-6">
                         <button
-                          onClick={() =>
-                            document
-                              .getElementById(`qr-upload-${order.id}`)
-                              ?.click()
-                          }
-                          className="text-xs text-blue-600 hover:text-blue-700 font-semibold"
+                          onClick={() => handleVerifyPayment(order.id, true)}
+                          className="flex-1 bg-green-600 text-white py-4 rounded-lg font-bold hover:bg-green-700 transition-all shadow-lg"
                         >
-                          Update Proof
+                          ✓ Accept Payment - Funds Confirmed
+                        </button>
+                        <button
+                          onClick={() => openRejectModal(order.id)}
+                          className="flex-1 bg-red-600 text-white py-4 rounded-lg font-bold hover:bg-red-700 transition-all shadow-lg"
+                        >
+                          ✗ Reject Payment - Not Received
                         </button>
                       </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <input
-                          type="file"
-                          id={`qr-upload-${order.id}`}
-                          accept="image/*"
-                          onChange={(e) => {
-                            setQRFileInput({
-                              ...qrFileInput,
-                              [order.id]: e.target.files?.[0],
-                            });
-                          }}
-                          className="hidden"
-                        />
-                        {qrFileInput[order.id] ? (
-                          <div className="flex items-center gap-2">
-                            <div className="flex-grow">
-                              <p className="text-sm text-gray-900 font-semibold">
-                                {qrFileInput[order.id].name}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {(qrFileInput[order.id].size / 1024).toFixed(2)}{" "}
-                                KB
-                              </p>
-                            </div>
-                            <button
-                              onClick={() =>
-                                handleQRUpload(order.id, qrFileInput[order.id])
-                              }
-                              disabled={uploadingQR === order.id}
-                              className="bg-amber-600 text-white px-4 py-2 rounded font-bold hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-                            >
-                              <Upload size={16} />
-                              {uploadingQR === order.id
-                                ? "Uploading..."
-                                : "Upload"}
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() =>
-                              document
-                                .getElementById(`qr-upload-${order.id}`)
-                                ?.click()
-                            }
-                            className="w-full border-2 border-dashed border-amber-300 p-4 rounded-lg text-amber-700 hover:bg-amber-50 transition-colors flex items-center justify-center gap-2"
-                          >
-                            <Upload size={18} />
-                            Upload QR Code / Payment Receipt
-                          </button>
-                        )}
+                    </div>
+
+                    {/* Delivery Details */}
+                    <div className="bg-gray-50 border rounded-lg p-4">
+                      <h4 className="font-bold text-gray-900 mb-3">
+                        📍 Delivery Information
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-600">Name:</p>
+                          <p className="font-semibold">
+                            {order.deliveryDetails?.fullName}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600">Phone:</p>
+                          <p className="font-semibold">
+                            {order.deliveryDetails?.phone}
+                          </p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-gray-600">Address:</p>
+                          <p className="font-semibold">
+                            {order.deliveryDetails?.address},{" "}
+                            {order.deliveryDetails?.city},{" "}
+                            {order.deliveryDetails?.province}
+                          </p>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
 
-                {order.paymentMethod === "cod" && (
-                  <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
-                    <p className="text-green-700 font-semibold">
-                      Cash on Delivery (COD)
-                    </p>
-                    <p className="text-sm text-green-600">
-                      No payment proof required for COD orders.
-                    </p>
+                    {/* Items */}
+                    <div className="border rounded-lg p-4">
+                      <h4 className="font-bold text-gray-900 mb-3">
+                        📦 Order Items
+                      </h4>
+                      {order.items?.map((item, idx) => (
+                        <div key={idx} className="flex gap-4 items-center mb-3">
+                          <img
+                            src={item.imageUrl}
+                            alt={item.productName || item.name}
+                            className="w-16 h-16 rounded object-cover"
+                          />
+                          <div className="flex-1">
+                            <p className="font-semibold">
+                              {item.productName || item.name}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Qty: {item.quantity} × ₱
+                              {item.price?.toLocaleString()}
+                            </p>
+                          </div>
+                          <p className="font-bold">
+                            ₱
+                            {(
+                              (item.price || 0) * (item.quantity || 0)
+                            ).toLocaleString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                )}
-
-                {/* Complete Order Button */}
-                {order.status !== "completed" && (
-                  <button
-                    onClick={() => handleCompleteOrder(order.id)}
-                    disabled={updating === order.id}
-                    className="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition-colors disabled:opacity-50"
-                  >
-                    {updating === order.id
-                      ? "Processing..."
-                      : "✓ Mark as Completed"}
-                  </button>
-                )}
-
-                {order.status === "completed" && (
-                  <div className="bg-green-50 border border-green-200 p-4 rounded-lg text-center">
-                    <p className="text-green-700 font-semibold">
-                      ✓ Order Completed
-                    </p>
-                    <p className="text-sm text-green-600 mt-1">
-                      Product ratings have been updated.
-                    </p>
-                  </div>
-                )}
-              </div>
+                </div>
+              ))
             )}
           </div>
-        ))}
+        )}
+
+        {/* Active Orders Tab */}
+        {activeTab === "active" && (
+          <div className="space-y-4">
+            {activeOrders.length === 0 ? (
+              <div className="bg-white rounded-lg p-12 text-center border shadow-sm">
+                <p className="text-gray-500">No active orders</p>
+              </div>
+            ) : (
+              activeOrders.map((order) => (
+                <div
+                  key={order.id}
+                  className="bg-white rounded-lg border shadow-sm p-6"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-bold text-gray-900">
+                        Order #{order.id.slice(-8).toUpperCase()}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        {order.deliveryDetails?.fullName || "Unknown"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold">
+                        ₱{order.total?.toLocaleString()}
+                      </p>
+                      <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">
+                        ✓ Verified
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleUpdateDelivery(order.id, "packed")}
+                      className="px-4 py-2 bg-blue-600 text-white rounded font-bold hover:bg-blue-700"
+                    >
+                      Mark as Packed
+                    </button>
+                    <button
+                      onClick={() => handleUpdateDelivery(order.id, "shipped")}
+                      className="px-4 py-2 bg-purple-600 text-white rounded font-bold hover:bg-purple-700"
+                    >
+                      Mark as Shipped
+                    </button>
+                    <button
+                      onClick={() =>
+                        handleUpdateDelivery(order.id, "delivered")
+                      }
+                      className="px-4 py-2 bg-green-600 text-white rounded font-bold hover:bg-green-700"
+                    >
+                      Mark as Delivered
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Completed Tab */}
+        {activeTab === "completed" && (
+          <div className="space-y-4">
+            {completedOrders.length === 0 ? (
+              <div className="bg-white rounded-lg p-12 text-center border shadow-sm">
+                <p className="text-gray-500">No completed orders yet</p>
+              </div>
+            ) : (
+              completedOrders.map((order) => (
+                <div
+                  key={order.id}
+                  className="bg-white rounded-lg border shadow-sm p-6"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-gray-900">
+                        Order #{order.id.slice(-8).toUpperCase()}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        {order.deliveryDetails?.fullName || "Unknown"}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Completed:{" "}
+                        {order.completedAt
+                          ? new Date(order.completedAt).toLocaleDateString()
+                          : "N/A"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-green-600">
+                        ₱{order.total?.toLocaleString()}
+                      </p>
+                      <span className="text-xs px-2 py-1 bg-emerald-100 text-emerald-700 rounded">
+                        ✓ Completed
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Lightbox Modal */}
+        {lightboxImage && (
+          <div
+            onClick={() => setLightboxImage(null)}
+            className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-6"
+          >
+            <img
+              src={lightboxImage}
+              alt="Full size proof"
+              className="max-w-full max-h-full rounded-lg shadow-2xl"
+            />
+            <button
+              onClick={() => setLightboxImage(null)}
+              className="absolute top-4 right-4 bg-white text-black rounded-full w-12 h-12 flex items-center justify-center font-bold text-xl hover:bg-gray-200"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Reject Modal */}
+        {rejectModal && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full">
+              <h3 className="text-xl font-bold mb-4">Reject Payment</h3>
+              <p className="text-gray-600 mb-4">
+                Please provide a reason for rejection:
+              </p>
+              <textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                className="w-full border-2 rounded-lg p-3 mb-4 resize-none"
+                rows="4"
+                placeholder="e.g., Payment not found in my account, Amount mismatch, Wrong reference number..."
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleVerifyPayment(rejectModal, false)}
+                  className="flex-1 bg-red-600 text-white py-3 rounded-lg font-bold hover:bg-red-700"
+                >
+                  Confirm Rejection
+                </button>
+                <button
+                  onClick={() => setRejectModal(null)}
+                  className="flex-1 bg-gray-200 text-gray-900 py-3 rounded-lg font-bold hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,20 @@ import { useState } from "react";
 export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState("products");
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+  };
+
+  const handleProductUpdate = () => {
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
+  const handleBundleCreate = () => {
+    setRefreshTrigger((prev) => prev + 1);
+  };
 
   return (
     <div className="mx-auto w-full min-h-screen px-4 py-4 lg:py-8 font-sans text-zinc-900">
@@ -52,35 +66,58 @@ export default function InventoryPage() {
         <>
           {/* SEARCH BAR */}
           <div className="mb-6">
-            <SearchBar placeholder="Search inventory..." />
+            <SearchBar
+              placeholder="Search inventory..."
+              onSearch={handleSearch}
+            />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
             {/* LEFT: ACTIVE INVENTORY LIST (1/3 Width) */}
             <div className="lg:col-span-4 sticky top-24">
-              <SellerProducts onSelect={(p) => setSelectedProduct(p)} />
+              <SellerProducts
+                onSelect={(p) => setSelectedProduct(p)}
+                searchQuery={searchQuery}
+                refreshTrigger={refreshTrigger}
+              />
             </div>
 
             {/* RIGHT: MASTER REGISTRY FORM (2/3 Width) */}
             <div className="lg:col-span-8">
-              <ProductForm selectedProduct={selectedProduct} />
+              <ProductForm
+                selectedProduct={selectedProduct}
+                onProductUpdate={handleProductUpdate}
+              />
             </div>
           </div>
         </>
       )}
 
       {activeTab === "bundles" && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
-          {/* LEFT: ACTIVE INVENTORY LIST (1/3 Width) */}
-          <div className="lg:col-span-4 sticky top-24">
-            <SellerProducts />
+        <>
+          {/* SEARCH BAR */}
+          <div className="mb-6">
+            <SearchBar
+              placeholder="Search products for bundles..."
+              onSearch={handleSearch}
+            />
           </div>
 
-          {/* RIGHT: BUNDLE MANAGEMENT (2/3 Width) */}
-          <div className="lg:col-span-8">
-            <BundleManagement />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+            {/* LEFT: ACTIVE INVENTORY LIST (1/3 Width) */}
+            <div className="lg:col-span-4 sticky top-24">
+              <SellerProducts
+                searchQuery={searchQuery}
+                refreshTrigger={refreshTrigger}
+              />
+            </div>
+
+            {/* RIGHT: BUNDLE MANAGEMENT (2/3 Width) */}
+            <div className="lg:col-span-8">
+              <BundleManagement onBundleCreate={handleBundleCreate} />
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-export default function ProductForm({ selectedProduct }) {
+export default function ProductForm({ selectedProduct, onProductUpdate }) {
   const { user } = useAuth();
   const { addProductToList, updateProductInList, clearSelection } =
     useProductContext();
@@ -283,10 +283,12 @@ export default function ProductForm({ selectedProduct }) {
         toast.success("Product updated successfully!");
         updateProductInList(editingProductId, result);
         clearSelection();
+        onProductUpdate && onProductUpdate();
       } else {
         const result = await createProduct(data);
         toast.success("Product Registered Successfully!");
         addProductToList(result);
+        onProductUpdate && onProductUpdate();
       }
 
       // Reset form
