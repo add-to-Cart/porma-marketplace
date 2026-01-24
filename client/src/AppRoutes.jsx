@@ -5,7 +5,6 @@ import ProtectedSellerRoute from "@/components/ProtectedSellerRoute";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ProfilePage from "@/pages/ProfilePage";
-import ApplySellerPage from "@/pages/ApplySellerPage";
 import AdminPage from "@/pages/AdminPage";
 
 import MarketPlace from "@/pages/Marketplace";
@@ -22,6 +21,7 @@ import SellerOrdersPage from "@/pages/SellerOrdersPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
 import OrdersPage from "@/pages/OrdersPage";
 import SellerAccount from "@/pages/SellerAccount";
+import SellerApplication from "@/pages/SellerApplication";
 
 export default function AppRoutes() {
   return (
@@ -43,7 +43,7 @@ export default function AppRoutes() {
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/apply-seller" element={<ApplySellerPage />} />
+        <Route path="/apply-seller" element={<SellerApplication />} />
         <Route path="/admin" element={<AdminPage />} />
       </Route>
 

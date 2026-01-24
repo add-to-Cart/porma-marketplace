@@ -489,54 +489,67 @@ router.post("/signout", verifyAuth, async (req, res) => {
   }
 });
 
-// Apply to become seller
-router.post("/apply-seller", verifyAuth, async (req, res) => {
-  try {
-    const { storeName, storeDescription } = req.body;
-    const db = admin.firestore();
+router.post(
+  "/apply-seller",
+  verifyAuth,
+  upload.single("qrCode"),
+  async (req, res) => {
+    try {
+      const { storeName, storeDescription, paymentMethod, ...paymentDetails } =
+        req.body;
+      const db = admin.firestore();
 
-    // Prevent already-approved sellers from applying again
-    if (req.user && req.user.role === "seller") {
-      return res
-        .status(400)
-        .json({ success: false, message: "You are already a seller" });
-    }
+      // Upload QR code to Cloudinary
+      let qrCodeUrl = null;
+      if (req.file) {
+        const uploadResult = await uploadProductImage(
+          req.file,
+          `qr_codes/${req.user.uid}`,
+        );
+        qrCodeUrl = uploadResult.url;
+      }
 
-    // Prevent duplicate pending applications
-    if (
-      req.user &&
-      req.user.sellerApplication &&
-      req.user.sellerApplication.status === "pending"
-    ) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Application already pending" });
-    }
+      await db
+        .collection("users")
+        .doc(req.user.uid)
+        .update({
+          sellerApplication: {
+            status: "pending",
+            storeName,
+            storeDescription,
+            paymentDetails: {
+              method: paymentMethod,
+              ...(paymentMethod === "gcash" && {
+                gcash: {
+                  number: paymentDetails.gcashNumber,
+                  name: paymentDetails.gcashName,
+                },
+              }),
+              ...(paymentMethod === "bank" && {
+                bank: {
+                  bankName: paymentDetails.bankName,
+                  accountNumber: paymentDetails.accountNumber,
+                  accountName: paymentDetails.accountName,
+                },
+              }),
+              qrCodeUrl,
+            },
+            appliedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+        });
 
-    await db
-      .collection("users")
-      .doc(req.user.uid)
-      .update({
-        sellerApplication: {
-          status: "pending",
-          storeName: storeName || null,
-          storeDescription: storeDescription || null,
-          appliedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
+      res.json({
+        success: true,
+        message: "Application submitted successfully",
       });
-
-    res.json({
-      success: true,
-      message: "Application submitted successfully",
-    });
-  } catch (error) {
-    console.error("Apply seller error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-});
+    } catch (error) {
+      console.error("Apply seller error:", error);
+      res
+        .status(500)
+        .json({ success: false, message: "Internal server error" });
+    }
+  },
+);
 
 // Get seller applications (admin only)
 router.get("/seller-applications", verifyAuth, async (req, res) => {
