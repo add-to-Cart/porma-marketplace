@@ -2,15 +2,20 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { createOrder, uploadPaymentProof } from "@/api/orders";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 
 export default function Checkout() {
   const { user } = useAuth();
   const { cart, subtotal, deliveryFee, total, clearCart } = useCart();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [currentStep, setCurrentStep] = useState(1);
+  const [checkoutItems, setCheckoutItems] = useState([]);
+  const [checkoutSubtotal, setCheckoutSubtotal] = useState(0);
+  const [checkoutDeliveryFee, setCheckoutDeliveryFee] = useState(0);
+  const [checkoutTotal, setCheckoutTotal] = useState(0);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -26,6 +31,27 @@ export default function Checkout() {
   const [paymentProofFile, setPaymentProofFile] = useState(null);
   const [referenceNumber, setReferenceNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Handle quick checkout from Buy Now button
+  useEffect(() => {
+    if (location.state?.quickCheckout) {
+      const { product, quantity } = location.state.quickCheckout;
+      const itemSubtotal = (product.price || product.basePrice) * quantity;
+      const itemDeliveryFee = itemSubtotal > 1000 ? 0 : 150;
+      const itemTotal = itemSubtotal + itemDeliveryFee;
+
+      setCheckoutItems([{ ...product, quantity }]);
+      setCheckoutSubtotal(itemSubtotal);
+      setCheckoutDeliveryFee(itemDeliveryFee);
+      setCheckoutTotal(itemTotal);
+    } else {
+      // Use cart items
+      setCheckoutItems(cart);
+      setCheckoutSubtotal(subtotal);
+      setCheckoutDeliveryFee(deliveryFee);
+      setCheckoutTotal(total);
+    }
+  }, [location.state, cart, subtotal, deliveryFee, total]);
 
   // Load user data into form
   useEffect(() => {
@@ -65,7 +91,7 @@ export default function Checkout() {
     try {
       const orderData = {
         buyerId: user.uid,
-        items: cart.map((item) => ({
+        items: checkoutItems.map((item) => ({
           id: item.id,
           name: item.name,
           quantity: item.quantity,
@@ -74,9 +100,9 @@ export default function Checkout() {
           sellerId: item.sellerId,
           storeName: item.storeName,
         })),
-        subtotal,
-        deliveryFee,
-        total,
+        subtotal: checkoutSubtotal,
+        deliveryFee: checkoutDeliveryFee,
+        total: checkoutTotal,
         paymentMethod: formData.paymentMethod,
         deliveryDetails: {
           fullName: formData.fullName,
@@ -342,7 +368,7 @@ export default function Checkout() {
                 <h2 className="text-lg font-bold mb-4">Order Summary</h2>
 
                 <div className="space-y-3 mb-4">
-                  {cart.map((item, idx) => (
+                  {checkoutItems.map((item, idx) => (
                     <div key={idx} className="flex gap-3">
                       <img
                         src={item.imageUrl}
@@ -363,19 +389,19 @@ export default function Checkout() {
                   <div className="flex justify-between text-sm">
                     <span>Subtotal</span>
                     <span className="font-semibold">
-                      ₱{subtotal.toLocaleString()}
+                      ₱{checkoutSubtotal.toLocaleString()}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span>Delivery</span>
                     <span className="font-semibold">
-                      ₱{deliveryFee.toLocaleString()}
+                      ₱{checkoutDeliveryFee.toLocaleString()}
                     </span>
                   </div>
                   <div className="border-t pt-2 flex justify-between">
                     <span className="font-bold">Total</span>
                     <span className="text-xl font-black text-blue-600">
-                      ₱{total.toLocaleString()}
+                      ₱{checkoutTotal.toLocaleString()}
                     </span>
                   </div>
                 </div>

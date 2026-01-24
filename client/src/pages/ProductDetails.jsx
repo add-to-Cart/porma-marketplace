@@ -304,32 +304,21 @@ export default function ProductDetails() {
                   </button>
                 </div>
                 <button
-                  onClick={async () => {
+                  onClick={() => {
                     if (!user) {
                       toast.error("Please log in to place an order");
                       return;
                     }
 
-                    try {
-                      const orderData = {
-                        buyerId: user.uid,
-                        items: [{ ...product, quantity }],
-                        subtotal:
-                          (product.price || product.basePrice) * quantity,
-                        deliveryFee: 150,
-                        total:
-                          (product.price || product.basePrice) * quantity + 150,
-                      };
-
-                      const order = await createOrder(orderData);
-                      toast.success(
-                        `Order placed successfully! Order #${order.id.slice(-8)}`,
-                      );
-                      navigate("/orders");
-                    } catch (err) {
-                      console.error("Failed to place order:", err);
-                      toast.error("Failed to place order. Please try again.");
-                    }
+                    // Navigate directly to checkout with product details
+                    navigate("/checkout", {
+                      state: {
+                        quickCheckout: {
+                          product: { ...product, quantity },
+                          quantity,
+                        },
+                      },
+                    });
                   }}
                   className="w-full h-12 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-all text-sm mt-2"
                 >
