@@ -211,7 +211,6 @@ export const getDealsProducts = async (req, res) => {
     const bundlesSnapshot = await db
       .collection("products")
       .where("isBundle", "==", true)
-      .where("isAvailable", "==", true)
       .orderBy("createdAt", "desc")
       .limit(50)
       .get();
@@ -219,7 +218,6 @@ export const getDealsProducts = async (req, res) => {
     const seasonalSnapshot = await db
       .collection("products")
       .where("isSeasonal", "==", true)
-      .where("isAvailable", "==", true)
       .orderBy("createdAt", "desc")
       .limit(50)
       .get();

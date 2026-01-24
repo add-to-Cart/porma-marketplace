@@ -32,7 +32,19 @@ export default function ProductCard({ product, onClick }) {
         />
 
         {/* Fitment Badge (The "Essential" Info) */}
-        <div className="absolute top-2 right-2 flex flex-col gap-1">
+        <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
+          {/* Discount Percentage Badge */}
+          {product.isBundle && product.compareAtPrice && product.basePrice && (
+            <span className="px-2 py-1 rounded-md text-[10px] font-black shadow-sm uppercase bg-red-600 text-white animate-pulse">
+              {Math.round(
+                ((product.compareAtPrice - product.basePrice) /
+                  product.compareAtPrice) *
+                  100,
+              )}
+              % OFF
+            </span>
+          )}
+
           <span
             className={`px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md ${
               vc?.type === "Motorcycle"
@@ -42,20 +54,24 @@ export default function ProductCard({ product, onClick }) {
           >
             {vc?.type || "Universal"}
           </span>
+
           {product.viewCount && (
             <span className="px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md bg-gray-800/90 text-white flex items-center gap-1">
               👁 {product.viewCount}
             </span>
           )}
-          {product.isBundle && (
-            <span className="px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md bg-green-500/90 text-white">
-              Bundle
-            </span>
-          )}
+
           {product.isSeasonal && (
-            <span className="px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md bg-purple-500/90 text-white">
-              Seasonal
-            </span>
+            <div className="flex flex-col gap-0.5 items-end">
+              <span className="px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md bg-purple-500/90 text-white">
+                Seasonal
+              </span>
+              {product.seasonalCategory && (
+                <span className="px-1.5 py-0.5 rounded-sm text-[7px] font-black shadow-sm uppercase bg-white/90 text-purple-700 border border-purple-200">
+                  {product.seasonalCategory}
+                </span>
+              )}
+            </div>
           )}
         </div>
       </div>
