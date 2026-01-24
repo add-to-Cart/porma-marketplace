@@ -6,6 +6,7 @@ import {
   getOrder,
   updateOrderStatus,
   completeOrder,
+  uploadPaymentProof,
 } from "../controllers/orderController.js";
 
 const router = express.Router();
@@ -27,5 +28,8 @@ router.patch("/:orderId", updateOrderStatus);
 
 // Complete order and update ratings
 router.patch("/:orderId/complete", completeOrder);
+
+// Upload payment proof (QR code for online payments)
+router.post("/:orderId/payment-proof", uploadPaymentProof);
 
 export default router;

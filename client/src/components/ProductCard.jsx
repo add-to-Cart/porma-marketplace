@@ -26,7 +26,7 @@ export default function ProductCard({ product, onClick }) {
       {/* Image Container */}
       <div className="relative aspect-square w-full overflow-hidden rounded-t-2xl bg-gray-100">
         <img
-          src={product.imageUrl}
+          src={product.imageUrl || null}
           alt={product.name}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
         />

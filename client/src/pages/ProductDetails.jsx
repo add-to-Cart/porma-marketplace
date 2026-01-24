@@ -219,13 +219,16 @@ export default function ProductDetails() {
                 </h3>
               </div>
               <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {product.bundleContents.split(",").map((item, index) => (
+                {(Array.isArray(product.bundleContents)
+                  ? product.bundleContents
+                  : product.bundleContents?.split(",") || []
+                ).map((item, index) => (
                   <li
                     key={index}
                     className="flex items-start gap-3 text-xs font-bold text-zinc-600"
                   >
                     <div className="mt-1 w-2 h-2 bg-zinc-900 rounded-full shrink-0" />
-                    {item.trim()}
+                    {typeof item === "string" ? item.trim() : item}
                   </li>
                 ))}
               </ul>

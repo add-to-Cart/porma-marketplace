@@ -19,7 +19,7 @@ export const CartProvider = ({ children }) => {
   const addToCart = (product) => {
     const productWithNumericPrice = {
       ...product,
-      price: Number(product.price) || 0,
+      basePrice: Number(product.basePrice) || 0,
     };
     const quantityToAdd = product.quantity || 1;
 
@@ -50,13 +50,17 @@ export const CartProvider = ({ children }) => {
   const clearCart = () => setCart([]);
 
   // More realistic cart calculations
-  const subtotal = cart.reduce(
-    (sum, item) => sum + item.price * item.quantity,
-    0,
-  );
+  const subtotal = cart.reduce((sum, item) => {
+    const basePrice = Number(item.basePrice) || 0;
+    const quantity = Number(item.quantity) || 0;
+    return sum + basePrice * quantity;
+  }, 0);
   const deliveryFee = subtotal > 1000 ? 0 : 150; // Free delivery over ₱1000
   const total = subtotal + deliveryFee;
-  const itemCount = cart.reduce((count, item) => count + item.quantity, 0);
+  const itemCount = cart.reduce(
+    (count, item) => count + (Number(item.quantity) || 0),
+    0,
+  );
 
   return (
     <CartContext.Provider

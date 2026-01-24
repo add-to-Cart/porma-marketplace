@@ -9,6 +9,7 @@ import {
   Tag,
   LogOut,
   LayoutDashboard,
+  Package,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
@@ -117,17 +118,19 @@ export default function Navbar() {
                 className="p-2.5 hover:bg-blue-50 rounded-full text-blue-600 transition-colors group relative"
                 title="My Orders"
               >
-                <ShoppingCart size={20} />
+                <Package size={20} />
                 <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
-              <NavLink
-                to="/seller/dashboard"
-                className="p-2.5 hover:bg-purple-50 rounded-full text-purple-600 transition-colors group relative"
-                title="Seller Dashboard"
-              >
-                <LayoutDashboard size={20} />
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-purple-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-              </NavLink>
+              {user?.isSeller && (
+                <NavLink
+                  to="/seller/dashboard"
+                  className="p-2.5 hover:bg-purple-50 rounded-full text-purple-600 transition-colors group relative"
+                  title="Seller Dashboard"
+                >
+                  <LayoutDashboard size={20} />
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-purple-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                </NavLink>
+              )}
               <button
                 onClick={() => navigate("/profile")}
                 className="flex items-center gap-2 pl-2 pr-4 py-1.5 hover:bg-gray-50 rounded-full transition-colors border border-transparent hover:border-gray-200"
@@ -157,15 +160,6 @@ export default function Navbar() {
                   title="Admin Panel"
                 >
                   <LayoutGrid size={20} />
-                </button>
-              )}
-              {user?.role === "seller" && (
-                <button
-                  onClick={() => navigate("/seller/dashboard")}
-                  className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"
-                  title="Seller Dashboard"
-                >
-                  <TrendingUp size={20} />
                 </button>
               )}
               <button

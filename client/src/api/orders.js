@@ -29,3 +29,10 @@ export const completeOrder = async (orderId) => {
   const res = await api.patch(`/orders/${orderId}/complete`);
   return res.data;
 };
+
+export const uploadPaymentProof = async (orderId, paymentProofUrl) => {
+  const res = await api.post(`/orders/${orderId}/payment-proof`, {
+    paymentProofUrl,
+  });
+  return res.data;
+};

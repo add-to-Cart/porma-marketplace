@@ -4,6 +4,7 @@ import {
   getSellerOrders,
   updateOrderStatus,
   completeOrder,
+  uploadPaymentProof,
 } from "@/api/orders";
 import {
   Package,
@@ -12,6 +13,8 @@ import {
   ChevronDown,
   Clock,
   MapPin,
+  Upload,
+  CreditCard,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -45,6 +48,8 @@ export default function SellerOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [updating, setUpdating] = useState(null);
+  const [uploadingQR, setUploadingQR] = useState(null);
+  const [qrFileInput, setQRFileInput] = useState({});
 
   useEffect(() => {
     if (user) {
@@ -107,6 +112,38 @@ export default function SellerOrdersPage() {
       toast.error("Failed to complete order");
     } finally {
       setUpdating(null);
+    }
+  };
+
+  const handleQRUpload = async (orderId, file) => {
+    if (!file) return;
+
+    try {
+      setUploadingQR(orderId);
+
+      // Convert file to Base64 for simple implementation
+      // In production, you might want to use Cloudinary or another service
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64String = e.target.result;
+
+        try {
+          await uploadPaymentProof(orderId, base64String);
+          toast.success("Payment proof uploaded successfully!");
+          setQRFileInput({ ...qrFileInput, [orderId]: null });
+          fetchOrders();
+        } catch (err) {
+          console.error("Failed to upload payment proof:", err);
+          toast.error("Failed to upload payment proof");
+        } finally {
+          setUploadingQR(null);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Error processing file:", err);
+      toast.error("Error processing file");
+      setUploadingQR(null);
     }
   };
 
@@ -257,6 +294,62 @@ export default function SellerOrdersPage() {
                   </div>
                 </div>
 
+                {/* Delivery Address Section */}
+                {order.deliveryDetails && (
+                  <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                    <h4 className="font-bold text-gray-900 mb-3 flex items-center gap-2">
+                      <MapPin size={18} />
+                      Delivery Address
+                    </h4>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-gray-600">Full Name</p>
+                        <p className="font-semibold text-gray-900">
+                          {order.deliveryDetails.fullName || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Phone</p>
+                        <p className="font-semibold text-gray-900">
+                          {order.deliveryDetails.phone || "N/A"}
+                        </p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-gray-600">Email</p>
+                        <p className="font-semibold text-gray-900">
+                          {order.deliveryDetails.email || "N/A"}
+                        </p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-gray-600">Address</p>
+                        <p className="font-semibold text-gray-900">
+                          {order.deliveryDetails.address || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">City</p>
+                        <p className="font-semibold text-gray-900">
+                          {order.deliveryDetails.city || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-600">Province</p>
+                        <p className="font-semibold text-gray-900">
+                          {order.deliveryDetails.province || "N/A"}
+                        </p>
+                      </div>
+                      {order.deliveryDetails.zipCode && (
+                        <div>
+                          <p className="text-gray-600">Zip Code</p>
+                          <p className="font-semibold text-gray-900">
+                            {order.deliveryDetails.zipCode}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Delivery Progress */}
                 {order.deliveryStatus && (
                   <div className="space-y-3">
@@ -330,6 +423,128 @@ export default function SellerOrdersPage() {
                     </span>
                   </div>
                 </div>
+
+                {/* Payment Method Section */}
+                {order.paymentMethod && order.paymentMethod !== "cod" && (
+                  <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-4">
+                      <CreditCard size={18} className="text-amber-700" />
+                      <h4 className="font-bold text-amber-900">
+                        Payment Proof Required
+                      </h4>
+                    </div>
+                    <p className="text-sm text-amber-800 mb-3">
+                      Payment Method:{" "}
+                      <span className="font-semibold">
+                        {order.paymentMethod === "bank"
+                          ? "Bank Transfer"
+                          : order.paymentMethod === "gcash"
+                            ? "GCash"
+                            : order.paymentMethod}
+                      </span>
+                    </p>
+
+                    {order.paymentProofUrl ? (
+                      <div className="space-y-2">
+                        <div className="bg-white p-3 rounded border border-amber-200">
+                          <p className="text-xs text-gray-600 mb-2">
+                            Payment Proof (QR/Receipt):
+                          </p>
+                          <img
+                            src={order.paymentProofUrl}
+                            alt="Payment proof"
+                            className="max-w-xs rounded border border-gray-200"
+                          />
+                          <p className="text-xs text-gray-500 mt-2">
+                            Uploaded on{" "}
+                            {order.paymentProofUploadedAt
+                              ? new Date(
+                                  typeof order.paymentProofUploadedAt ===
+                                    "object" &&
+                                    order.paymentProofUploadedAt.toDate
+                                    ? order.paymentProofUploadedAt.toDate()
+                                    : order.paymentProofUploadedAt,
+                                ).toLocaleDateString()
+                              : "Unknown"}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() =>
+                            document
+                              .getElementById(`qr-upload-${order.id}`)
+                              ?.click()
+                          }
+                          className="text-xs text-blue-600 hover:text-blue-700 font-semibold"
+                        >
+                          Update Proof
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <input
+                          type="file"
+                          id={`qr-upload-${order.id}`}
+                          accept="image/*"
+                          onChange={(e) => {
+                            setQRFileInput({
+                              ...qrFileInput,
+                              [order.id]: e.target.files?.[0],
+                            });
+                          }}
+                          className="hidden"
+                        />
+                        {qrFileInput[order.id] ? (
+                          <div className="flex items-center gap-2">
+                            <div className="flex-grow">
+                              <p className="text-sm text-gray-900 font-semibold">
+                                {qrFileInput[order.id].name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {(qrFileInput[order.id].size / 1024).toFixed(2)}{" "}
+                                KB
+                              </p>
+                            </div>
+                            <button
+                              onClick={() =>
+                                handleQRUpload(order.id, qrFileInput[order.id])
+                              }
+                              disabled={uploadingQR === order.id}
+                              className="bg-amber-600 text-white px-4 py-2 rounded font-bold hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                            >
+                              <Upload size={16} />
+                              {uploadingQR === order.id
+                                ? "Uploading..."
+                                : "Upload"}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() =>
+                              document
+                                .getElementById(`qr-upload-${order.id}`)
+                                ?.click()
+                            }
+                            className="w-full border-2 border-dashed border-amber-300 p-4 rounded-lg text-amber-700 hover:bg-amber-50 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Upload size={18} />
+                            Upload QR Code / Payment Receipt
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {order.paymentMethod === "cod" && (
+                  <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                    <p className="text-green-700 font-semibold">
+                      Cash on Delivery (COD)
+                    </p>
+                    <p className="text-sm text-green-600">
+                      No payment proof required for COD orders.
+                    </p>
+                  </div>
+                )}
 
                 {/* Complete Order Button */}
                 {order.status !== "completed" && (

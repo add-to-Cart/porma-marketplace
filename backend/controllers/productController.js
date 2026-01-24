@@ -1,6 +1,7 @@
 import admin from "../config/firebaseAdmin.js";
 const db = admin.firestore();
 import { uploadProductImage } from "../services/cloudinary_service.js";
+import { getTrendingProducts as calculateTrendingProducts } from "../utils/trendingAlgorithm.js";
 
 // Helper to generate comprehensive search tags
 const generateSearchTags = (data) => {
@@ -101,12 +102,10 @@ export const getAllProducts = async (req, res) => {
 // 2. TRENDING: Refined algorithm using normalized metrics
 export const getTrendingProducts = async (req, res) => {
   try {
+    // Get all available products (including bundles)
     const snapshot = await db
       .collection("products")
-      .where("isAvailable", "==", true)
-      // Remove or comment the line below if you want "Wasalak" (a bundle) to appear in Trending
-      // .where("isBundle", "==", false)
-      .limit(100)
+      .limit(200) // Get a larger set to rank
       .get();
 
     let products = snapshot.docs.map((doc) => ({
@@ -114,59 +113,27 @@ export const getTrendingProducts = async (req, res) => {
       ...doc.data(),
     }));
 
+    // Normalize data before scoring
     products = products.map((p) => {
-      // 1. Ensure we use the normalized metrics
-      const sold = p.soldCount || 0;
-      const views = p.viewCount || 0;
-      const numRatings = p.ratingsCount || 0;
-
       // Calculate average from ratings array if ratingAverage is missing
       let avgRating = p.ratingAverage || 0;
       if (!avgRating && p.ratings && p.ratings.length > 0) {
         avgRating = p.ratings.reduce((a, b) => a + b, 0) / p.ratings.length;
       }
 
-      // 2. Credibility factor (more ratings = more reliable score)
-      const credibility = Math.min(numRatings / 10, 1);
-
-      // 3. Engagement rate (Conversion)
-      const engagementRate = views > 0 ? sold / views : 0;
-
-      // 4. Weighted Scoring Algorithm
-      // We give higher weight to sales and the rating/credibility combo
-      let trendingScore =
-        sold * 5.0 + // Sales are the strongest indicator
-        views * 0.2 + // Views show interest but not intent
-        avgRating * 3.0 * credibility + // High ratings only matter if there are enough of them
-        engagementRate * 50; // Bonus for high-conversion products
-
-      // Boost for Recency (Created in the last 30 days)
-      const createdAt = p.createdAt?._seconds
-        ? new Date(p.createdAt._seconds * 1000)
-        : new Date(p.createdAt);
-
-      const daysOld = (Date.now() - createdAt) / (1000 * 60 * 60 * 24);
-      if (daysOld <= 30) {
-        trendingScore *= 1.2; // 20% boost for new arrivals
-      }
-
-      // Penalty for poor performance
-      if (avgRating < 3.0 && sold > 10) {
-        trendingScore *= 0.5; // "Bad" trending items are pushed down
-      }
-
       return {
         ...p,
         ratingAverage: parseFloat(avgRating.toFixed(1)),
-        trendingScore,
+        soldCount: p.soldCount || 0,
+        viewCount: p.viewCount || 0,
+        ratingsCount: p.ratingsCount || 0,
       };
     });
 
-    // Sort by score (Highest first)
-    products.sort((a, b) => b.trendingScore - a.trendingScore);
+    // Use the new trending algorithm to rank products
+    const trendingProducts = calculateTrendingProducts(products, 20);
 
-    // Return top 20 trending items
-    res.json(products.slice(0, 20));
+    res.json(trendingProducts);
   } catch (err) {
     console.error("Trending Error:", err);
     res.status(500).json({

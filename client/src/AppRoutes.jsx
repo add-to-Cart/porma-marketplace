@@ -16,6 +16,7 @@ import ProductDetails from "@/pages/ProductDetails";
 import TrendingProduct from "@/pages/TrendingProduct";
 import DealsPage from "@/pages/DealsPage";
 import Cart from "@/pages/Cart";
+import Checkout from "@/pages/Checkout";
 import SellerDashboard from "@/pages/SellerDashboard";
 import SellerOrdersPage from "@/pages/SellerOrdersPage";
 import AnalyticsPage from "@/pages/AnalyticsPage";
@@ -39,6 +40,7 @@ export default function AppRoutes() {
         <Route path="/trending" element={<TrendingProduct />} />
         <Route path="/deals" element={<DealsPage />} />
         <Route path="/cart" element={<Cart />} />
+        <Route path="/checkout" element={<Checkout />} />
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/apply-seller" element={<ApplySellerPage />} />

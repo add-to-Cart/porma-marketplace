@@ -140,9 +140,16 @@ export default function OrdersPage() {
                   <div>
                     <p className="text-sm text-gray-500">Date</p>
                     <p className="font-semibold text-gray-900">
-                      {new Date(
-                        order.createdAt?.toDate?.() || order.createdAt,
-                      ).toLocaleDateString()}
+                      {order.createdAt
+                        ? new Date(order.createdAt).toLocaleDateString(
+                            "en-US",
+                            {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            },
+                          )
+                        : "N/A"}
                     </p>
                   </div>
                   <div>
