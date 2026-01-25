@@ -25,6 +25,7 @@ export default function BundleManagement({ onBundleCreate }) {
   const [bundleForm, setBundleForm] = useState({
     name: "",
     description: "",
+    bundleContents: [],
     discountPercentage: "",
     compareAtPrice: "",
   });
@@ -67,8 +68,16 @@ export default function BundleManagement({ onBundleCreate }) {
 
   const handleBundleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validation for product count
     if (selectedProducts.length < 2) {
-      alert("Please select at least 2 products for a bundle");
+      toast.error("Please select at least 2 products for a bundle");
+      return;
+    }
+
+    // ADD THIS: Validation for image
+    if (!imageFile) {
+      toast.error("Please upload a bundle image");
       return;
     }
 
@@ -128,6 +137,7 @@ export default function BundleManagement({ onBundleCreate }) {
       setSelectedProducts([]);
       setBundleForm({
         name: "",
+        bundleContents: [],
         description: "",
         discountPercentage: "",
         compareAtPrice: "",

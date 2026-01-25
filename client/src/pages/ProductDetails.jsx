@@ -38,6 +38,7 @@ export default function ProductDetails() {
   const [related, setRelated] = useState([]);
   const [trending, setTrending] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [showAllReviews, setShowAllReviews] = useState(false);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const { addToCart } = useCart();
   const { user } = useAuth();
@@ -86,7 +87,6 @@ export default function ProductDetails() {
 
   const fetchProductReviews = async () => {
     if (!id) return;
-
     try {
       setReviewsLoading(true);
       const data = await getProductReviews(id);
@@ -101,14 +101,27 @@ export default function ProductDetails() {
 
   if (loading)
     return (
-      <div className="p-20 text-center animate-pulse text-gray-400 font-medium">
+      <div className="p-20 text-center animate-pulse text-gray-400 font-medium italic uppercase tracking-widest">
         Loading Part Details...
       </div>
     );
   if (!product)
-    return <div className="p-20 text-center">Product not found.</div>;
+    return (
+      <div className="p-20 text-center font-bold text-zinc-400 uppercase">
+        Product not found.
+      </div>
+    );
 
   const isUniversal = product.vehicleCompatibility?.isUniversalFit;
+  // Fallback check for compatibility data
+  const hasCompatibilityData =
+    product.vehicleCompatibility?.type ||
+    (product.vehicleCompatibility?.makes &&
+      product.vehicleCompatibility.makes.length > 0) ||
+    (product.vehicleCompatibility?.models &&
+      product.vehicleCompatibility.models.length > 0);
+  // Logic for expandable reviews
+  const reviewsToShow = showAllReviews ? reviews : reviews.slice(0, 3);
 
   return (
     <div className="max-w-[1200px] mx-auto p-4 md:p-6 lg:pt-10">
@@ -193,20 +206,28 @@ export default function ProductDetails() {
                   Rating
                 </div>
                 <div className="text-xl font-black text-amber-600">
-                  {product.ratingAverage || product.averageRating || 0}/5
+                  {product.ratingsCount > 0
+                    ? `${product.ratingAverage || 0}/5`
+                    : "N/A"}
                 </div>
               </div>
             </div>
 
-            {/* Rating Details */}
-            {product.ratingsCount && (
-              <div className="text-sm text-gray-600 mb-4">
-                Based on{" "}
-                <span className="font-bold">
-                  {product.ratingsCount || 0} reviews
+            {/* FIX: Rating Details Fallback */}
+            <div className="text-sm text-gray-600 mb-4">
+              {product.ratingsCount && product.ratingsCount > 0 ? (
+                <>
+                  Based on{" "}
+                  <span className="font-bold">
+                    {product.ratingsCount} reviews
+                  </span>
+                </>
+              ) : (
+                <span className="italic text-gray-400">
+                  No reviews yet for this product
                 </span>
-              </div>
-            )}
+              )}
+            </div>
 
             {product.isBundle && product.compareAtPrice && (
               <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded border border-emerald-100 w-fit">
@@ -220,11 +241,21 @@ export default function ProductDetails() {
               </div>
             )}
 
+            {product.isBundle && (
+              <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-purple-600 bg-purple-50 px-2 py-1">
+                <ListChecks size={10} /> Bundle Pack
+              </span>
+            )}
+
             {product.isSeasonal && (
               <div className="flex items-center gap-2 bg-purple-50 text-purple-700 px-3 py-1 rounded border border-purple-100 w-fit">
                 <Snowflake size={14} />
                 <span className="text-[10px] font-black uppercase">
                   Seasonal Item
+                </span>
+                <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-blue-600 bg-blue-50 px-2 py-1">
+                  <Snowflake size={10} />{" "}
+                  {product.seasonalCategory || "Seasonal"}
                 </span>
               </div>
             )}
@@ -232,11 +263,9 @@ export default function ProductDetails() {
             {/* Rating */}
             <Rating
               productId={product.id}
-              averageRating={
-                product.ratingAverage || product.averageRating || 0
-              }
-              numRatings={product.ratingsCount || product.numRatings || 0}
-              onRate={(rating) => console.log("Rated:", rating)}
+              averageRating={product.ratingAverage || 0}
+              numRatings={product.ratingsCount || 0}
+              readOnly={true} // Add this if your Rating component supports it
             />
           </div>
 
@@ -272,35 +301,50 @@ export default function ProductDetails() {
             )}
 
           {/* Compatibility Info */}
-          <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100">
-            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
-              Compatibility
+          <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100 mt-6">
+            <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
+              Compatibility Profile
             </h3>
             {isUniversal ? (
-              <p className="text-sm text-gray-700 font-semibold">
-                Fits all standard vehicle types
+              <p className="text-sm text-gray-700 font-bold uppercase flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-green-600" />
+                Universal Fit
               </p>
-            ) : (
-              <div className="text-sm text-gray-700 font-semibold space-y-1">
+            ) : hasCompatibilityData ? (
+              <div className="text-sm text-gray-700 font-semibold space-y-2">
                 {product.vehicleCompatibility?.type && (
                   <div>
-                    <strong className="font-bold">Type:</strong>{" "}
+                    <strong className="text-[10px] uppercase text-gray-400 mr-2">
+                      Type:
+                    </strong>{" "}
                     {product.vehicleCompatibility.type}
                   </div>
                 )}
                 {product.vehicleCompatibility?.makes && (
                   <div>
-                    <strong className="font-bold">Makes:</strong>{" "}
-                    {product.vehicleCompatibility.makes.join(", ")}
+                    <strong className="text-[10px] uppercase text-gray-400 mr-2">
+                      Makes:
+                    </strong>{" "}
+                    {Array.isArray(product.vehicleCompatibility.makes)
+                      ? product.vehicleCompatibility.makes.join(", ")
+                      : product.vehicleCompatibility.makes}
                   </div>
                 )}
                 {product.vehicleCompatibility?.models && (
                   <div>
-                    <strong className="font-bold">Models:</strong>{" "}
-                    {product.vehicleCompatibility.models.join(", ")}
+                    <strong className="text-[10px] uppercase text-gray-400 mr-2">
+                      Models:
+                    </strong>{" "}
+                    {Array.isArray(product.vehicleCompatibility.models)
+                      ? product.vehicleCompatibility.models.join(", ")
+                      : product.vehicleCompatibility.models}
                   </div>
                 )}
               </div>
+            ) : (
+              <p className="text-sm text-gray-500 italic">
+                General compatibility (Check description for details)
+              </p>
             )}
           </div>
 
@@ -343,7 +387,8 @@ export default function ProductDetails() {
                 <button
                   onClick={() => {
                     if (!user) {
-                      toast.error("Please log in to place an order");
+                      toast.error("Please log in to proceed to checkout.");
+                      navigate("/login");
                       return;
                     }
 
@@ -397,133 +442,80 @@ export default function ProductDetails() {
 
       {/* Reviews Section */}
       <div className="mt-12 pt-8 border-t border-gray-100">
-        <div className="bg-gray-50 p-6 rounded-lg border border-gray-100 mb-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">
-            Product Rating & Reviews Summary
+        <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+          <h3 className="text-lg font-bold text-gray-900 mb-6 uppercase tracking-tighter italic">
+            Customer Reviews
           </h3>
 
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="text-center">
-              <div className="text-4xl font-black text-amber-600">
-                {product.ratingAverage || product.averageRating || 0}
-              </div>
-              <div className="text-sm text-gray-600">Average Rating</div>
-              <div className="text-xs text-gray-500">out of 5 stars</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-black text-gray-900">
-                {product.ratingsCount || product.numRatings || 0}
-              </div>
-              <div className="text-sm text-gray-600">Total Reviews</div>
-              <div className="text-xs text-gray-500">customer ratings</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-black text-green-600">
-                {product.soldCount || 0}
-              </div>
-              <div className="text-sm text-gray-600">Units Sold</div>
-              <div className="text-xs text-gray-500">verified purchases</div>
-            </div>
-          </div>
-
-          {/* Rating Distribution */}
-          {product.ratings && product.ratings.length > 0 && (
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <h4 className="text-sm font-bold text-gray-900 mb-3">
-                Rating Distribution
-              </h4>
-              {[5, 4, 3, 2, 1].map((star) => {
-                const count =
-                  product.ratings?.filter((r) => r === star).length || 0;
-                const percentage = product.ratingsCount
-                  ? (count / product.ratingsCount) * 100
-                  : 0;
-                return (
-                  <div key={star} className="flex items-center gap-3 mb-2">
-                    <span className="text-sm font-bold text-gray-700 w-8">
-                      {star}★
-                    </span>
-                    <div className="flex-grow h-2 bg-gray-200 rounded-full overflow-hidden">
+          {product.ratingsCount > 0 ? (
+            <div className="space-y-6">
+              {/* Individual Written Reviews */}
+              <div className="grid grid-cols-1 gap-4">
+                {reviews.length > 0 ? (
+                  <>
+                    {reviewsToShow.map((review) => (
                       <div
-                        className="h-full bg-amber-500"
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
-                    <span className="text-sm text-gray-600 w-12 text-right">
-                      {count}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-100 rounded text-sm text-blue-900">
-            <p className="font-semibold">✓ Verified Reviews</p>
-            <p className="text-xs mt-1">
-              These are reviews from verified buyers who purchased this product.
-            </p>
-          </div>
-
-          {/* Customer Reviews */}
-          {reviews.length > 0 && (
-            <div className="mt-8 pt-8 border-t border-gray-200">
-              <h4 className="text-lg font-bold text-gray-900 mb-6">
-                Customer Reviews ({reviews.length})
-              </h4>
-              <div className="space-y-4">
-                {reviews.map((review) => (
-                  <div
-                    key={review.id}
-                    className="bg-gray-50 p-4 rounded-lg border border-gray-200"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-semibold text-gray-900">
-                          {review.buyerName}
+                        key={review.id}
+                        className="bg-white p-5 border-l-4 border-zinc-900 shadow-sm transition-all"
+                      >
+                        <div className="flex text-amber-400 text-xs mb-2 pointer-events-none">
+                          {[...Array(5)].map((_, i) => (
+                            <span
+                              key={i}
+                              className={
+                                i < review.rating ? "opacity-100" : "opacity-20"
+                              }
+                            >
+                              ★
+                            </span>
+                          ))}
+                        </div>
+                        <p className="text-sm text-gray-700 font-medium leading-relaxed">
+                          "{review.comment}"
                         </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="flex gap-0.5">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <span
-                                key={star}
-                                className={`text-lg ${
-                                  star <= review.rating
-                                    ? "text-amber-400"
-                                    : "text-gray-300"
-                                }`}
-                              >
-                                ★
-                              </span>
-                            ))}
-                          </div>
-                          <span className="text-sm text-gray-600">
-                            {review.rating.toFixed(1)}
-                          </span>
+                        <div className="mt-3 text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                          <CheckCircle2
+                            size={10}
+                            className="text-emerald-500"
+                          />{" "}
+                          Verified Purchase
                         </div>
                       </div>
-                      <p className="text-xs text-gray-500">
-                        {review.createdAt
-                          ? new Date(
-                              review.createdAt.seconds
-                                ? review.createdAt.seconds * 1000
-                                : review.createdAt,
-                            ).toLocaleDateString("en-US", {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                            })
-                          : ""}
-                      </p>
-                    </div>
-                    {review.reviewText && (
-                      <p className="text-sm text-gray-700 mt-3 leading-relaxed">
-                        {review.reviewText}
-                      </p>
+                    ))}
+
+                    {/* Expand/Collapse Button */}
+                    {reviews.length > 3 && (
+                      <button
+                        onClick={() => setShowAllReviews(!showAllReviews)}
+                        className="mt-4 flex items-center justify-center gap-2 w-full py-3 border-2 border-zinc-200 rounded-xl text-xs font-black uppercase tracking-widest text-zinc-500 hover:bg-zinc-900 hover:text-white hover:border-zinc-900 transition-all"
+                      >
+                        {showAllReviews ? (
+                          <>
+                            Show Fewer Reviews <ChevronUp size={16} />
+                          </>
+                        ) : (
+                          <>
+                            Show All {reviews.length} Reviews{" "}
+                            <ChevronDown size={16} />
+                          </>
+                        )}
+                      </button>
                     )}
+                  </>
+                ) : (
+                  <div className="text-center py-8 bg-white rounded-xl border border-dashed border-gray-200">
+                    <p className="text-gray-400 italic text-sm">
+                      No written reviews provided yet.
+                    </p>
                   </div>
-                ))}
+                )}
               </div>
+            </div>
+          ) : (
+            <div className="text-center py-10">
+              <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">
+                Be the first to rate this product
+              </p>
             </div>
           )}
         </div>

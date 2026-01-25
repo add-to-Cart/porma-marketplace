@@ -93,7 +93,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
     isSeasonal: false,
     seasonalCategory: "",
     compareAtPrice: "",
-    bundleContents: "",
+
     vehicleType: "",
     vehicleMake: [],
     models: [],
@@ -131,7 +131,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
       seasonalCategory: product.seasonalCategory || "",
       compareAtPrice:
         product.compareAtPrice != null ? String(product.compareAtPrice) : "",
-      bundleContents: product.bundleContents || "",
+
       vehicleType: product.vehicleCompatibility?.type || "",
       vehicleMake: Array.isArray(product.vehicleCompatibility?.makes)
         ? product.vehicleCompatibility.makes
@@ -206,7 +206,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
         isSeasonal: false,
         seasonalCategory: "",
         compareAtPrice: "",
-        bundleContents: "",
+
         vehicleType: "",
         vehicleMake: "",
         models: [],
@@ -236,81 +236,87 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // 1. AUTHENTICATION CHECK
     if (!user) {
-      alert("You must be logged in to create products");
+      toast.error("You must be logged in to create products");
+      return;
+    }
+
+    // 2. IMAGE VALIDATION (Strict)
+    // Prevent creation if no image is selected (ignore for editing if imageUrl exists)
+    if (!imageFile && !editingProductId) {
+      toast.error("An image is required to register a product.");
       return;
     }
 
     setLoading(true);
     try {
-      // Prepare Vehicle Compatibility
-      const vehicleCompatibility = {
-        type: formData.vehicleType || "Universal",
-        isUniversalFit: formData.isUniversalFit,
-        makes: formData.vehicleMake,
-        models: Array.isArray(formData.models) ? formData.models : [],
-        yearRange: {
-          from: Number(formData.yearFrom),
-          to: Number(formData.yearTo),
-        },
-      };
-
       const data = new FormData();
 
-      // Append standard fields
-      data.append("name", formData.name);
+      // 3. CORE METADATA
+      data.append("name", formData.name.trim());
       data.append("category", formData.category);
-      data.append("description", formData.description);
-      data.append("price", formData.price);
-      data.append("stock", formData.stock);
-      data.append("isUniversalFit", formData.isUniversalFit);
+      data.append("description", formData.description.trim());
+      data.append("price", Number(formData.price) || 0);
+      data.append("stock", Number(formData.stock) || 1);
 
-      // Seasonal handling
-      data.append(
-        "isSeasonal",
-        formData.seasonalCategory ? "true" : formData.isSeasonal,
-      );
+      if (formData.compareAtPrice) {
+        data.append("compareAtPrice", Number(formData.compareAtPrice));
+      }
+
+      // 5. SEASONAL METADATA
+      const isSeasonal = !!(formData.isSeasonal || formData.seasonalCategory);
+      data.append("isSeasonal", isSeasonal);
       if (formData.seasonalCategory) {
         data.append("seasonalCategory", formData.seasonalCategory);
       }
 
-      // Bundle handling
-      if (formData.compareAtPrice) {
-        data.append("compareAtPrice", formData.compareAtPrice);
-      }
-      if (formData.bundleContents) {
-        data.append("bundleContents", formData.bundleContents);
-      }
+      // 6. VEHICLE COMPATIBILITY (Fuzzy Search Prep)
+      const vehicleCompatibility = {
+        type: formData.vehicleType || "Universal",
+        isUniversalFit:
+          formData.isUniversalFit === true ||
+          formData.isUniversalFit === "true",
+        makes: formData.vehicleMake || "",
+        models: Array.isArray(formData.models) ? formData.models : [],
+        yearRange: {
+          from: Number(formData.yearFrom) || 0,
+          to: Number(formData.yearTo) || 0,
+        },
+      };
+      data.append("vehicleCompatibility", JSON.stringify(vehicleCompatibility));
+      data.append("isUniversalFit", vehicleCompatibility.isUniversalFit);
 
-      // Add seller information
+      // 7. SELLER INFO
       data.append("sellerId", user.uid);
       data.append(
         "storeName",
         user.storeName || user.displayName || "Unknown Store",
       );
 
-      // Add vehicle compatibility
-      data.append("vehicleCompatibility", JSON.stringify(vehicleCompatibility));
-
-      // Add image if provided
+      // 8. IMAGE FILE
       if (imageFile) {
         data.append("image", imageFile);
       }
 
+      // 9. API CALL
+      let result;
       if (editingProductId) {
-        const result = await updateProduct(editingProductId, data);
+        result = await updateProduct(editingProductId, data);
         toast.success("Product updated successfully!");
         updateProductInList(editingProductId, result);
         clearSelection();
-        onProductUpdate && onProductUpdate();
       } else {
-        const result = await createProduct(data);
+        result = await createProduct(data);
         toast.success("Product Registered Successfully!");
         addProductToList(result);
-        onProductUpdate && onProductUpdate();
       }
 
-      // Reset form
+      // 10. SUCCESS UI UPDATE
+      onProductUpdate && onProductUpdate();
+
+      // Reset Form State
       setFormData({
         name: "",
         category: "",
@@ -319,9 +325,10 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
         stock: "1",
         isUniversalFit: false,
         isSeasonal: false,
+
         seasonalCategory: "",
         compareAtPrice: "",
-        bundleContents: "",
+
         vehicleType: "",
         vehicleMake: "",
         models: [],
@@ -331,10 +338,15 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
       });
       setImagePreview(null);
       setImageFile(null);
-      fetchSellerProducts();
+
+      if (typeof fetchSellerProducts === "function") {
+        fetchSellerProducts();
+      }
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to save product");
+      console.error("Submit Error:", err);
+      const errorMessage =
+        err.response?.data?.message || "Failed to save product";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -483,7 +495,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                     className="w-4 h-4 accent-zinc-900 cursor-pointer"
                   />
                   <label className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">
-                    Is Seasonal?
+                    Seasonal Item
                   </label>
                 </div>
                 {formData.isSeasonal && (

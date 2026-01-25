@@ -499,26 +499,34 @@ export const searchProducts = async (req, res) => {
   }
 };
 
-// Create product
 export const createProduct = async (req, res) => {
   try {
+    // 1. IMAGE VALIDATION: Prevent creation if no file is uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        message: "Product creation failed: An image is required.",
+      });
+    }
+
     const productData = { ...req.body };
 
+    // 2. DATA TYPE CORRECTION
     if (typeof productData.vehicleCompatibility === "string") {
       productData.vehicleCompatibility = JSON.parse(
         productData.vehicleCompatibility,
       );
     }
 
-    if (productData.isBundle) {
-      productData.isBundle = productData.isBundle === "true";
-    }
-    if (productData.isSeasonal) {
-      productData.isSeasonal = productData.isSeasonal === "true";
-    }
+    // Ensure Booleans and Numbers are correctly casted
+    productData.isBundle = productData.isBundle === "true";
+    productData.isSeasonal = productData.isSeasonal === "true";
+    productData.price = Number(productData.price);
+
     if (productData.compareAtPrice) {
       productData.compareAtPrice = Number(productData.compareAtPrice);
     }
+
+    // 3. BUNDLE METADATA: Handle contents
     if (
       productData.bundleContents &&
       typeof productData.bundleContents === "string"
@@ -526,35 +534,34 @@ export const createProduct = async (req, res) => {
       try {
         productData.bundleContents = JSON.parse(productData.bundleContents);
       } catch (e) {
-        // If it's not JSON, treat as comma-separated string and split
+        // Fallback for comma-separated text
         productData.bundleContents = productData.bundleContents
           .split(",")
           .map((item) => item.trim());
       }
     }
 
-    // Initialize metrics
-    productData.rating = 0;
+    // 4. METRICS INITIALIZATION
     productData.ratingAverage = 0;
     productData.ratingsCount = 0;
-    productData.totalRating = 0;
     productData.viewCount = 0;
     productData.soldCount = 0;
     productData.isAvailable = true;
 
-    // Generate searchTags
+    // 5. FUZZY SEARCH PREPARATION
+    // This function generates the prefixes and keywords used by your search logic
     productData.searchTags = generateSearchTags(productData);
 
-    // Handle image upload
-    if (req.file) {
-      const userId = productData.sellerId || "anonymous";
-      const sanitizedName = productData.name.replace(/\s+/g, "-").toLowerCase();
-      const publicId = `products/${userId}-${sanitizedName}`;
-      const uploadResult = await uploadProductImage(req.file, publicId);
-      productData.imageUrl = uploadResult.url;
-      productData.cloudinaryId = uploadResult.publicId;
-    }
+    // 6. IMAGE UPLOAD
+    const userId = productData.sellerId || "anonymous";
+    const sanitizedName = productData.name.replace(/\s+/g, "-").toLowerCase();
+    const publicId = `products/${userId}-${sanitizedName}`;
 
+    const uploadResult = await uploadProductImage(req.file, publicId);
+    productData.imageUrl = uploadResult.url;
+    productData.cloudinaryId = uploadResult.publicId;
+
+    // 7. FIRESTORE PERSISTENCE
     const docRef = await db.collection("products").add({
       ...productData,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
