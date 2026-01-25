@@ -181,8 +181,7 @@ export default function SellerDashboard() {
       .map((product) => ({
         name: product.name,
         sold: product.soldCount || 0,
-        revenue:
-          (product.soldCount || 0) * (product.basePrice || product.price || 0),
+        revenue: (product.soldCount || 0) * (product.price || 0),
       }));
 
     setTopProducts(sorted);

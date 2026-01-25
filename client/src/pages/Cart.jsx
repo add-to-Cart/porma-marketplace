@@ -65,7 +65,7 @@ export default function Cart() {
             <div className="flex-1">
               <h3 className="font-semibold text-gray-900">{item.name}</h3>
               <p className="text-gray-600 text-sm">
-                ₱{(Number(item.basePrice) || 0).toLocaleString()}
+                ₱{(Number(item.price) || 0).toLocaleString()}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -88,7 +88,7 @@ export default function Cart() {
             <p className="font-bold text-gray-900 w-24 text-right">
               ₱
               {(
-                (Number(item.basePrice) || 0) * (Number(item.quantity) || 0)
+                (Number(item.price) || 0) * (Number(item.quantity) || 0)
               ).toLocaleString()}
             </p>
             <button

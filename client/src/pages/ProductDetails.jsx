@@ -156,7 +156,7 @@ export default function ProductDetails() {
               <span className="text-5xl font-black tracking-tighter">
                 ₱
                 {product.price?.toLocaleString() ||
-                  product.basePrice?.toLocaleString()}
+                  product.price?.toLocaleString()}
               </span>
             </div>
 
@@ -204,8 +204,7 @@ export default function ProductDetails() {
                 <span className="text-[10px] font-black uppercase">
                   Bundle Savings: ₱
                   {(
-                    product.compareAtPrice -
-                    (product.price || product.basePrice)
+                    product.compareAtPrice - (product.price || product.price)
                   )?.toLocaleString()}
                 </span>
               </div>

@@ -36,7 +36,7 @@ export default function Checkout() {
   useEffect(() => {
     if (location.state?.quickCheckout) {
       const { product, quantity } = location.state.quickCheckout;
-      const itemSubtotal = (product.price || product.basePrice) * quantity;
+      const itemSubtotal = (product.price || product.price) * quantity;
       const itemDeliveryFee = itemSubtotal > 1000 ? 0 : 150;
       const itemTotal = itemSubtotal + itemDeliveryFee;
 
@@ -107,7 +107,7 @@ export default function Checkout() {
           id: item.id,
           name: item.name,
           quantity: item.quantity,
-          price: item.basePrice,
+          price: item.price,
           imageUrl: item.imageUrl,
           sellerId: item.sellerId,
           storeName: item.storeName,

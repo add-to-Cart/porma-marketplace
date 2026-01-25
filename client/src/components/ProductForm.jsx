@@ -63,7 +63,10 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
         "PCX 160",
         "Airblade 160",
         "Winner X",
-        "BeAT",
+        "Beat Fi",
+        "Beat 110",
+        "Beat 125",
+        "Wave 100",
       ],
       Kawasaki: [
         "Ninja 500",

@@ -24,7 +24,7 @@ export const createOrder = async (req, res) => {
         productId: item.id,
         productName: item.name,
         quantity: item.quantity,
-        price: item.price || item.basePrice,
+        price: item.price || item.price,
         imageUrl: item.imageUrl,
         sellerId: item.sellerId,
         storeName: item.storeName,

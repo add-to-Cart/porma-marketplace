@@ -104,9 +104,11 @@ export default function AdminPage() {
                   )}
                   <p className="text-xs text-gray-500 mt-1">
                     Applied on:{" "}
-                    {new Date(
-                      app.sellerApplication.appliedAt,
-                    ).toLocaleDateString()}
+                    {app.sellerApplication?.appliedAt?._seconds
+                      ? new Date(
+                          app.sellerApplication.appliedAt._seconds * 1000,
+                        ).toLocaleDateString()
+                      : "Date not available"}
                   </p>
                 </div>
                 <div className="flex gap-2">

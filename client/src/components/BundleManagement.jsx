@@ -80,7 +80,7 @@ export default function BundleManagement({ onBundleCreate }) {
       const bundleData = new FormData();
 
       const totalPrice = selectedProductData.reduce((sum, p) => {
-        const raw = p.basePrice ?? 0;
+        const raw = p.price ?? 0;
         const num = parseFloat(String(raw).replace(/,/g, "")) || 0;
         return sum + num;
       }, 0);
@@ -144,7 +144,7 @@ export default function BundleManagement({ onBundleCreate }) {
     selectedProducts.includes(p.id),
   );
   const totalPrice = selectedProductData.reduce((sum, p) => {
-    const raw = p.basePrice ?? 0;
+    const raw = p.price ?? 0;
     const num = parseFloat(String(raw).replace(/,/g, "")) || 0;
     return sum + num;
   }, 0);
@@ -207,7 +207,7 @@ export default function BundleManagement({ onBundleCreate }) {
                     </div>
                   </div>
                   <p className="text-sm font-mono mt-2">
-                    ₱{product.basePrice?.toLocaleString()}
+                    ₱{product.price?.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -374,7 +374,7 @@ export default function BundleManagement({ onBundleCreate }) {
                 <ul className="list-disc list-inside space-y-1">
                   {selectedProductData.map((product) => (
                     <li key={product.id} className="text-sm font-medium">
-                      {product.name} - ₱{product.basePrice?.toLocaleString()}
+                      {product.name} - ₱{product.price?.toLocaleString()}
                     </li>
                   ))}
                 </ul>

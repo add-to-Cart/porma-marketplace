@@ -911,6 +911,14 @@ router.put("/approve-seller/:uid", verifyAuth, async (req, res) => {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // Create document in sellers collection
+    await db.collection("sellers").doc(uid).set({
+      sellerId: uid,
+      storeName: application.storeName,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
     res.json({
       success: true,
       message: "Seller application approved successfully",

@@ -97,10 +97,7 @@ export default function SellerProducts({
                   </h3>
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-[10px] font-mono font-bold text-amber-600">
-                      ₱
-                      {p.price?.toLocaleString() ||
-                        p.basePrice?.toLocaleString() ||
-                        "0"}
+                      ₱{p.price?.toLocaleString() || "0"}
                     </span>
                     <span className="text-[9px] font-black uppercase text-zinc-400">
                       QTY: {p.stock || 0}

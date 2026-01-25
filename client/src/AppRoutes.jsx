@@ -11,7 +11,7 @@ import AdminLogin from "@/pages/AdminLogin";
 
 import MarketPlace from "@/pages/Marketplace";
 import ProductUpdate from "@/pages/ProductUpdate";
-import CompatibleParts from "@/pages/CompatibleParts";
+
 import InventoryPage from "@/pages/InventoryPage";
 import ProductDetails from "@/pages/ProductDetails";
 import TrendingProduct from "@/pages/TrendingProduct";
@@ -48,7 +48,6 @@ export default function AppRoutes() {
         <Route path="/" element={<MarketPlace />} />
         <Route path="/products/:id" element={<ProductDetails />} />
         <Route path="/products/update/:id" element={<ProductUpdate />} />
-        <Route path="/compatible-parts" element={<CompatibleParts />} />
 
         <Route path="/trending" element={<TrendingProduct />} />
         <Route path="/deals" element={<DealsPage />} />

@@ -34,10 +34,10 @@ export default function ProductCard({ product, onClick }) {
         {/* Fitment Badge (The "Essential" Info) */}
         <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
           {/* Discount Percentage Badge */}
-          {product.isBundle && product.compareAtPrice && product.basePrice && (
+          {product.isBundle && product.compareAtPrice && product.price && (
             <span className="px-2 py-1 rounded-md text-[10px] font-black shadow-sm uppercase bg-red-600 text-white animate-pulse">
               {Math.round(
-                ((product.compareAtPrice - product.basePrice) /
+                ((product.compareAtPrice - product.price) /
                   product.compareAtPrice) *
                   100,
               )}
@@ -111,14 +111,12 @@ export default function ProductCard({ product, onClick }) {
                 </span>
               )}
               <span className="text-lg font-black text-gray-900">
-                ₱{product.basePrice?.toLocaleString()}
+                ₱{product.price?.toLocaleString()}
               </span>
               {product.isBundle && product.compareAtPrice && (
                 <span className="text-[10px] font-bold text-green-600">
                   Save ₱
-                  {(
-                    product.compareAtPrice - product.basePrice
-                  )?.toLocaleString()}
+                  {(product.compareAtPrice - product.price)?.toLocaleString()}
                 </span>
               )}
             </div>
