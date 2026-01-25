@@ -9,49 +9,68 @@ export default function Sidebar() {
     clearAllFilters,
   } = useFilters();
 
-  const makes = [
-    "Ford",
-    "Honda",
-    "Kawasaki",
-    "Mitsubishi",
-    "Nissan",
-    "Royal Enfield",
-    "Suzuki",
-    "Toyota",
-    "Yamaha",
-  ];
-
-  const models = {
-    Ford: ["Everest", "Ranger"],
-    Honda: ["ADV 160", "Click 125i", "Click 160", "PCX 160"],
-    Kawasaki: ["Dominar 400", "Ninja 400", "Z400"],
-    Mitsubishi: ["Montero Sport", "Strada", "Xpander"],
-    Nissan: ["Almera", "Navara", "Terra"],
-    "Royal Enfield": ["Himalayan 450"],
-    Suzuki: ["Burgman Street", "Raider R150 Fi"],
-    Toyota: ["Fortuner", "Hilux", "Vios"],
-    Yamaha: ["Aerox 155", "NMAX", "NMAX 155"],
+  // Updated to match ProductForm.jsx VEHICLE_DATA
+  const VEHICLE_DATA = {
+    Motorcycle: {
+      Yamaha: [
+        "NMAX 155 Tech Max",
+        "Aerox 155 SP",
+        "Mio Fazzio",
+        "Sniper 155",
+        "YZF-R15",
+        "XMAX",
+        "Mio Sporty",
+      ],
+      Honda: [
+        "Click 125i",
+        "Click 160",
+        "ADV 160",
+        "PCX 160",
+        "Airblade 160",
+        "Winner X",
+        "XRM 125",
+        "CBR150R",
+        "Honda Wave 100",
+        "BeAT",
+      ],
+      Kawasaki: [
+        "Ninja 500",
+        "Ninja ZX-25R",
+        "Ninja 400",
+        "Z400",
+        "Dominar 400",
+        "Rouser NS200",
+      ],
+      Suzuki: ["Burgman Street", "Raider R150 Fi", "Gixxer 150"],
+    },
+    Car: {
+      Toyota: ["Fortuner", "Hilux", "Vios", "Innova", "Raize", "Wigo"],
+      Mitsubishi: ["Montero Sport", "Strada", "Xpander", "Mirage G4"],
+      Ford: ["Everest", "Ranger", "Territory"],
+    },
   };
 
+  // Updated to match ProductForm.jsx CATEGORIES
   const CATEGORIES = [
-    "Accessories",
-    "Body",
-    "Body Parts",
-    "Brakes",
-    "Electronics",
-    "Engine",
-    "Interior",
-    "Lighting",
-    "Lights",
-    "Maintenance",
-    "Performance",
-    "Protection",
-    "Rims",
-    "Storage",
-    "Suspension",
-    "Tools",
-    "Transmission",
+    "Braking Systems",
+    "Drivetrain & Transmission",
+    "Engine & Performance",
+    "Exhaust Systems",
+    "Suspension & Steering",
+    "Wheels & Tires",
+    "Body & Fairings",
+    "Lighting & Electrical",
+    "Maintenance & Care",
+    "Tools & Garage",
+    "Rider Gear & Apparel",
+    "Accessories & Luggage",
   ];
+
+  // Derive available makes based on the selected vehicle type
+  const selectedType = filters.vehicleType || "Motorcycle";
+  const availableMakes = Object.keys(VEHICLE_DATA[selectedType] || {});
+  const availableModels =
+    VEHICLE_DATA[selectedType]?.[filters.vehicle.make] || [];
 
   return (
     <aside className="w-full md:w-64 flex-shrink-0 border rounded-2xl p-5 space-y-6 bg-white shadow-sm h-fit sticky top-24">
@@ -77,7 +96,6 @@ export default function Sidebar() {
         >
           <option value="newest">Newest First</option>
           <option value="trending">Trending</option>
-          <option value="popular">Most Popular</option>
           <option value="price-asc">Price: Low to High</option>
           <option value="price-desc">Price: High to Low</option>
           <option value="rating">Highest Rated</option>
@@ -110,16 +128,22 @@ export default function Sidebar() {
         </label>
         <select
           value={filters.vehicleType}
-          onChange={(e) => updateFilter("vehicleType", e.target.value)}
+          onChange={(e) => {
+            updateFilter("vehicleType", e.target.value);
+            clearVehicleFilter(); // Reset make/model when type changes
+          }}
           className="w-full bg-gray-50 border-gray-200 rounded-xl px-3 py-2.5 text-sm"
         >
-          <option value="">All Types</option>
-          <option value="Motorcycle">Motorcycle</option>
-          <option value="Car">Car</option>
+          <option value="">Select Type</option>
+          {Object.keys(VEHICLE_DATA).map((type) => (
+            <option key={type} value={type}>
+              {type}
+            </option>
+          ))}
         </select>
       </div>
 
-      {/* Bundle/Seasonal Filters */}
+      {/* Special Offers */}
       <div className="space-y-3">
         <label className="text-xs font-bold text-gray-400 uppercase">
           Special Offers
@@ -128,18 +152,9 @@ export default function Sidebar() {
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
-              checked={filters.isBundle}
-              onChange={(e) => updateFilter("isBundle", e.target.checked)}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-            />
-            <span className="text-sm text-gray-700">Bundles/Kits</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
               checked={filters.isSeasonal}
               onChange={(e) => updateFilter("isSeasonal", e.target.checked)}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded"
             />
             <span className="text-sm text-gray-700">Seasonal Items</span>
           </label>
@@ -150,21 +165,20 @@ export default function Sidebar() {
 
       {/* Vehicle Specifics */}
       <div className="space-y-4">
-        <h3 className="font-bold text-sm text-gray-800">
-          Vehicle Compatibility
-        </h3>
+        <h3 className="font-bold text-sm text-gray-800">Compatibility</h3>
         <div className="space-y-2">
           <label className="text-xs text-gray-500">Brand / Make</label>
           <select
+            disabled={!filters.vehicleType}
             value={filters.vehicle.make}
             onChange={(e) => {
               updateVehicleFilter("make", e.target.value);
-              updateVehicleFilter("model", ""); // Clear model if make changes
+              updateVehicleFilter("model", "");
             }}
-            className="w-full bg-gray-50 border-gray-200 rounded-xl px-3 py-2.5 text-sm"
+            className="w-full bg-gray-50 border-gray-200 rounded-xl px-3 py-2.5 text-sm disabled:opacity-50"
           >
             <option value="">Select Make</option>
-            {makes.map((m) => (
+            {availableMakes.map((m) => (
               <option key={m} value={m}>
                 {m}
               </option>
@@ -181,12 +195,11 @@ export default function Sidebar() {
             className="w-full bg-gray-50 border-gray-200 rounded-xl px-3 py-2.5 text-sm disabled:opacity-50"
           >
             <option value="">Select Model</option>
-            {filters.vehicle.make &&
-              models[filters.vehicle.make]?.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
+            {availableModels.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
           </select>
         </div>
 

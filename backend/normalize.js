@@ -1,69 +1,92 @@
 import admin from "./config/firebaseAdmin.js";
-
 const db = admin.firestore();
 
-async function redistributeProducts() {
-  try {
-    console.log("--- Nagsisimula na ang distribution ---");
+// Helper to generate search tags (copy from productController.js)
+const generateSearchTags = (data) => {
+  const tags = new Set();
 
-    // 2. Kunin ang lahat ng Sellers
-    const sellersSnapshot = await db.collection("sellers").get();
-    const sellers = [];
-    sellersSnapshot.forEach((doc) => {
-      sellers.push({ id: doc.id, ...doc.data() });
-    });
-
-    if (sellers.length === 0) {
-      console.error("Error: Walang nahanap na sellers sa database.");
-      return;
-    }
-    console.log(`Nahanap: ${sellers.length} sellers.`);
-
-    // 3. Kunin ang lahat ng Products
-    const productsSnapshot = await db.collection("products").get();
-    console.log(`Nahanap: ${productsSnapshot.size} products.`);
-
-    // 4. Batch Processing (Limit ng Firestore ang 500 operations per batch)
-    let batch = db.batch();
-    let count = 0;
-    let totalUpdated = 0;
-
-    productsSnapshot.forEach((doc) => {
-      // Pumili ng random seller
-      const randomSeller = sellers[Math.floor(Math.random() * sellers.length)];
-
-      const productRef = db.collection("products").doc(doc.id);
-
-      // I-update ang sellerId at storeName
-      batch.update(productRef, {
-        sellerId: randomSeller.sellerId || randomSeller.id,
-        storeName: randomSeller.storeName || "Unknown Store",
-      });
-
-      count++;
-      totalUpdated++;
-
-      // Kapag umabot ng 500, i-commit at gumawa ng bagong batch
-      if (count === 500) {
-        batch.commit();
-        batch = db.batch();
-        count = 0;
+  const addPrefixes = (word) => {
+    if (word.length > 2) {
+      for (let i = 3; i <= word.length; i++) {
+        tags.add(word.substring(0, i));
       }
-    });
+    } else {
+      tags.add(word);
+    }
+  };
 
-    // I-commit ang natitirang updates
+  if (data.name) {
+    data.name
+      .toLowerCase()
+      .split(/\s+/)
+      .forEach((word) => {
+        if (word.length > 1) addPrefixes(word);
+      });
+  }
+
+  if (data.categories && Array.isArray(data.categories)) {
+    data.categories.forEach((cat) => tags.add(cat.toLowerCase()));
+  }
+
+  const comp = data.vehicleCompatibility;
+  if (comp) {
+    if (comp.isUniversalFit) {
+      tags.add("universal");
+    } else {
+      comp.makes?.forEach((make) => tags.add(make.toLowerCase()));
+      comp.models?.forEach((model) => tags.add(model.toLowerCase()));
+    }
+    if (comp.type && comp.type !== "Universal") {
+      tags.add(comp.type.toLowerCase());
+    }
+  }
+
+  if (data.isBundle) tags.add("bundle");
+  if (data.isSeasonal) tags.add("seasonal");
+  if (data.seasonalCategory) {
+    tags.add(data.seasonalCategory.toLowerCase());
+  }
+
+  return Array.from(tags).filter((tag) => tag && tag.length > 1);
+};
+
+async function migrateCategories() {
+  try {
+    console.log("Starting migration...");
+    const snapshot = await db.collection("products").get();
+    const batch = db.batch();
+    let count = 0;
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      let needsUpdate = false;
+      const updateData = {};
+
+      // If category exists and categories doesn't, create categories array
+      if (data.category && !data.categories) {
+        updateData.categories = [data.category];
+        updateData.category = admin.firestore.FieldValue.delete(); // Remove old field
+        needsUpdate = true;
+      }
+
+      // Regenerate searchTags if categories changed
+      if (needsUpdate) {
+        const fullData = { ...data, ...updateData };
+        updateData.searchTags = generateSearchTags(fullData);
+        batch.update(doc.ref, updateData);
+        count++;
+      }
+    }
+
     if (count > 0) {
       await batch.commit();
+      console.log(`Migrated ${count} products.`);
+    } else {
+      console.log("No products needed migration.");
     }
-
-    console.log(
-      `✅ Tapos na! Na-distribute ang ${totalUpdated} products sa ${sellers.length} sellers.`,
-    );
-  } catch (error) {
-    console.error("May error sa pag-distribute:", error);
-  } finally {
-    process.exit();
+  } catch (err) {
+    console.error("Migration error:", err);
   }
 }
 
-redistributeProducts();
+migrateCategories();

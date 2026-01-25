@@ -63,51 +63,7 @@ export default function TrendingProduct() {
             ? `${displayItems.length} products found`
             : "Most popular parts flying off the shelves"}
         </p>
-
-        {!isUserSearching && (
-          <div className="mt-6 grid grid-cols-3 gap-4">
-            <div className="bg-white/10 backdrop-blur rounded-lg p-4">
-              <div className="text-3xl font-black">{trending.length}</div>
-              <div className="text-sm text-orange-100">Trending Items</div>
-            </div>
-            <div className="bg-white/10 backdrop-blur rounded-lg p-4">
-              <div className="text-3xl font-black">
-                {trending.reduce((sum, p) => sum + (p.soldCount || 0), 0)}
-              </div>
-              <div className="text-sm text-orange-100">Total Sales</div>
-            </div>
-            <div className="bg-white/10 backdrop-blur rounded-lg p-4">
-              <div className="text-3xl font-black">
-                {trending.reduce((sum, p) => sum + (p.viewCount || 0), 0)}
-              </div>
-              <div className="text-sm text-orange-100">Total Views</div>
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* Trending Algorithm Explanation */}
-      {!isUserSearching && (
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
-          <div className="flex items-start gap-3">
-            <TrendingUp className="text-blue-600 mt-1" size={24} />
-            <div>
-              <h3 className="font-bold text-blue-900 mb-2">
-                How We Calculate Trending
-              </h3>
-              <p className="text-sm text-blue-700 leading-relaxed">
-                Our trending algorithm analyzes <strong>sales velocity</strong>,{" "}
-                <strong>customer ratings</strong>,{" "}
-                <strong>product freshness</strong>, and{" "}
-                <strong>value offers</strong> to surface the best products. New
-                items get a boost, but proven sellers with excellent ratings
-                dominate. Bundle deals with significant discounts also rank
-                higher!
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Products Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -167,42 +123,6 @@ export default function TrendingProduct() {
           </div>
         )}
       </div>
-
-      {/* Trending Tips */}
-      {!isUserSearching && displayItems.length > 0 && (
-        <div className="bg-gray-50 rounded-2xl p-6 border">
-          <h3 className="font-bold text-gray-900 mb-3">
-            💡 Why These Products?
-          </h3>
-          <div className="grid md:grid-cols-2 gap-4 text-sm text-gray-700">
-            <div className="flex gap-2">
-              <span className="text-orange-500 font-bold">🔥</span>
-              <div>
-                <strong>High Conversion:</strong> Products that turn views into
-                sales
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <span className="text-blue-500 font-bold">⭐</span>
-              <div>
-                <strong>Quality Ratings:</strong> Verified customer satisfaction
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <span className="text-green-500 font-bold">🆕</span>
-              <div>
-                <strong>Fresh Products:</strong> New items get visibility boost
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <span className="text-purple-500 font-bold">💰</span>
-              <div>
-                <strong>Great Value:</strong> Bundles and deals rank higher
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

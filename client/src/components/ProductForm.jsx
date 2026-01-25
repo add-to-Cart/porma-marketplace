@@ -58,6 +58,8 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
         "PCX 160",
         "Airblade 160",
         "Winner X",
+        "XRM 125",
+        "CBR150R",
         "Honda Wave 100",
         "BeAT",
       ],
@@ -84,13 +86,12 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
     description: "",
     price: "",
     stock: "1",
-    isUniversalFit: false, // Global Universal
-    isUniversalMake: false, // Universal for specific Type
+    isUniversalFit: false,
+    isUniversalMake: false,
     isSeasonal: false,
     seasonalCategory: "",
     compareAtPrice: "",
-
-    vehicleType: "",
+    vehicleType: "Motorcycle",
     vehicleMake: [],
     models: [],
     yearFrom: "",
@@ -99,7 +100,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
   });
 
   const [sellerProducts, setSellerProducts] = useState([]);
-  const [editingProductId, setEditingProductId] = useState(null);
+  const [editingProductId, setEditingProductId] = useState("");
 
   useEffect(() => {
     if (user) fetchSellerProducts();
@@ -118,6 +119,8 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
     if (!product) return;
     setFormData({
       name: product.name || "",
+      categories:
+        product.categories || (product.category ? [product.category] : []),
       category: product.category || "",
       description: product.description || "",
       price: product.price != null ? String(product.price) : "",
@@ -127,8 +130,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
       seasonalCategory: product.seasonalCategory || "",
       compareAtPrice:
         product.compareAtPrice != null ? String(product.compareAtPrice) : "",
-
-      vehicleType: product.vehicleCompatibility?.type || "",
+      vehicleType: product.vehicleCompatibility?.type || "Motorcycle",
       vehicleMake: Array.isArray(product.vehicleCompatibility?.makes)
         ? product.vehicleCompatibility.makes
         : product.vehicleCompatibility?.makes
@@ -154,7 +156,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
       setEditingProductId(selectedProduct.id);
       populateFromProduct(selectedProduct);
     } else {
-      setEditingProductId(null);
+      setEditingProductId("");
     }
   }, [selectedProduct]);
 
@@ -166,18 +168,27 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
         vehicleMake: isRemoving
           ? prev.vehicleMake.filter((m) => m !== makeName)
           : [...prev.vehicleMake, makeName],
-        // Optional: Clear models that don't belong to the remaining makes
-        models: isRemoving ? [] : prev.models,
+        models: isRemoving ? prev.models : [],
       };
     });
   };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+
+    if (name === "vehicleType") {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+        vehicleMake: [],
+        models: [],
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        [name]: type === "checkbox" ? checked : value,
+      }));
+    }
   };
 
   const handleFileChange = (e) => {
@@ -191,9 +202,10 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
   const handleSelectProduct = (e) => {
     const id = e.target.value;
     if (!id) {
-      setEditingProductId(null);
+      setEditingProductId("");
       setFormData({
         name: "",
+        categories: [],
         category: "",
         description: "",
         price: "",
@@ -202,9 +214,8 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
         isSeasonal: false,
         seasonalCategory: "",
         compareAtPrice: "",
-
-        vehicleType: "",
-        vehicleMake: "",
+        vehicleType: "Motorcycle",
+        vehicleMake: [],
         models: [],
         yearFrom: "",
         yearTo: "",
@@ -224,11 +235,12 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
   const toggleModel = (modelName) => {
     setFormData((prev) => ({
       ...prev,
-      models: prev.models?.includes(modelName)
-        ? prev.models.filter((m) => m !== modelName)
+      models: (prev.models || []).includes(modelName)
+        ? (prev.models || []).filter((m) => m !== modelName)
         : [...(prev.models || []), modelName],
     }));
   };
+
   const toggleCategory = (cat) => {
     setFormData((prev) => ({
       ...prev,
@@ -241,14 +253,11 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // 1. AUTHENTICATION CHECK
     if (!user) {
       toast.error("You must be logged in to create products");
       return;
     }
 
-    // 2. IMAGE VALIDATION (Strict)
-    // Prevent creation if no image is selected (ignore for editing if imageUrl exists)
     if (!imageFile && !editingProductId) {
       toast.error("An image is required to register a product.");
       return;
@@ -258,9 +267,8 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
     try {
       const data = new FormData();
 
-      // 3. CORE METADATA
       data.append("name", formData.name.trim());
-      data.append("category", formData.category);
+      data.append("categories", JSON.stringify(formData.categories));
       data.append("description", formData.description.trim());
       data.append("price", Number(formData.price) || 0);
       data.append("stock", Number(formData.stock) || 1);
@@ -269,20 +277,18 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
         data.append("compareAtPrice", Number(formData.compareAtPrice));
       }
 
-      // 5. SEASONAL METADATA
       const isSeasonal = !!(formData.isSeasonal || formData.seasonalCategory);
       data.append("isSeasonal", isSeasonal);
       if (formData.seasonalCategory) {
         data.append("seasonalCategory", formData.seasonalCategory);
       }
 
-      // 6. VEHICLE COMPATIBILITY (Fuzzy Search Prep)
       const vehicleCompatibility = {
         type: formData.vehicleType || "Universal",
         isUniversalFit:
           formData.isUniversalFit === true ||
           formData.isUniversalFit === "true",
-        makes: formData.vehicleMake || "",
+        makes: Array.isArray(formData.vehicleMake) ? formData.vehicleMake : [],
         models: Array.isArray(formData.models) ? formData.models : [],
         yearRange: {
           from: Number(formData.yearFrom) || 0,
@@ -292,19 +298,16 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
       data.append("vehicleCompatibility", JSON.stringify(vehicleCompatibility));
       data.append("isUniversalFit", vehicleCompatibility.isUniversalFit);
 
-      // 7. SELLER INFO
       data.append("sellerId", user.uid);
       data.append(
         "storeName",
         user.storeName || user.displayName || "Unknown Store",
       );
 
-      // 8. IMAGE FILE
       if (imageFile) {
         data.append("image", imageFile);
       }
 
-      // 9. API CALL
       let result;
       if (editingProductId) {
         result = await updateProduct(editingProductId, data);
@@ -317,24 +320,20 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
         addProductToList(result);
       }
 
-      // 10. SUCCESS UI UPDATE
       onProductUpdate && onProductUpdate();
 
-      // Reset Form State
       setFormData({
         name: "",
-        category: "",
+        categories: [],
         description: "",
         price: "",
         stock: "1",
         isUniversalFit: false,
         isSeasonal: false,
-
         seasonalCategory: "",
         compareAtPrice: "",
-
-        vehicleType: "",
-        vehicleMake: "",
+        vehicleType: "Motorcycle",
+        vehicleMake: [],
         models: [],
         yearFrom: "",
         yearTo: "",
@@ -354,6 +353,19 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getModelsForMakes = () => {
+    if (!formData.vehicleType || !formData.vehicleMake.length) return [];
+
+    const allModels = [];
+    formData.vehicleMake.forEach((make) => {
+      const makeData = VEHICLE_DATA[formData.vehicleType]?.[make];
+      if (makeData && Array.isArray(makeData)) {
+        allModels.push(...makeData);
+      }
+    });
+    return allModels;
   };
 
   return (
@@ -380,13 +392,13 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
             </label>
             <select
               onChange={handleSelectProduct}
-              value={editingProductId || ""}
+              value={editingProductId}
               className="w-full border-2 border-zinc-100 p-2 text-xs font-bold outline-none bg-white"
             >
               <option value="">-- Create New Product --</option>
               {sellerProducts.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({p.category})
+                  {p.name} ({p.categories?.join(", ")})
                 </option>
               ))}
             </select>
@@ -445,7 +457,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                 <input
                   required
                   name="name"
-                  value={formData.name}
+                  value={formData.name || ""}
                   onChange={handleChange}
                   className="w-full border-b-2 border-zinc-100 focus:border-amber-600 outline-none p-2 text-xl font-black uppercase transition-colors"
                   placeholder="E.G. RCB S1 FORGED BRAKE CALIPER"
@@ -482,7 +494,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                     required
                     name="price"
                     type="number"
-                    value={formData.price}
+                    value={formData.price || ""}
                     onChange={handleChange}
                     className="w-full border-b-2 border-zinc-100 p-2 text-lg font-mono font-bold outline-none"
                     placeholder="0.00"
@@ -511,7 +523,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                     </label>
                     <input
                       name="seasonalCategory"
-                      value={formData.seasonalCategory}
+                      value={formData.seasonalCategory || ""}
                       onChange={handleChange}
                       className="w-full border-b-2 border-zinc-100 focus:border-amber-600 outline-none p-2 text-sm font-bold uppercase"
                       placeholder="E.G. WET SEASON, HOLIDAY SALE"
@@ -526,7 +538,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                 </label>
                 <textarea
                   name="description"
-                  value={formData.description}
+                  value={formData.description || ""}
                   onChange={handleChange}
                   className="w-full border-2 border-zinc-50 p-4 min-h-[120px] text-sm font-medium leading-relaxed outline-none focus:border-amber-600"
                   placeholder="Material composition, performance metrics, installation notes..."
@@ -590,16 +602,12 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                     </label>
                     <select
                       name="vehicleType"
-                      value={formData.vehicleType}
+                      value={formData.vehicleType || ""}
                       onChange={handleChange}
                       className="w-full border-2 border-zinc-100 p-3 text-[10px] font-black uppercase outline-none focus:border-zinc-900"
                     >
-                      <option value="">SELECT TYPE</option>
-                      {Object.keys(VEHICLE_DATA).map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
+                      <option value="Motorcycle">Motorcycle</option>
+                      <option value="Car">Car</option>
                     </select>
                   </div>
 
@@ -610,7 +618,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                     <div className="flex gap-2">
                       <input
                         name="yearFrom"
-                        value={formData.yearFrom}
+                        value={formData.yearFrom || ""}
                         type="number"
                         placeholder="FROM (E.G. 2018)"
                         onChange={handleChange}
@@ -618,7 +626,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                       />
                       <input
                         name="yearTo"
-                        value={formData.yearTo}
+                        value={formData.yearTo || ""}
                         type="number"
                         placeholder="TO (E.G. 2024)"
                         onChange={handleChange}
@@ -628,7 +636,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                   </div>
                 </div>
 
-                {/* ROW 2: Makes (Hidden if Type-Universal or Global-Universal) */}
+                {/* ROW 2: Makes */}
                 {!formData.isUniversalMake && formData.vehicleType && (
                   <div className="space-y-2">
                     <label className="text-[9px] font-black text-zinc-400 uppercase">
@@ -639,7 +647,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                         Object.keys(VEHICLE_DATA[formData.vehicleType]).map(
                           (make) => {
                             const isActive =
-                              formData.vehicleMake?.includes(make);
+                              formData.vehicleMake.includes(make);
                             return (
                               <button
                                 key={make}
@@ -660,38 +668,31 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                   </div>
                 )}
 
-                {/* ROW 3: Models (Hidden if Type-Universal or Global-Universal) */}
+                {/* ROW 3: Models */}
                 {!formData.isUniversalMake &&
-                  formData.vehicleMake?.length > 0 && (
+                  formData.vehicleMake.length > 0 && (
                     <div className="space-y-2">
                       <label className="text-[9px] font-black text-zinc-400 uppercase">
                         Specific Models
                       </label>
                       <div className="flex flex-wrap gap-2">
-                        {formData.vehicleMake.map((make) =>
-                          VEHICLE_DATA[formData.vehicleType][make]?.map(
-                            (model) => {
-                              const active = formData.models?.includes(model);
-                              return (
-                                <button
-                                  key={model}
-                                  type="button"
-                                  onClick={() => toggleModel(model)}
-                                  className={`px-3 py-1 text-[10px] border-2 uppercase font-bold transition-all ${
-                                    active
-                                      ? "bg-amber-500 text-zinc-900 border-zinc-900"
-                                      : "bg-zinc-100 text-zinc-400 border-transparent hover:border-zinc-200"
-                                  }`}
-                                >
-                                  <span className="opacity-50 mr-1 text-[8px]">
-                                    {make}
-                                  </span>{" "}
-                                  {model}
-                                </button>
-                              );
-                            },
-                          ),
-                        )}
+                        {getModelsForMakes().map((model) => {
+                          const active = formData.models.includes(model);
+                          return (
+                            <button
+                              key={model}
+                              type="button"
+                              onClick={() => toggleModel(model)}
+                              className={`px-3 py-1 text-[10px] border-2 uppercase font-bold transition-all ${
+                                active
+                                  ? "bg-amber-500 text-zinc-900 border-zinc-900"
+                                  : "bg-zinc-100 text-zinc-400 border-transparent hover:border-zinc-200"
+                              }`}
+                            >
+                              {model}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -711,7 +712,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                   name="stock"
                   type="number"
                   min="1"
-                  value={formData.stock}
+                  value={formData.stock || ""}
                   onChange={handleChange}
                   className="w-20 bg-transparent text-right text-lg font-mono font-black outline-none"
                   placeholder="1"

@@ -49,7 +49,7 @@ export default function SellerProducts({
     const query = searchQuery.toLowerCase();
     return (
       product.name?.toLowerCase().includes(query) ||
-      product.category?.toLowerCase().includes(query) ||
+      product.categories?.join(", ").toLowerCase().includes(query) ||
       product.description?.toLowerCase().includes(query)
     );
   });

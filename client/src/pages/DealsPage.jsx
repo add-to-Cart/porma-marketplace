@@ -4,6 +4,7 @@ import ProductCard from "@/components/ProductCard";
 import { Sparkles, CloudRain, Package, Percent, Filter } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useFilters } from "@/contexts/FilterContext";
+import { calculateTrendingScore } from "@/utils/trendingAlgorithm";
 
 export default function DealsPage() {
   const [bundles, setBundles] = useState([]);
@@ -18,6 +19,7 @@ export default function DealsPage() {
     const fetchDeals = async () => {
       try {
         const response = await api.get("/products/deals");
+        console.log("Fetched deals:", response.data); // Add this
         setBundles(response.data.bundles || []);
         setSeasonal(response.data.seasonal || []);
       } catch (err) {
@@ -44,10 +46,16 @@ export default function DealsPage() {
         products = [...bundles, ...seasonal];
     }
 
-    // Apply global filters
-    products = applyFilters(products, "");
+    // Apply global filters, but skip vehicle-specific ones for bundles/seasonal
+    products = products.filter((product) => {
+      // Always allow if it's a bundle or seasonal (universal)
+      if (product.isBundle || product.isSeasonal) return true;
 
-    // Sort products
+      // Otherwise, apply full filters
+      return applyFilters([product], "").length > 0;
+    });
+
+    // Sort products (your existing sort logic)
     return products.sort((a, b) => {
       switch (sortBy) {
         case "discount": {
@@ -60,9 +68,9 @@ export default function DealsPage() {
           return discountB - discountA;
         }
         case "price-asc":
-          return (a.price || a.basePrice) - (b.price || b.basePrice);
+          return a.price - b.price;
         case "price-desc":
-          return (b.price || b.basePrice) - (a.price || a.basePrice);
+          return b.price - a.price;
         case "popular":
           return (b.soldCount || 0) - (a.soldCount || 0);
         case "newest": {
@@ -98,24 +106,6 @@ export default function DealsPage() {
         <p className="text-blue-100 mb-6">
           Handpicked kits, bundles, and seasonal promotions for your ride.
         </p>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white/10 backdrop-blur rounded-lg p-4">
-            <div className="text-3xl font-black">
-              {bundles.length + seasonal.length}
-            </div>
-            <div className="text-sm text-blue-100">Total Deals</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur rounded-lg p-4">
-            <div className="text-3xl font-black">{bundles.length}</div>
-            <div className="text-sm text-blue-100">Bundle Deals</div>
-          </div>
-          <div className="bg-white/10 backdrop-blur rounded-lg p-4">
-            <div className="text-3xl font-black">{seasonal.length}</div>
-            <div className="text-sm text-blue-100">Seasonal Items</div>
-          </div>
-        </div>
       </header>
 
       {/* Tabs & Filters */}

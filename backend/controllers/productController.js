@@ -80,7 +80,10 @@ const generateSearchTags = (data) => {
       });
   }
 
-  if (data.category) tags.add(data.category.toLowerCase());
+  // Handle categories as array
+  if (data.categories && Array.isArray(data.categories)) {
+    data.categories.forEach((cat) => tags.add(cat.toLowerCase()));
+  }
 
   const comp = data.vehicleCompatibility;
   if (comp) {
@@ -146,7 +149,9 @@ export const getAllProducts = async (req, res) => {
 
     // Apply all filters in memory
     if (category) {
-      products = products.filter((p) => p.category === category);
+      products = products.filter(
+        (p) => p.categories && p.categories.includes(category),
+      );
     }
 
     if (vehicleType) {
@@ -345,15 +350,18 @@ export const getRelatedProducts = async (req, res) => {
 
     let query = db.collection("products").where("isBundle", "==", false);
 
-    if (category) {
-      query = query.where("category", "==", category);
-    }
-
     const snapshot = await query.limit(50).get();
 
     let related = snapshot.docs
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .filter((p) => p.id !== id);
+
+    // Filter by category in memory
+    if (category) {
+      related = related.filter(
+        (p) => p.categories && p.categories.includes(category),
+      );
+    }
 
     // Prioritize products from the same store first
     related.sort((a, b) => {
@@ -454,9 +462,6 @@ export const searchProducts = async (req, res) => {
 
     let firestoreQuery = db.collection("products");
 
-    if (category) {
-      firestoreQuery = firestoreQuery.where("category", "==", category);
-    }
     if (vehicleType) {
       firestoreQuery = firestoreQuery.where(
         "vehicleCompatibility.type",
@@ -476,6 +481,11 @@ export const searchProducts = async (req, res) => {
     let products = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
     // In-memory filters
+    if (category) {
+      products = products.filter(
+        (p) => p.categories && p.categories.includes(category),
+      );
+    }
     if (make) {
       products = products.filter((p) =>
         p.vehicleCompatibility?.makes?.includes(make),
@@ -514,7 +524,38 @@ export const createProduct = async (req, res) => {
       });
     }
 
-    const productData = { ...req.body };
+    const {
+      name,
+      categories,
+      description,
+      price,
+      stock,
+      compareAtPrice,
+      isSeasonal,
+      seasonalCategory,
+      vehicleCompatibility,
+      isUniversalFit,
+      sellerId,
+      storeName,
+    } = req.body;
+    const parsedCategories = JSON.parse(categories || "[]");
+
+    const productData = {
+      name: name.trim(),
+      categories: parsedCategories,
+      description: description.trim(),
+      price: Number(price) || 0,
+      stock: Number(stock) || 1,
+      compareAtPrice: compareAtPrice ? Number(compareAtPrice) : null,
+      isSeasonal: isSeasonal === "true",
+      seasonalCategory: seasonalCategory ? seasonalCategory.trim() : null,
+      vehicleCompatibility: vehicleCompatibility
+        ? JSON.parse(vehicleCompatibility)
+        : {},
+      isUniversalFit: isUniversalFit === "true",
+      sellerId: sellerId || null,
+      storeName: storeName || null,
+    };
 
     // 2. DATA TYPE CORRECTION
     if (typeof productData.vehicleCompatibility === "string") {
@@ -585,6 +626,11 @@ export const updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
+
+    // Parse categories if it's a JSON string
+    if (updateData.categories && typeof updateData.categories === "string") {
+      updateData.categories = JSON.parse(updateData.categories);
+    }
 
     if (typeof updateData.vehicleCompatibility === "string") {
       updateData.vehicleCompatibility = JSON.parse(
