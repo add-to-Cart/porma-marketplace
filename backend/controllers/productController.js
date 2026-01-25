@@ -601,7 +601,12 @@ export const createProduct = async (req, res) => {
 
     // 6. IMAGE UPLOAD
     const userId = productData.sellerId || "anonymous";
-    const sanitizedName = productData.name.replace(/\s+/g, "-").toLowerCase();
+    const sanitizedName = productData.name
+      .replace(/[&]/g, "and") // Replace & with "and"
+      .replace(/[^\w\s-]/g, "") // Remove special characters except alphanumeric, spaces, hyphens
+      .replace(/\s+/g, "-") // Replace spaces with hyphens
+      .toLowerCase();
+
     const publicId = `products/${userId}-${sanitizedName}`;
 
     const uploadResult = await uploadProductImage(req.file, publicId);
@@ -684,7 +689,9 @@ export const updateProduct = async (req, res) => {
     if (req.file) {
       const userId = updateData.sellerId || currentData.sellerId || "anonymous";
       const sanitizedName = (updateData.name || currentData.name)
-        .replace(/\s+/g, "-")
+        .replace(/[&]/g, "and") // Replace & with "and"
+        .replace(/[^\w\s-]/g, "") // Remove special characters except alphanumeric, spaces, hyphens
+        .replace(/\s+/g, "-") // Replace spaces with hyphens
         .toLowerCase();
       const publicId = `products/${userId}-${sanitizedName}`;
       const uploadResult = await uploadProductImage(req.file, publicId);

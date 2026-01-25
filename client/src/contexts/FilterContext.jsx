@@ -56,7 +56,7 @@ export const fuzzyMatch = (text, query) => {
 
 export const FilterProvider = ({ children }) => {
   const [filters, setFilters] = useState({
-    category: "",
+    categories: "",
     vehicleType: "",
     isBundle: false,
     isSeasonal: false,
@@ -98,7 +98,7 @@ export const FilterProvider = ({ children }) => {
 
   const clearAllFilters = () => {
     setFilters({
-      category: "",
+      categories: "",
       vehicleType: "",
       isBundle: false,
       isSeasonal: false,
@@ -123,7 +123,7 @@ export const FilterProvider = ({ children }) => {
           const searchableText = [
             product.name,
             product.description,
-            product.category,
+            product.categories?.join(", "),
             product.storeName,
             ...(product.vehicleCompatibility?.makes || []),
             ...(product.vehicleCompatibility?.models || []),
@@ -141,8 +141,10 @@ export const FilterProvider = ({ children }) => {
     }
 
     // Category filter
-    if (filters.category) {
-      filtered = filtered.filter((p) => p.category === filters.category);
+    if (filters.categories) {
+      filtered = filtered.filter((p) =>
+        p.categories?.includes(filters.categories),
+      );
     }
 
     // Vehicle type filter

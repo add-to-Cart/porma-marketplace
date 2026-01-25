@@ -119,9 +119,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
     if (!product) return;
     setFormData({
       name: product.name || "",
-      categories:
-        product.categories || (product.category ? [product.category] : []),
-      category: product.category || "",
+      categories: product.categories || [],
       description: product.description || "",
       price: product.price != null ? String(product.price) : "",
       stock: product.stock != null ? String(product.stock) : "1",
@@ -206,7 +204,6 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
       setFormData({
         name: "",
         categories: [],
-        category: "",
         description: "",
         price: "",
         stock: "1",

@@ -105,11 +105,11 @@ export default function Sidebar() {
       {/* Category */}
       <div className="space-y-2">
         <label className="text-xs font-bold text-gray-400 uppercase">
-          Category
+          Categories
         </label>
         <select
-          value={filters.category}
-          onChange={(e) => updateFilter("category", e.target.value)}
+          value={filters.categories}
+          onChange={(e) => updateFilter("categories", e.target.value)}
           className="w-full bg-gray-50 border-gray-200 rounded-xl px-3 py-2.5 text-sm"
         >
           <option value="">All Categories</option>
