@@ -2,124 +2,68 @@ import admin from "./config/firebaseAdmin.js";
 
 const db = admin.firestore();
 
-async function migrateSellersToCollection() {
-  const usersRef = db.collection("users");
-  const sellersRef = db.collection("sellers");
-
+async function redistributeProducts() {
   try {
-    console.log("Fetching approved sellers...");
-    const snapshot = await usersRef
-      .where("role", "==", "seller")
-      .where("sellerApplication.status", "==", "approved")
-      .get();
+    console.log("--- Nagsisimula na ang distribution ---");
 
-    if (snapshot.empty) {
-      console.log("No approved sellers found.");
+    // 2. Kunin ang lahat ng Sellers
+    const sellersSnapshot = await db.collection("sellers").get();
+    const sellers = [];
+    sellersSnapshot.forEach((doc) => {
+      sellers.push({ id: doc.id, ...doc.data() });
+    });
+
+    if (sellers.length === 0) {
+      console.error("Error: Walang nahanap na sellers sa database.");
       return;
     }
+    console.log(`Nahanap: ${sellers.length} sellers.`);
 
+    // 3. Kunin ang lahat ng Products
+    const productsSnapshot = await db.collection("products").get();
+    console.log(`Nahanap: ${productsSnapshot.size} products.`);
+
+    // 4. Batch Processing (Limit ng Firestore ang 500 operations per batch)
     let batch = db.batch();
     let count = 0;
-    let totalMigrated = 0;
+    let totalUpdated = 0;
 
-    console.log(`Processing ${snapshot.size} approved sellers...`);
+    productsSnapshot.forEach((doc) => {
+      // Pumili ng random seller
+      const randomSeller = sellers[Math.floor(Math.random() * sellers.length)];
 
-    snapshot.docs.forEach((doc) => {
-      const data = doc.data();
-      const sellerId = doc.id;
-      const storeName =
-        data.seller?.storeName || data.sellerApplication?.storeName;
+      const productRef = db.collection("products").doc(doc.id);
 
-      if (storeName) {
-        const sellerDocRef = sellersRef.doc(sellerId);
+      // I-update ang sellerId at storeName
+      batch.update(productRef, {
+        sellerId: randomSeller.sellerId || randomSeller.id,
+        storeName: randomSeller.storeName || "Unknown Store",
+      });
 
-        batch.set(sellerDocRef, {
-          sellerId: sellerId,
-          storeName: storeName,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+      count++;
+      totalUpdated++;
 
-        count++;
-        totalMigrated++;
-      }
-
-      // Firestore allows up to 500 operations per batch
-      if (count === 499) {
+      // Kapag umabot ng 500, i-commit at gumawa ng bagong batch
+      if (count === 500) {
         batch.commit();
         batch = db.batch();
         count = 0;
-        console.log(`...committed batch. Total migrated: ${totalMigrated}`);
       }
     });
 
-    // Commit any remaining operations
+    // I-commit ang natitirang updates
     if (count > 0) {
       await batch.commit();
     }
 
     console.log(
-      `✅ Success! Migrated ${totalMigrated} sellers to sellers collection.`,
+      `✅ Tapos na! Na-distribute ang ${totalUpdated} products sa ${sellers.length} sellers.`,
     );
   } catch (error) {
-    console.error("❌ Error during seller migration:", error);
+    console.error("May error sa pag-distribute:", error);
+  } finally {
+    process.exit();
   }
 }
 
-async function renameBasePriceToPrice() {
-  const collectionRef = db.collection("products");
-
-  try {
-    console.log("Fetching products...");
-    const snapshot = await collectionRef.get();
-
-    if (snapshot.empty) {
-      console.log("No products found.");
-      return;
-    }
-
-    let batch = db.batch();
-    let count = 0;
-    let totalUpdated = 0;
-
-    console.log(`Processing ${snapshot.size} documents...`);
-
-    snapshot.docs.forEach((doc) => {
-      const data = doc.data();
-
-      // Check if basePrice exists in the document
-      if (data.hasOwnProperty("basePrice")) {
-        const docRef = collectionRef.doc(doc.id);
-
-        batch.update(docRef, {
-          price: data.basePrice, // Create the new 'price' field
-          basePrice: admin.firestore.FieldValue.delete(), // Delete the old 'basePrice' field
-        });
-
-        count++;
-        totalUpdated++;
-      }
-
-      // Firestore allows up to 500 operations per batch
-      if (count === 499) {
-        batch.commit();
-        batch = db.batch();
-        count = 0;
-        console.log(`...committed batch. Total updated: ${totalUpdated}`);
-      }
-    });
-
-    // Commit any remaining operations
-    if (count > 0) {
-      await batch.commit();
-    }
-
-    console.log(`✅ Success! Renamed fields in ${totalUpdated} products.`);
-  } catch (error) {
-    console.error("❌ Error during migration:", error);
-  }
-}
-
-// Run the migrations
-// renameBasePriceToPrice();
-migrateSellersToCollection();
+redistributeProducts();

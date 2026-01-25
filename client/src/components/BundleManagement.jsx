@@ -113,6 +113,10 @@ export default function BundleManagement({ onBundleCreate }) {
         user.storeName || user.displayName || "Unknown Store",
       );
 
+      // Set bundle contents to the names of selected products
+      const bundleContents = selectedProductData.map((p) => p.name);
+      bundleData.append("bundleContents", JSON.stringify(bundleContents));
+
       const vehicleComp = { type: "Universal", isUniversalFit: true };
       bundleData.append("vehicleCompatibility", JSON.stringify(vehicleComp));
       bundleData.append("tags", JSON.stringify(["bundle"]));

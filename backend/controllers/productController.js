@@ -113,6 +113,7 @@ export const getAllProducts = async (req, res) => {
       sortBy = "newest",
     } = req.query;
 
+    // Start with a simple query - only filter bundles
     let query = db.collection("products");
 
     // Filter out bundles for marketplace (unless explicitly requested)
@@ -120,32 +121,33 @@ export const getAllProducts = async (req, res) => {
       query = query.where("isBundle", "==", false);
     }
 
-    // Metadata Filtering
-    if (category) query = query.where("category", "==", category);
-    if (vehicleType) {
-      query = query.where("vehicleCompatibility.type", "==", vehicleType);
-    }
-
     // Sort by newest first
     query = query.orderBy("createdAt", "desc");
 
-    // Pagination
+    // Get more documents to account for in-memory filtering
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const offset = pageNum * limitNum;
 
-    // Get one extra to check if there are more
-    const snapshot = await query
-      .offset(offset)
-      .limit(limitNum + 1)
-      .get();
+    // Get a larger batch to filter from
+    const batchSize = 100; // Get more products to filter
+    const snapshot = await query.offset(offset).limit(batchSize).get();
 
-    let products = snapshot.docs.slice(0, limitNum).map((doc) => ({
+    let products = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
 
-    const hasMore = snapshot.docs.length > limitNum;
+    // Apply all filters in memory
+    if (category) {
+      products = products.filter((p) => p.category === category);
+    }
+
+    if (vehicleType) {
+      products = products.filter(
+        (p) => p.vehicleCompatibility?.type === vehicleType,
+      );
+    }
 
     // In-memory filters for complex queries
     if (make) {
@@ -163,6 +165,11 @@ export const getAllProducts = async (req, res) => {
     if (isSeasonal === "true") {
       products = products.filter((p) => p.isSeasonal === true);
     }
+
+    // Apply pagination after filtering
+    const totalFiltered = products.length;
+    products = products.slice(0, limitNum);
+    const hasMore = totalFiltered > limitNum;
 
     // Populate seller information
     products = await populateSellerInfo(products);
@@ -512,6 +519,19 @@ export const createProduct = async (req, res) => {
     if (productData.compareAtPrice) {
       productData.compareAtPrice = Number(productData.compareAtPrice);
     }
+    if (
+      productData.bundleContents &&
+      typeof productData.bundleContents === "string"
+    ) {
+      try {
+        productData.bundleContents = JSON.parse(productData.bundleContents);
+      } catch (e) {
+        // If it's not JSON, treat as comma-separated string and split
+        productData.bundleContents = productData.bundleContents
+          .split(",")
+          .map((item) => item.trim());
+      }
+    }
 
     // Initialize metrics
     productData.rating = 0;
@@ -567,6 +587,19 @@ export const updateProduct = async (req, res) => {
     }
     if (updateData.compareAtPrice) {
       updateData.compareAtPrice = Number(updateData.compareAtPrice);
+    }
+    if (
+      updateData.bundleContents &&
+      typeof updateData.bundleContents === "string"
+    ) {
+      try {
+        updateData.bundleContents = JSON.parse(updateData.bundleContents);
+      } catch (e) {
+        // If it's not JSON, treat as comma-separated string and split
+        updateData.bundleContents = updateData.bundleContents
+          .split(",")
+          .map((item) => item.trim());
+      }
     }
 
     const docRef = db.collection("products").doc(id);

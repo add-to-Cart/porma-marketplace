@@ -58,11 +58,14 @@ export default function SellerDashboard() {
         getProductsBySeller(user.uid),
       ]);
 
-      setOrders(Array.isArray(ordersData) ? ordersData : []);
-      setProducts(Array.isArray(productsData) ? productsData : []);
+      const sanitizedOrders = Array.isArray(ordersData) ? ordersData : [];
+      const sanitizedProducts = Array.isArray(productsData) ? productsData : [];
+
+      setOrders(sanitizedOrders);
+      setProducts(sanitizedProducts);
 
       // Calculate statistics
-      calculateStats(ordersData, productsData);
+      calculateStats(sanitizedOrders, sanitizedProducts);
     } catch (err) {
       console.error("Error fetching dashboard data:", err);
       toast.error("Failed to load dashboard data");

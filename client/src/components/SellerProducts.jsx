@@ -33,7 +33,7 @@ export default function SellerProducts({
       try {
         const data = await getProductsBySeller(user.uid);
         console.log("Fetched products:", data);
-        setProducts(data);
+        setProducts(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Error fetching products:", err);
       } finally {

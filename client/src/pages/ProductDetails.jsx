@@ -241,30 +241,35 @@ export default function ProductDetails() {
           </div>
 
           {/* Bundle Contents */}
-          {product.isBundle && product.bundleContents && (
-            <div className="mt-10 p-6 border-4 border-zinc-900 bg-zinc-50 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-              <div className="flex items-center gap-2 mb-4">
-                <ListChecks size={20} className="text-zinc-900" />
-                <h3 className="font-black uppercase tracking-tighter text-sm italic">
-                  The Kit Manifest (What's in the box)
-                </h3>
+          {product.isBundle &&
+            product.bundleContents &&
+            ((Array.isArray(product.bundleContents) &&
+              product.bundleContents.length > 0) ||
+              (!Array.isArray(product.bundleContents) &&
+                product.bundleContents?.trim().length > 0)) && (
+              <div className="mt-10 p-6 border-4 border-zinc-900 bg-zinc-50 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+                <div className="flex items-center gap-2 mb-4">
+                  <ListChecks size={20} className="text-zinc-900" />
+                  <h3 className="font-black uppercase tracking-tighter text-sm italic">
+                    The Kit Manifest (What's in the box)
+                  </h3>
+                </div>
+                <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(Array.isArray(product.bundleContents)
+                    ? product.bundleContents
+                    : product.bundleContents?.split(",") || []
+                  ).map((item, index) => (
+                    <li
+                      key={index}
+                      className="flex items-start gap-3 text-xs font-bold text-zinc-600"
+                    >
+                      <div className="mt-1 w-2 h-2 bg-zinc-900 rounded-full shrink-0" />
+                      {typeof item === "string" ? item.trim() : item}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {(Array.isArray(product.bundleContents)
-                  ? product.bundleContents
-                  : product.bundleContents?.split(",") || []
-                ).map((item, index) => (
-                  <li
-                    key={index}
-                    className="flex items-start gap-3 text-xs font-bold text-zinc-600"
-                  >
-                    <div className="mt-1 w-2 h-2 bg-zinc-900 rounded-full shrink-0" />
-                    {typeof item === "string" ? item.trim() : item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            )}
 
           {/* Compatibility Info */}
           <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100">

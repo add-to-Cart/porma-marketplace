@@ -80,7 +80,7 @@ export const getProductsBySeller = async (sellerId, page = 0, limit = 20) => {
   const res = await api.get(
     `/products/seller/${sellerId}?page=${page}&limit=${limit}`,
   );
-  return res.data;
+  return res.data.products || res.data || [];
 };
 
 /**
