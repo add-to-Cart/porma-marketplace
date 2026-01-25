@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -42,19 +42,30 @@ export default function ProductDetails() {
   const { addToCart } = useCart();
   const { user } = useAuth();
 
+  // SOLUTION 1: Use ref to track if view has been counted
+  const viewCounted = useRef(false);
+
   useEffect(() => {
     const fetchProduct = async () => {
       try {
         const data = await getProductById(id);
         setProduct(data);
-        // Increment view count when product is viewed
-        await incrementViewCount(id);
+
+        // CRITICAL FIX: Only increment view count ONCE
+        // Check if view hasn't been counted yet
+        if (!viewCounted.current) {
+          await incrementViewCount(id);
+          viewCounted.current = true; // Mark as counted
+        }
       } catch (err) {
         console.error("Error fetching product:", err);
       } finally {
         setLoading(false);
       }
     };
+
+    // Reset the ref when product ID changes
+    viewCounted.current = false;
     fetchProduct();
   }, [id]);
 
@@ -74,7 +85,6 @@ export default function ProductDetails() {
   }, [product, id]);
 
   const fetchProductReviews = async () => {
-    // Only fetch if id is available
     if (!id) return;
 
     try {
@@ -112,7 +122,7 @@ export default function ProductDetails() {
       </nav>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
-        {/* 2. Media Section (More compact container) */}
+        {/* 2. Media Section */}
         <div className="lg:col-span-6">
           <div className="sticky top-28 bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
             <div className="aspect-square rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
@@ -125,7 +135,7 @@ export default function ProductDetails() {
           </div>
         </div>
 
-        {/* 3. Buying Section (Standard font sizes) */}
+        {/* 3. Buying Section */}
         <div className="lg:col-span-6 flex flex-col">
           <div className="flex flex-col gap-2">
             <div>
@@ -175,7 +185,7 @@ export default function ProductDetails() {
                   Views
                 </div>
                 <div className="text-xl font-black text-gray-900">
-                  👁 {product.viewCount || 0}
+                  👁️ {product.viewCount || 0}
                 </div>
               </div>
               <div className="text-center">
@@ -226,11 +236,11 @@ export default function ProductDetails() {
                 product.ratingAverage || product.averageRating || 0
               }
               numRatings={product.ratingsCount || product.numRatings || 0}
-              onRate={(rating) => console.log("Rated:", rating)} // TODO: Implement API call
+              onRate={(rating) => console.log("Rated:", rating)}
             />
           </div>
 
-          {/* MATURE THESIS FEATURE: THE MANIFEST LIST */}
+          {/* Bundle Contents */}
           {product.isBundle && product.bundleContents && (
             <div className="mt-10 p-6 border-4 border-zinc-900 bg-zinc-50 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
               <div className="flex items-center gap-2 mb-4">
@@ -256,7 +266,7 @@ export default function ProductDetails() {
             </div>
           )}
 
-          {/* Compatibility Info (Restored Layout) */}
+          {/* Compatibility Info */}
           <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-100">
             <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
               Compatibility
@@ -288,7 +298,8 @@ export default function ProductDetails() {
               </div>
             )}
           </div>
-          {/* Quantity and Actions (Slimmer) */}
+
+          {/* Quantity and Actions */}
           <div className="space-y-3 mb-8">
             {user?.uid === product.sellerId ? (
               <div className="bg-yellow-50 border-2 border-yellow-200 p-4 rounded-lg text-center">
@@ -331,7 +342,6 @@ export default function ProductDetails() {
                       return;
                     }
 
-                    // Navigate directly to checkout with product details
                     navigate("/checkout", {
                       state: {
                         quickCheckout: {
@@ -347,7 +357,7 @@ export default function ProductDetails() {
                 </button>
               </>
             )}
-            {/* Trust Factors (Slimmer) */}
+            {/* Trust Factors */}
             <div className="grid grid-cols-2 gap-4 pt-6 border-t border-gray-100">
               <div className="flex gap-3 items-center">
                 <div className="p-2 bg-gray-100 rounded-lg text-gray-500">
@@ -370,7 +380,7 @@ export default function ProductDetails() {
         </div>
       </div>
 
-      {/* 4. Description Section (Restored full content) */}
+      {/* Description Section */}
       <div className="mt-16 pt-10 border-t border-gray-100">
         <h2 className="text-lg font-bold text-gray-900 mb-4">
           Detailed Description
@@ -380,7 +390,7 @@ export default function ProductDetails() {
         </div>
       </div>
 
-      {/* 5. Reviews Section (Display-Only) */}
+      {/* Reviews Section */}
       <div className="mt-12 pt-8 border-t border-gray-100">
         <div className="bg-gray-50 p-6 rounded-lg border border-gray-100 mb-6">
           <h3 className="text-lg font-bold text-gray-900 mb-4">
@@ -411,7 +421,7 @@ export default function ProductDetails() {
             </div>
           </div>
 
-          {/* Rating Distribution Bar (if ratings exist) */}
+          {/* Rating Distribution */}
           {product.ratings && product.ratings.length > 0 && (
             <div className="mt-6 pt-6 border-t border-gray-200">
               <h4 className="text-sm font-bold text-gray-900 mb-3">
@@ -514,7 +524,7 @@ export default function ProductDetails() {
         </div>
       </div>
 
-      {/* 5. Recommended Sections (RESTORED) */}
+      {/* Related Products */}
       {related.length > 0 && (
         <section className="mt-20">
           <div className="flex items-center justify-between mb-6">
@@ -540,6 +550,7 @@ export default function ProductDetails() {
         </section>
       )}
 
+      {/* Trending Products */}
       {trending.length > 0 && (
         <section className="mt-20 pb-20">
           <h2 className="text-xl font-bold text-gray-900 mb-6">

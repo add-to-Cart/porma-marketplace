@@ -1,8 +1,13 @@
 import { useFilters } from "@/contexts/FilterContext";
 
 export default function Sidebar() {
-  const { filters, updateFilter, updateVehicleFilter, clearVehicleFilter } =
-    useFilters();
+  const {
+    filters,
+    updateFilter,
+    updateVehicleFilter,
+    clearVehicleFilter,
+    clearAllFilters,
+  } = useFilters();
 
   const makes = [
     "Ford",
@@ -53,11 +58,30 @@ export default function Sidebar() {
       <div className="flex items-center justify-between">
         <h2 className="font-bold text-lg text-gray-800">Filters</h2>
         <button
-          onClick={clearVehicleFilter}
-          className="text-xs text-blue-600 hover:underline"
+          onClick={clearAllFilters}
+          className="text-xs text-blue-600 hover:underline font-semibold"
         >
-          Reset
+          Reset All
         </button>
+      </div>
+
+      {/* Sort By */}
+      <div className="space-y-2">
+        <label className="text-xs font-bold text-gray-400 uppercase">
+          Sort By
+        </label>
+        <select
+          value={filters.sortBy}
+          onChange={(e) => updateFilter("sortBy", e.target.value)}
+          className="w-full bg-gray-50 border-gray-200 rounded-xl px-3 py-2.5 text-sm"
+        >
+          <option value="newest">Newest First</option>
+          <option value="trending">Trending</option>
+          <option value="popular">Most Popular</option>
+          <option value="price-asc">Price: Low to High</option>
+          <option value="price-desc">Price: High to Low</option>
+          <option value="rating">Highest Rated</option>
+        </select>
       </div>
 
       {/* Category */}
@@ -165,6 +189,15 @@ export default function Sidebar() {
               ))}
           </select>
         </div>
+
+        {(filters.vehicle.make || filters.vehicle.model) && (
+          <button
+            onClick={clearVehicleFilter}
+            className="w-full text-xs text-blue-600 hover:underline font-semibold"
+          >
+            Clear Vehicle Filters
+          </button>
+        )}
       </div>
     </aside>
   );

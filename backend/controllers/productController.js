@@ -5,42 +5,34 @@ import { getTrendingProducts as calculateTrendingProducts } from "../utils/trend
 
 // Helper function to populate seller information for products
 const populateSellerInfo = async (products) => {
-  // Get unique seller IDs
   const sellerIds = [
     ...new Set(products.map((p) => p.sellerId).filter((id) => id)),
   ];
 
   if (sellerIds.length === 0) return products;
 
-  // Batch fetch seller documents
   const sellerPromises = sellerIds.map((id) =>
     db.collection("users").doc(id).get(),
   );
   const sellerDocs = await Promise.all(sellerPromises);
 
-  // Create seller info map
   const sellerMap = {};
   sellerDocs.forEach((doc, index) => {
     if (doc.exists) {
       const sellerData = doc.data();
       const sellerId = sellerIds[index];
 
-      // Check for approved seller profile first
       if (sellerData.role === "seller" && sellerData.seller) {
         sellerMap[sellerId] = {
           storeName: sellerData.seller.storeName,
           owner: sellerData.seller.storeName,
         };
-      }
-      // If no approved seller profile, check for pending application
-      else if (sellerData.sellerApplication?.status === "pending") {
+      } else if (sellerData.sellerApplication?.status === "pending") {
         sellerMap[sellerId] = {
           storeName: sellerData.sellerApplication.storeName,
           owner: sellerData.sellerApplication.storeName,
         };
-      }
-      // Fallback to display name
-      else {
+      } else {
         sellerMap[sellerId] = {
           storeName: sellerData.displayName || "Unknown Seller",
           owner: sellerData.displayName || "Unknown Seller",
@@ -49,7 +41,6 @@ const populateSellerInfo = async (products) => {
     }
   });
 
-  // Merge seller info into products
   return products.map((product) => ({
     ...product,
     ...(sellerMap[product.sellerId] || {
@@ -63,20 +54,28 @@ const populateSellerInfo = async (products) => {
 const generateSearchTags = (data) => {
   const tags = new Set();
 
-  // 1. Add name parts
+  const addPrefixes = (word) => {
+    if (word.length > 2) {
+      // Only for words longer than 2 chars
+      for (let i = 3; i <= word.length; i++) {
+        tags.add(word.substring(0, i));
+      }
+    } else {
+      tags.add(word);
+    }
+  };
+
   if (data.name) {
     data.name
       .toLowerCase()
       .split(/\s+/)
       .forEach((word) => {
-        if (word.length > 1) tags.add(word);
+        if (word.length > 1) addPrefixes(word);
       });
   }
 
-  // 2. Add category
   if (data.category) tags.add(data.category.toLowerCase());
 
-  // 3. Add vehicle details
   const comp = data.vehicleCompatibility;
   if (comp) {
     if (comp.isUniversalFit) {
@@ -90,11 +89,8 @@ const generateSearchTags = (data) => {
     }
   }
 
-  // 4. Add bundle/seasonal flags
   if (data.isBundle) tags.add("bundle");
   if (data.isSeasonal) tags.add("seasonal");
-
-  // 5. Add seasonal category if exists
   if (data.seasonalCategory) {
     tags.add(data.seasonalCategory.toLowerCase());
   }
@@ -102,14 +98,24 @@ const generateSearchTags = (data) => {
   return Array.from(tags).filter((tag) => tag && tag.length > 1);
 };
 
-// 1. MARKETPLACE: Latest to Oldest (exclude bundles)
+// 1. MARKETPLACE: Latest to Oldest with PAGINATION
 export const getAllProducts = async (req, res) => {
   try {
-    const { category, vehicleType, make, model, isBundle, isSeasonal } =
-      req.query;
+    const {
+      category,
+      vehicleType,
+      make,
+      model,
+      isBundle,
+      isSeasonal,
+      page = 0,
+      limit = 20,
+      sortBy = "newest",
+    } = req.query;
+
     let query = db.collection("products");
 
-    // Filter out bundles for marketplace
+    // Filter out bundles for marketplace (unless explicitly requested)
     if (isBundle !== "true") {
       query = query.where("isBundle", "==", false);
     }
@@ -120,13 +126,26 @@ export const getAllProducts = async (req, res) => {
       query = query.where("vehicleCompatibility.type", "==", vehicleType);
     }
 
-    // Sort by newest first (latest to oldest)
-    const snapshot = await query.orderBy("createdAt", "desc").limit(100).get();
+    // Sort by newest first
+    query = query.orderBy("createdAt", "desc");
 
-    let products = snapshot.docs.map((doc) => ({
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const offset = pageNum * limitNum;
+
+    // Get one extra to check if there are more
+    const snapshot = await query
+      .offset(offset)
+      .limit(limitNum + 1)
+      .get();
+
+    let products = snapshot.docs.slice(0, limitNum).map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
+
+    const hasMore = snapshot.docs.length > limitNum;
 
     // In-memory filters for complex queries
     if (make) {
@@ -148,7 +167,13 @@ export const getAllProducts = async (req, res) => {
     // Populate seller information
     products = await populateSellerInfo(products);
 
-    res.json(products);
+    res.json({
+      products,
+      page: pageNum,
+      limit: limitNum,
+      hasMore,
+      total: products.length,
+    });
   } catch (err) {
     console.error("Marketplace Error:", err);
     res.status(500).json({
@@ -161,11 +186,10 @@ export const getAllProducts = async (req, res) => {
 // 2. TRENDING: Refined algorithm using normalized metrics
 export const getTrendingProducts = async (req, res) => {
   try {
+    const { limit = 20 } = req.query;
+
     // Get all available products (including bundles)
-    const snapshot = await db
-      .collection("products")
-      .limit(200) // Get a larger set to rank
-      .get();
+    const snapshot = await db.collection("products").limit(200).get();
 
     let products = snapshot.docs.map((doc) => ({
       id: doc.id,
@@ -174,7 +198,6 @@ export const getTrendingProducts = async (req, res) => {
 
     // Normalize data before scoring
     products = products.map((p) => {
-      // Calculate average from ratings array if ratingAverage is missing
       let avgRating = p.ratingAverage || 0;
       if (!avgRating && p.ratings && p.ratings.length > 0) {
         avgRating = p.ratings.reduce((a, b) => a + b, 0) / p.ratings.length;
@@ -189,8 +212,11 @@ export const getTrendingProducts = async (req, res) => {
       };
     });
 
-    // Use the new trending algorithm to rank products
-    const trendingProducts = calculateTrendingProducts(products, 20);
+    // Use the trending algorithm to rank products
+    const trendingProducts = calculateTrendingProducts(
+      products,
+      parseInt(limit),
+    );
 
     // Populate seller information
     const productsWithSellerInfo = await populateSellerInfo(trendingProducts);
@@ -249,10 +275,11 @@ export const getDealsProducts = async (req, res) => {
   }
 };
 
-// Get products by seller
+// Get products by seller with pagination
 export const getProductsBySeller = async (req, res) => {
   try {
     const { sellerId } = req.params;
+    const { page = 0, limit = 20 } = req.query;
 
     if (!sellerId) {
       return res
@@ -260,27 +287,34 @@ export const getProductsBySeller = async (req, res) => {
         .json({ message: "sellerId parameter is required" });
     }
 
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const offset = pageNum * limitNum;
+
     const snapshot = await db
       .collection("products")
       .where("sellerId", "==", sellerId)
+      .orderBy("createdAt", "desc")
+      .offset(offset)
+      .limit(limitNum + 1)
       .get();
 
-    let products = snapshot.docs.map((doc) => ({
+    let products = snapshot.docs.slice(0, limitNum).map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
 
-    // Sort in memory by createdAt desc
-    products.sort((a, b) => {
-      const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
-      const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
-      return bTime - aTime;
-    });
+    const hasMore = snapshot.docs.length > limitNum;
 
     // Populate seller information
     const productsWithSeller = await populateSellerInfo(products);
 
-    return res.json(productsWithSeller);
+    return res.json({
+      products: productsWithSeller,
+      page: pageNum,
+      limit: limitNum,
+      hasMore,
+    });
   } catch (err) {
     console.error("Failed to fetch seller products:", err);
     return res.status(500).json({
@@ -296,7 +330,7 @@ export const getRelatedProducts = async (req, res) => {
     const { id } = req.params;
     const { category, make, sellerId } = req.query;
 
-    let query = db.collection("products").where("isBundle", "==", false); // Exclude bundles
+    let query = db.collection("products").where("isBundle", "==", false);
 
     if (category) {
       query = query.where("category", "==", category);
@@ -310,19 +344,16 @@ export const getRelatedProducts = async (req, res) => {
 
     // Prioritize products from the same store first
     related.sort((a, b) => {
-      // Same store has highest priority
       const aSameStore = a.sellerId === sellerId ? 1 : 0;
       const bSameStore = b.sellerId === sellerId ? 1 : 0;
       if (aSameStore !== bSameStore) return bSameStore - aSameStore;
 
-      // Then prioritize by make
       if (make) {
         const aMatch = a.vehicleCompatibility?.makes?.includes(make) ? 1 : 0;
         const bMatch = b.vehicleCompatibility?.makes?.includes(make) ? 1 : 0;
         if (aMatch !== bMatch) return bMatch - aMatch;
       }
 
-      // Finally, sort by soldCount (most popular)
       return (b.soldCount || 0) - (a.soldCount || 0);
     });
 
@@ -338,7 +369,6 @@ export const getRelatedProducts = async (req, res) => {
   }
 };
 
-// Get product by ID
 // Get product by ID with seller information
 export const getProductById = async (req, res) => {
   try {
@@ -362,22 +392,17 @@ export const getProductById = async (req, res) => {
           .get();
         if (sellerDoc.exists) {
           const sellerData = sellerDoc.data();
-          // Check for approved seller profile first
           if (sellerData.role === "seller" && sellerData.seller) {
             sellerInfo = {
               storeName: sellerData.seller.storeName,
               owner: sellerData.seller.storeName,
             };
-          }
-          // If no approved seller profile, check for pending application
-          else if (sellerData.sellerApplication?.status === "pending") {
+          } else if (sellerData.sellerApplication?.status === "pending") {
             sellerInfo = {
               storeName: sellerData.sellerApplication.storeName,
               owner: sellerData.sellerApplication.storeName,
             };
-          }
-          // Fallback to display name
-          else {
+          } else {
             sellerInfo = {
               storeName: sellerData.displayName || "Unknown Seller",
               owner: sellerData.displayName || "Unknown Seller",
@@ -392,7 +417,7 @@ export const getProductById = async (req, res) => {
     res.json({
       id: snapshot.id,
       ...productData,
-      ...sellerInfo, // Merge seller info into product data
+      ...sellerInfo,
     });
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch product" });
@@ -416,7 +441,6 @@ export const searchProducts = async (req, res) => {
 
     let firestoreQuery = db.collection("products");
 
-    // Simple equality filters
     if (category) {
       firestoreQuery = firestoreQuery.where("category", "==", category);
     }
@@ -473,14 +497,12 @@ export const createProduct = async (req, res) => {
   try {
     const productData = { ...req.body };
 
-    // Parse stringified objects
     if (typeof productData.vehicleCompatibility === "string") {
       productData.vehicleCompatibility = JSON.parse(
         productData.vehicleCompatibility,
       );
     }
 
-    // Parse boolean fields
     if (productData.isBundle) {
       productData.isBundle = productData.isBundle === "true";
     }
@@ -500,7 +522,7 @@ export const createProduct = async (req, res) => {
     productData.soldCount = 0;
     productData.isAvailable = true;
 
-    // Generate searchTags (unified field)
+    // Generate searchTags
     productData.searchTags = generateSearchTags(productData);
 
     // Handle image upload
@@ -531,14 +553,12 @@ export const updateProduct = async (req, res) => {
     const { id } = req.params;
     const updateData = { ...req.body };
 
-    // Parse stringified objects
     if (typeof updateData.vehicleCompatibility === "string") {
       updateData.vehicleCompatibility = JSON.parse(
         updateData.vehicleCompatibility,
       );
     }
 
-    // Parse boolean fields
     if (updateData.isBundle !== undefined) {
       updateData.isBundle = updateData.isBundle === "true";
     }
@@ -549,7 +569,6 @@ export const updateProduct = async (req, res) => {
       updateData.compareAtPrice = Number(updateData.compareAtPrice);
     }
 
-    // Get existing product
     const docRef = db.collection("products").doc(id);
     const snapshot = await docRef.get();
 
@@ -559,7 +578,6 @@ export const updateProduct = async (req, res) => {
 
     const currentData = snapshot.data();
 
-    // Merge data for searchTags generation
     const fullData = {
       ...currentData,
       ...updateData,
@@ -569,10 +587,8 @@ export const updateProduct = async (req, res) => {
       },
     };
 
-    // Regenerate searchTags
     const updatedSearchTags = generateSearchTags(fullData);
 
-    // Handle image upload if new file provided
     if (req.file) {
       const userId = updateData.sellerId || currentData.sellerId || "anonymous";
       const sanitizedName = (updateData.name || currentData.name)
@@ -584,7 +600,6 @@ export const updateProduct = async (req, res) => {
       updateData.cloudinaryId = uploadResult.publicId;
     }
 
-    // Prepare final update
     const finalUpdate = {
       ...updateData,
       searchTags: updatedSearchTags,
@@ -646,7 +661,6 @@ export const incrementViewCount = async (req, res) => {
   }
 };
 
-// Add rating to a product
 export const addRating = async (req, res) => {
   try {
     const { productId } = req.params;
@@ -674,14 +688,11 @@ export const addRating = async (req, res) => {
     const product = productDoc.data();
     const ratings = product.ratings || [];
 
-    // Add the new rating
     ratings.push(rating);
 
-    // Calculate new average
     const ratingAverage =
       ratings.length > 0 ? ratings.reduce((a, b) => a + b) / ratings.length : 0;
 
-    // Update product with new ratings
     await productRef.update({
       ratings,
       ratingsCount: ratings.length,
@@ -700,14 +711,10 @@ export const addRating = async (req, res) => {
   }
 };
 
-// Replace these functions in productController.js
-
-// Get reviews for a product
 export const getProductReviews = async (req, res) => {
   try {
     const { productId } = req.params;
 
-    // Simple validation - just check if productId exists
     if (!productId) {
       return res.status(400).json({ message: "Product ID is required" });
     }
@@ -723,19 +730,16 @@ export const getProductReviews = async (req, res) => {
       reviews.push({
         id: doc.id,
         ...data,
-        // Convert Firestore timestamp to a serializable format
         createdAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
       });
     });
 
-    // Sort by createdAt in descending order
     reviews.sort((a, b) => {
       const timeA = new Date(a.createdAt).getTime();
       const timeB = new Date(b.createdAt).getTime();
       return timeB - timeA;
     });
 
-    // Always return an array (even if empty)
     res.json(reviews);
   } catch (err) {
     console.error("Get Reviews Error:", err);
@@ -745,34 +749,29 @@ export const getProductReviews = async (req, res) => {
   }
 };
 
-// Add review to a product
 export const addReview = async (req, res) => {
   try {
     const { productId } = req.params;
     const { rating, reviewText, buyerId, buyerName } = req.body;
 
-    // Validate productId
     if (!productId) {
       return res.status(400).json({
         message: "Product ID is required",
       });
     }
 
-    // Validate rating
     if (!rating || typeof rating !== "number" || rating < 1 || rating > 5) {
       return res.status(400).json({
         message: "Rating must be a number between 1 and 5",
       });
     }
 
-    // Validate buyerId
     if (!buyerId) {
       return res.status(400).json({
         message: "Buyer ID is required",
       });
     }
 
-    // Create review in reviews collection
     const review = {
       productId: productId,
       buyerId: buyerId,
@@ -784,7 +783,6 @@ export const addReview = async (req, res) => {
 
     const reviewDoc = await db.collection("reviews").add(review);
 
-    // Also update product ratings for average calculation
     const productRef = db.collection("products").doc(productId);
     const productDoc = await productRef.get();
 
@@ -809,7 +807,7 @@ export const addReview = async (req, res) => {
     res.json({
       id: reviewDoc.id,
       ...review,
-      createdAt: new Date(), // Return a date object instead of FieldValue
+      createdAt: new Date(),
     });
   } catch (err) {
     console.error("Add Review Error:", err);

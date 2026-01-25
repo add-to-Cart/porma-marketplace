@@ -10,6 +10,7 @@ export const CartProvider = ({ children }) => {
 
   // Use ref to prevent infinite loop
   const isSavingRef = useRef(false);
+  const prevCartLengthRef = useRef(0); // Track previous cart length for immediate saves on removals
 
   // Load cart from Firestore when user logs in
   useEffect(() => {
@@ -23,17 +24,20 @@ export const CartProvider = ({ children }) => {
 
   // Save to Firestore whenever cart changes (for logged-in users)
   // FIXED: Added debouncing and prevented infinite loop
+  // MODIFIED: Save immediately on removals, debounce on additions
   useEffect(() => {
     // Don't save if we're already saving or if cart hasn't been initialized
     if (isSavingRef.current || loading) {
       return;
     }
 
-    // Debounce the save operation
-    const timeoutId = setTimeout(() => {
-      if (user?.uid && cart.length >= 0) {
+    const isRemoval = cart.length < prevCartLengthRef.current;
+
+    if (isRemoval) {
+      // Save immediately for removals
+      if (user?.uid) {
         saveCartToFirestore();
-      } else if (!user) {
+      } else {
         // Save to localStorage for guests
         try {
           localStorage.setItem("cart", JSON.stringify(cart));
@@ -41,9 +45,26 @@ export const CartProvider = ({ children }) => {
           console.error("Failed to save to localStorage:", error);
         }
       }
-    }, 500); // Wait 500ms before saving
+    } else {
+      // Debounce the save operation for additions
+      const timeoutId = setTimeout(() => {
+        if (user?.uid && cart.length >= 0) {
+          saveCartToFirestore();
+        } else if (!user) {
+          // Save to localStorage for guests
+          try {
+            localStorage.setItem("cart", JSON.stringify(cart));
+          } catch (error) {
+            console.error("Failed to save to localStorage:", error);
+          }
+        }
+      }, 500); // Wait 500ms before saving
 
-    return () => clearTimeout(timeoutId);
+      return () => clearTimeout(timeoutId);
+    }
+
+    // Update previous cart length
+    prevCartLengthRef.current = cart.length;
   }, [cart, user?.uid]);
 
   const loadCartFromFirestore = async () => {
@@ -61,7 +82,9 @@ export const CartProvider = ({ children }) => {
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.cart) {
-          setCart(data.cart.items || []);
+          const loadedCart = data.cart.items || [];
+          setCart(loadedCart);
+          prevCartLengthRef.current = loadedCart.length; // Update previous length
         }
       }
     } catch (error) {
@@ -76,7 +99,9 @@ export const CartProvider = ({ children }) => {
     try {
       const saved = localStorage.getItem("cart");
       if (saved) {
-        setCart(JSON.parse(saved));
+        const parsedCart = JSON.parse(saved);
+        setCart(parsedCart);
+        prevCartLengthRef.current = parsedCart.length; // Update previous length
       }
     } catch (error) {
       console.error("Failed to load cart from localStorage:", error);
@@ -117,7 +142,7 @@ export const CartProvider = ({ children }) => {
   const addToCart = (product) => {
     const productWithNumericPrice = {
       ...product,
-      basePrice: Number(product.basePrice) || 0,
+      price: Number(product.price) || 0,
     };
     const quantityToAdd = product.quantity || 1;
 
@@ -148,13 +173,17 @@ export const CartProvider = ({ children }) => {
   const clearCart = () => setCart([]);
 
   const subtotal = cart.reduce((sum, item) => {
-    const basePrice = Number(item.basePrice) || 0;
+    const price = Number(item.price) || 0;
     const quantity = Number(item.quantity) || 0;
-    return sum + basePrice * quantity;
+    return sum + price * quantity;
   }, 0);
 
-  const deliveryFee = subtotal > 1000 ? 0 : 150;
+  // LOGIC: If subtotal > 1000, fee is 0.
+  // Otherwise, fee is 2% of the subtotal.
+  const deliveryFee = subtotal > 1000 ? 0 : subtotal * 0.02;
+
   const total = subtotal + deliveryFee;
+
   const itemCount = cart.reduce(
     (count, item) => count + (Number(item.quantity) || 0),
     0,
