@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getSellerOrders } from "@/api/orders";
+import {
+  getSellerOrders,
+  updateOrderStatus,
+  completeOrder,
+} from "@/api/orders";
 import toast from "react-hot-toast";
 
 export default function SellerOrdersPage() {
@@ -92,23 +96,20 @@ export default function SellerOrdersPage() {
 
   const handleUpdateDelivery = async (orderId, newStatus) => {
     try {
-      const response = await fetch(`http://localhost:3000/orders/${orderId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          deliveryStatus: newStatus,
-          status: newStatus === "delivered" ? "completed" : "pending",
-        }),
-      });
-
-      if (response.ok) {
-        toast.success(`Order marked as ${newStatus}!`);
-        await fetchOrders();
+      let response;
+      if (newStatus === "delivered") {
+        // Use completeOrder to update soldCount
+        response = await completeOrder(orderId);
+        toast.success("Order completed and sold count updated!");
       } else {
-        toast.error("Failed to update delivery status");
+        // Use updateOrderStatus for other statuses
+        response = await updateOrderStatus(orderId, {
+          deliveryStatus: newStatus,
+          status: "pending",
+        });
+        toast.success(`Order marked as ${newStatus}!`);
       }
+      await fetchOrders();
     } catch (err) {
       console.error("Update delivery error:", err);
       toast.error("Failed to update delivery status");

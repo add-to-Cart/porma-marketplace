@@ -890,7 +890,7 @@ export const getProductReviews = async (req, res) => {
 
 export const addReview = async (req, res) => {
   try {
-    const { id } = req.params; // Changed from productId to id to match route
+    const { id } = req.params; // product ID
     const { rating, reviewText, buyerId, buyerName } = req.body;
 
     console.log("Adding review:", {
@@ -922,6 +922,32 @@ export const addReview = async (req, res) => {
       });
     }
 
+    // ✅ VERIFY buyer has completed an order for this product
+    // This prevents review spam and fake reviews
+    const orderSnapshot = await db
+      .collection("orders")
+      .where("buyerId", "==", buyerId)
+      .where("status", "==", "completed")
+      .get();
+
+    let hasPurchased = false;
+    orderSnapshot.forEach((doc) => {
+      const order = doc.data();
+      if (order.items && Array.isArray(order.items)) {
+        const hasProdItem = order.items.some((item) => item.productId === id);
+        if (hasProdItem) {
+          hasPurchased = true;
+        }
+      }
+    });
+
+    if (!hasPurchased) {
+      return res.status(403).json({
+        success: false,
+        message: "You must complete a purchase of this product to review it",
+      });
+    }
+
     // Create review document
     const review = {
       productId: id,
@@ -938,7 +964,7 @@ export const addReview = async (req, res) => {
 
     console.log("Review created with ID:", reviewDoc.id);
 
-    // Update product ratings
+    // ✅ Update product ratings (NOT soldCount - that's done in completeOrder)
     const productRef = db.collection("products").doc(id);
     const productDoc = await productRef.get();
 

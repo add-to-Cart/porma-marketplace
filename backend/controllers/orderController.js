@@ -1,7 +1,3 @@
-// ============================================
-// FIXED: orderController.js with Stock Management
-// ============================================
-
 import admin from "../config/firebaseAdmin.js";
 import { createNotification } from "./notificationController.js";
 
@@ -9,7 +5,7 @@ const db = admin.firestore();
 
 // Create an order from cart items
 export const createOrder = async (req, res) => {
-  const batch = admin.firestore().batch(); // ✅ FIXED: Use admin.firestore().batch()
+  const batch = db.batch();
 
   try {
     const {
@@ -26,8 +22,7 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // ✅ CRITICAL: Reserve stock immediately when order is created
-    // This prevents overselling before payment
+    // ✅ Reserve stock immediately when order is created
     for (const item of items) {
       const productRef = db.collection("products").doc(item.id);
       const productDoc = await productRef.get();
@@ -41,14 +36,12 @@ export const createOrder = async (req, res) => {
       const product = productDoc.data();
       const currentStock = product.stock || 0;
 
-      // Check if sufficient stock
       if (currentStock < item.quantity) {
         return res.status(400).json({
           message: `Insufficient stock for ${item.name}. Available: ${currentStock}, Requested: ${item.quantity}`,
         });
       }
 
-      // Reserve stock (subtract from available)
       batch.update(productRef, {
         stock: currentStock - item.quantity,
         reservedStock: (product.reservedStock || 0) + item.quantity,
@@ -62,7 +55,7 @@ export const createOrder = async (req, res) => {
         productId: item.id,
         productName: item.name,
         quantity: item.quantity,
-        price: item.price || item.price,
+        price: item.price,
         imageUrl: item.imageUrl,
         sellerId: item.sellerId,
         storeName: item.storeName,
@@ -71,21 +64,16 @@ export const createOrder = async (req, res) => {
       deliveryFee,
       total,
       paymentMethod: paymentMethod || "cod",
-      // Payment proof fields
       paymentProofUrl: null,
       paymentReferenceNumber: null,
       paymentProofUploadedAt: null,
       paymentVerifiedAt: null,
       paymentVerifiedBy: null,
-      // Delivery details
       deliveryDetails: deliveryDetails || {},
-      // Stock tracking
       stockReserved: true,
       stockReleased: false,
-      // Timestamps
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      // Status fields
       status: paymentMethod === "cod" ? "pending" : "awaiting_payment",
       paymentStatus: paymentMethod === "cod" ? "cod" : "pending_proof",
       deliveryStatus: "processing",
@@ -95,10 +83,9 @@ export const createOrder = async (req, res) => {
     const docRef = db.collection("orders").doc();
     batch.set(docRef, order);
 
-    // Commit all stock updates and order creation together
     await batch.commit();
 
-    // ✅ Notify sellers about new order
+    // Notify sellers about new order
     const sellers = [...new Set(items.map((i) => i.sellerId))];
     for (const sellerId of sellers) {
       const sellerItems = items.filter((i) => i.sellerId === sellerId);
@@ -130,9 +117,9 @@ export const createOrder = async (req, res) => {
   }
 };
 
-// Verify payment and confirm stock reservation
+// Verify payment and confirm/reject
 export const verifyPayment = async (req, res) => {
-  const batch = admin.firestore().batch(); // ✅ FIXED
+  const batch = db.batch();
 
   try {
     const { orderId } = req.params;
@@ -145,7 +132,6 @@ export const verifyPayment = async (req, res) => {
 
     const order = orderDoc.data();
 
-    // Check if seller owns this order
     const sellerOwnsOrder = order.items.some(
       (item) => item.sellerId === sellerId,
     );
@@ -158,7 +144,7 @@ export const verifyPayment = async (req, res) => {
     const orderRef = db.collection("orders").doc(orderId);
 
     if (verified) {
-      // ✅ Payment accepted - keep stock reserved (don't change it)
+      // ✅ Payment accepted - keep stock reserved
       batch.update(orderRef, {
         paymentStatus: "verified",
         status: "pending",
@@ -168,7 +154,6 @@ export const verifyPayment = async (req, res) => {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Notify buyer
       await createNotification(
         order.buyerId,
         "payment_verified",
@@ -187,7 +172,6 @@ export const verifyPayment = async (req, res) => {
           const currentStock = product.stock || 0;
           const reservedStock = product.reservedStock || 0;
 
-          // Return stock to available
           batch.update(productRef, {
             stock: currentStock + item.quantity,
             reservedStock: Math.max(0, reservedStock - item.quantity),
@@ -208,7 +192,6 @@ export const verifyPayment = async (req, res) => {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Notify buyer
       await createNotification(
         order.buyerId,
         "payment_rejected",
@@ -231,9 +214,9 @@ export const verifyPayment = async (req, res) => {
   }
 };
 
-// Complete order and finalize stock
+// ✅ CRITICAL FIX: Complete order and finalize stock + update soldCount
 export const completeOrder = async (req, res) => {
-  const batch = admin.firestore().batch(); // ✅ FIXED
+  const batch = db.batch();
 
   try {
     const { orderId } = req.params;
@@ -246,7 +229,7 @@ export const completeOrder = async (req, res) => {
     const order = orderDoc.data();
     const orderRef = db.collection("orders").doc(orderId);
 
-    // ✅ Finalize stock: decrement from reserved, add to soldCount
+    // ✅ Update product metrics: Move reserved stock → soldCount
     for (const item of order.items) {
       const productRef = db.collection("products").doc(item.productId);
       const productDoc = await productRef.get();
@@ -255,25 +238,26 @@ export const completeOrder = async (req, res) => {
         const product = productDoc.data();
         const reservedStock = product.reservedStock || 0;
         const currentSoldCount = product.soldCount || 0;
-        const ratings = product.ratings || [];
 
-        const ratingAverage =
-          ratings.length > 0
-            ? ratings.reduce((a, b) => a + b) / ratings.length
-            : 0;
+        console.log(`[COMPLETE ORDER] Product: ${item.productName}`);
+        console.log(
+          `[BEFORE] Reserved: ${reservedStock}, Sold: ${currentSoldCount}`,
+        );
 
-        // Update product metrics
+        // ✅ KEY UPDATE: Increment soldCount, decrement reservedStock
         batch.update(productRef, {
-          reservedStock: Math.max(0, reservedStock - item.quantity),
           soldCount: currentSoldCount + item.quantity,
-          ratingsCount: ratings.length,
-          ratingAverage: Math.round(ratingAverage * 10) / 10,
+          reservedStock: Math.max(0, reservedStock - item.quantity),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+
+        console.log(
+          `[AFTER] Reserved: ${Math.max(0, reservedStock - item.quantity)}, Sold: ${currentSoldCount + item.quantity}`,
+        );
       }
     }
 
-    // Mark order as completed
+    // Update order status
     batch.update(orderRef, {
       status: "completed",
       deliveryStatus: "delivered",
@@ -324,11 +308,6 @@ export const getBuyerOrders = async (req, res) => {
         ...data,
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
         updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
-        paymentProofUploadedAt:
-          data.paymentProofUploadedAt?.toDate?.() ||
-          data.paymentProofUploadedAt,
-        paymentVerifiedAt:
-          data.paymentVerifiedAt?.toDate?.() || data.paymentVerifiedAt,
       };
     });
 
@@ -401,7 +380,6 @@ export const updateOrderStatus = async (req, res) => {
 
     await db.collection("orders").doc(orderId).update(updates);
 
-    // Get order details to notify buyer about status change
     const doc = await db.collection("orders").doc(orderId).get();
     const order = doc.data();
 

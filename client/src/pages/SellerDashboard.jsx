@@ -469,7 +469,7 @@ export default function SellerDashboard() {
                           {product.name}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {product.sold} units sold
+                          {product.soldCount} units sold
                         </p>
                       </div>
                     </div>
@@ -510,12 +510,6 @@ export default function SellerDashboard() {
               <p className="text-xs text-gray-300">
                 {stats.pendingOrders} pending
               </p>
-            </button>
-
-            <button className="bg-white/10 hover:bg-white/20 text-white p-4 rounded-lg transition-all border border-white/20 text-left">
-              <Star size={20} className="mb-2" />
-              <p className="font-bold text-sm">Reviews</p>
-              <p className="text-xs text-gray-300">Manage feedback</p>
             </button>
           </div>
         </div>
