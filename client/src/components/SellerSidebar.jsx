@@ -5,8 +5,6 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  ShieldCheck,
-  Activity,
   User,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
@@ -38,11 +36,6 @@ export default function SellerSidebar() {
       icon: <ShoppingCart size={18} />,
       path: "/seller/orders",
     },
-    {
-      label: "PERFORMANCE",
-      icon: <BarChart3 size={18} />,
-      path: "/seller/analytics",
-    },
   ];
 
   return (
@@ -53,9 +46,6 @@ export default function SellerSidebar() {
           {/* Logo Badge */}
           <div className="flex items-center gap-3">
             <div className="p-2 shadow-[0_0_20px_rgba(245,158,11,0.15)] border border-amber-400/20">
-              {/* If you have a physical logo.png, swap the ShieldCheck for: 
-                  <img src="/logo.png" className="w-6 h-6 object-contain" alt="Logo" /> 
-              */}
               <img
                 src="/logo.png"
                 className="w-16 h-16 object-contain"

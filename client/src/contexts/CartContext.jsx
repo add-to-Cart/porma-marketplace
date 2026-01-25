@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useRef } from "react";
 import { useAuth } from "./AuthContext";
 
 const CartContext = createContext();
@@ -7,6 +7,9 @@ export const CartProvider = ({ children }) => {
   const { user } = useAuth();
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Use ref to prevent infinite loop
+  const isSavingRef = useRef(false);
 
   // Load cart from Firestore when user logs in
   useEffect(() => {
@@ -19,13 +22,28 @@ export const CartProvider = ({ children }) => {
   }, [user?.uid]);
 
   // Save to Firestore whenever cart changes (for logged-in users)
+  // FIXED: Added debouncing and prevented infinite loop
   useEffect(() => {
-    if (user?.uid && cart.length >= 0) {
-      saveCartToFirestore();
-    } else if (!user) {
-      // Save to localStorage for guests
-      localStorage.setItem("cart", JSON.stringify(cart));
+    // Don't save if we're already saving or if cart hasn't been initialized
+    if (isSavingRef.current || loading) {
+      return;
     }
+
+    // Debounce the save operation
+    const timeoutId = setTimeout(() => {
+      if (user?.uid && cart.length >= 0) {
+        saveCartToFirestore();
+      } else if (!user) {
+        // Save to localStorage for guests
+        try {
+          localStorage.setItem("cart", JSON.stringify(cart));
+        } catch (error) {
+          console.error("Failed to save to localStorage:", error);
+        }
+      }
+    }, 500); // Wait 500ms before saving
+
+    return () => clearTimeout(timeoutId);
   }, [cart, user?.uid]);
 
   const loadCartFromFirestore = async () => {
@@ -67,9 +85,19 @@ export const CartProvider = ({ children }) => {
   };
 
   const saveCartToFirestore = async () => {
+    // Prevent concurrent saves
+    if (isSavingRef.current) {
+      return;
+    }
+
+    isSavingRef.current = true;
+
     try {
       const token = localStorage.getItem("authToken");
-      if (!token || !user?.uid) return;
+      if (!token || !user?.uid) {
+        isSavingRef.current = false;
+        return;
+      }
 
       await fetch(`http://localhost:3000/cart/${user.uid}`, {
         method: "PUT",
@@ -81,6 +109,8 @@ export const CartProvider = ({ children }) => {
       });
     } catch (error) {
       console.error("Failed to save cart to Firestore:", error);
+    } finally {
+      isSavingRef.current = false;
     }
   };
 

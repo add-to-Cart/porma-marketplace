@@ -71,3 +71,32 @@ export const incrementViewCount = async (id) => {
     console.error("Failed to update view count:", err);
   }
 };
+
+export const addRating = async (productId, rating, buyerId) => {
+  const res = await api.post(`/products/${productId}/rating`, {
+    rating,
+    buyerId,
+  });
+  return res.data;
+};
+
+export const addReview = async (
+  productId,
+  rating,
+  reviewText,
+  buyerId,
+  buyerName,
+) => {
+  const res = await api.post(`/products/${productId}/review`, {
+    rating,
+    reviewText,
+    buyerId,
+    buyerName,
+  });
+  return res.data;
+};
+
+export const getProductReviews = async (productId) => {
+  const res = await api.get(`/products/${productId}/reviews`);
+  return res.data;
+};

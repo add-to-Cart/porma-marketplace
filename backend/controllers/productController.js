@@ -645,3 +645,176 @@ export const incrementViewCount = async (req, res) => {
     res.status(500).json({ message: "Failed to update view count" });
   }
 };
+
+// Add rating to a product
+export const addRating = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { rating, buyerId } = req.body;
+
+    if (!productId || rating === undefined || !buyerId) {
+      return res.status(400).json({
+        message: "Missing required fields: productId, rating, buyerId",
+      });
+    }
+
+    if (rating < 1 || rating > 5) {
+      return res
+        .status(400)
+        .json({ message: "Rating must be between 1 and 5" });
+    }
+
+    const productRef = db.collection("products").doc(productId);
+    const productDoc = await productRef.get();
+
+    if (!productDoc.exists) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    const product = productDoc.data();
+    const ratings = product.ratings || [];
+
+    // Add the new rating
+    ratings.push(rating);
+
+    // Calculate new average
+    const ratingAverage =
+      ratings.length > 0 ? ratings.reduce((a, b) => a + b) / ratings.length : 0;
+
+    // Update product with new ratings
+    await productRef.update({
+      ratings,
+      ratingsCount: ratings.length,
+      ratingAverage: Math.round(ratingAverage * 10) / 10,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const updatedDoc = await productRef.get();
+    res.json({
+      id: updatedDoc.id,
+      ...updatedDoc.data(),
+    });
+  } catch (err) {
+    console.error("Add Rating Error:", err);
+    res.status(500).json({ message: "Failed to add rating" });
+  }
+};
+
+// Replace these functions in productController.js
+
+// Get reviews for a product
+export const getProductReviews = async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    // Simple validation - just check if productId exists
+    if (!productId) {
+      return res.status(400).json({ message: "Product ID is required" });
+    }
+
+    const reviewsSnapshot = await db
+      .collection("reviews")
+      .where("productId", "==", productId)
+      .get();
+
+    const reviews = [];
+    reviewsSnapshot.forEach((doc) => {
+      const data = doc.data();
+      reviews.push({
+        id: doc.id,
+        ...data,
+        // Convert Firestore timestamp to a serializable format
+        createdAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
+      });
+    });
+
+    // Sort by createdAt in descending order
+    reviews.sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      return timeB - timeA;
+    });
+
+    // Always return an array (even if empty)
+    res.json(reviews);
+  } catch (err) {
+    console.error("Get Reviews Error:", err);
+    res
+      .status(500)
+      .json({ message: "Failed to fetch reviews", error: err.message });
+  }
+};
+
+// Add review to a product
+export const addReview = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { rating, reviewText, buyerId, buyerName } = req.body;
+
+    // Validate productId
+    if (!productId) {
+      return res.status(400).json({
+        message: "Product ID is required",
+      });
+    }
+
+    // Validate rating
+    if (!rating || typeof rating !== "number" || rating < 1 || rating > 5) {
+      return res.status(400).json({
+        message: "Rating must be a number between 1 and 5",
+      });
+    }
+
+    // Validate buyerId
+    if (!buyerId) {
+      return res.status(400).json({
+        message: "Buyer ID is required",
+      });
+    }
+
+    // Create review in reviews collection
+    const review = {
+      productId: productId,
+      buyerId: buyerId,
+      buyerName: buyerName || "Anonymous",
+      rating: Number(rating),
+      reviewText: reviewText || "",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    const reviewDoc = await db.collection("reviews").add(review);
+
+    // Also update product ratings for average calculation
+    const productRef = db.collection("products").doc(productId);
+    const productDoc = await productRef.get();
+
+    if (productDoc.exists) {
+      const product = productDoc.data();
+      const ratings = product.ratings || [];
+      ratings.push(Number(rating));
+
+      const ratingAverage =
+        ratings.length > 0
+          ? ratings.reduce((a, b) => a + b) / ratings.length
+          : 0;
+
+      await productRef.update({
+        ratings,
+        ratingsCount: ratings.length,
+        ratingAverage: Math.round(ratingAverage * 10) / 10,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    res.json({
+      id: reviewDoc.id,
+      ...review,
+      createdAt: new Date(), // Return a date object instead of FieldValue
+    });
+  } catch (err) {
+    console.error("Add Review Error:", err);
+    res
+      .status(500)
+      .json({ message: "Failed to add review", error: err.message });
+  }
+};

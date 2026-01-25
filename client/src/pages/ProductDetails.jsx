@@ -8,6 +8,7 @@ import {
   getRelatedProducts,
   getTrendingProducts,
   incrementViewCount,
+  getProductReviews,
 } from "@/api/products";
 import { createOrder } from "@/api/orders";
 import ProductCard from "@/components/ProductCard";
@@ -36,6 +37,8 @@ export default function ProductDetails() {
   const [quantity, setQuantity] = useState(1);
   const [related, setRelated] = useState([]);
   const [trending, setTrending] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
   const { addToCart } = useCart();
   const { user } = useAuth();
 
@@ -56,7 +59,7 @@ export default function ProductDetails() {
   }, [id]);
 
   useEffect(() => {
-    if (product) {
+    if (product && id) {
       getRelatedProducts(id, {
         category: product.category,
         make: product.vehicleCompatibility?.makes?.[0],
@@ -64,8 +67,27 @@ export default function ProductDetails() {
       }).then(setRelated);
 
       getTrendingProducts().then(setTrending);
+
+      // Fetch reviews for this product
+      fetchProductReviews();
     }
   }, [product, id]);
+
+  const fetchProductReviews = async () => {
+    // Only fetch if id is available
+    if (!id) return;
+
+    try {
+      setReviewsLoading(true);
+      const data = await getProductReviews(id);
+      setReviews(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Failed to fetch reviews:", err);
+      setReviews([]);
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
 
   if (loading)
     return (
@@ -428,6 +450,68 @@ export default function ProductDetails() {
               These are reviews from verified buyers who purchased this product.
             </p>
           </div>
+
+          {/* Customer Reviews */}
+          {reviews.length > 0 && (
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <h4 className="text-lg font-bold text-gray-900 mb-6">
+                Customer Reviews ({reviews.length})
+              </h4>
+              <div className="space-y-4">
+                {reviews.map((review) => (
+                  <div
+                    key={review.id}
+                    className="bg-gray-50 p-4 rounded-lg border border-gray-200"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="font-semibold text-gray-900">
+                          {review.buyerName}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <div className="flex gap-0.5">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <span
+                                key={star}
+                                className={`text-lg ${
+                                  star <= review.rating
+                                    ? "text-amber-400"
+                                    : "text-gray-300"
+                                }`}
+                              >
+                                ★
+                              </span>
+                            ))}
+                          </div>
+                          <span className="text-sm text-gray-600">
+                            {review.rating.toFixed(1)}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {review.createdAt
+                          ? new Date(
+                              review.createdAt.seconds
+                                ? review.createdAt.seconds * 1000
+                                : review.createdAt,
+                            ).toLocaleDateString("en-US", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            })
+                          : ""}
+                      </p>
+                    </div>
+                    {review.reviewText && (
+                      <p className="text-sm text-gray-700 mt-3 leading-relaxed">
+                        {review.reviewText}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

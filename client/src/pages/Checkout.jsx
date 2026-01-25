@@ -64,6 +64,18 @@ export default function Checkout() {
     }
   }, [user]);
 
+  // FIXED: Always call useEffect, condition is inside
+  useEffect(() => {
+    if (currentStep === 3) {
+      clearCart();
+      const timer = setTimeout(() => {
+        navigate("/orders");
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentStep, clearCart, navigate]);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -447,7 +459,9 @@ export default function Checkout() {
               </p>
               <ol className="list-decimal list-inside text-sm text-amber-800 space-y-1">
                 <li>Scan the QR code below using your banking app</li>
-                <li>Complete the payment of ₱{total.toLocaleString()}</li>
+                <li>
+                  Complete the payment of ₱{checkoutTotal.toLocaleString()}
+                </li>
                 <li>Take a screenshot of the confirmation</li>
                 <li>Upload screenshot and enter reference number</li>
               </ol>
@@ -474,7 +488,9 @@ export default function Checkout() {
               </div>
               <div className="text-center">
                 <p className="text-sm text-gray-600">Amount to pay:</p>
-                <p className="text-2xl font-black">₱{total.toLocaleString()}</p>
+                <p className="text-2xl font-black">
+                  ₱{checkoutTotal.toLocaleString()}
+                </p>
               </div>
             </div>
 
@@ -563,20 +579,6 @@ export default function Checkout() {
   }
 
   // Step 3: Success
-  useEffect(() => {
-    if (currentStep === 3 && formData.paymentMethod === "cod") {
-      clearCart();
-      setTimeout(() => {
-        navigate("/orders");
-      }, 3000);
-    } else if (currentStep === 3) {
-      // For online payments, don't clear cart yet, wait for verification
-      setTimeout(() => {
-        navigate("/orders");
-      }, 3000);
-    }
-  }, [currentStep, formData.paymentMethod, clearCart, navigate]);
-
   if (currentStep === 3) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
@@ -623,4 +625,6 @@ export default function Checkout() {
       </div>
     );
   }
+
+  return null;
 }

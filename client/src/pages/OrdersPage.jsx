@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { getBuyerOrders } from "@/api/orders";
+import { addReview } from "@/api/products";
 import Receipt from "@/components/Receipt";
 import {
   ChevronDown,
@@ -23,6 +24,7 @@ export default function OrdersPage() {
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [ratingOrder, setRatingOrder] = useState(null);
   const [ratingValues, setRatingValues] = useState({});
+  const [reviewTexts, setReviewTexts] = useState({});
   const [receiptOrder, setReceiptOrder] = useState(null);
 
   useEffect(() => {
@@ -44,6 +46,63 @@ export default function OrdersPage() {
       setOrders([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmitReviews = async () => {
+    try {
+      // Submit ratings for all items with ratings
+      const ratingsToSubmit = order.items?.filter(
+        (item) => ratingValues[item.productId] > 0,
+      );
+
+      if (!ratingsToSubmit || ratingsToSubmit.length === 0) {
+        toast.error("Please rate at least one product");
+        return;
+      }
+
+      // Submit each review
+      for (const item of ratingsToSubmit) {
+        try {
+          const reviewData = {
+            rating: Number(ratingValues[item.productId]),
+            reviewText: reviewTexts[item.productId] || "",
+            buyerId: user.uid,
+            buyerName: user.displayName || user.username || "Anonymous",
+          };
+
+          console.log("Submitting review:", {
+            productId: item.productId,
+            ...reviewData,
+          });
+
+          await addReview(
+            item.productId,
+            reviewData.rating,
+            reviewData.reviewText,
+            reviewData.buyerId,
+            reviewData.buyerName,
+          );
+        } catch (err) {
+          console.error(`Failed to submit review for ${item.productId}:`, err);
+          throw err; // Re-throw to be caught by outer try-catch
+        }
+      }
+
+      toast.success(
+        `${ratingsToSubmit.length} review(s) submitted successfully!`,
+      );
+      setRatingOrder(null);
+      setRatingValues({});
+      setReviewTexts({});
+      // Refresh orders to reflect updated ratings
+      fetchOrders();
+    } catch (err) {
+      console.error("Failed to submit reviews:", err);
+      toast.error(
+        err.response?.data?.message ||
+          "Failed to submit reviews. Please try again.",
+      );
     }
   };
 
@@ -328,26 +387,29 @@ export default function OrdersPage() {
                 {ratingOrder === order.id && (
                   <div className="bg-white p-4 rounded-lg border border-gray-200">
                     <p className="font-bold text-gray-900 mb-4">
-                      Rate Products
+                      Rate & Review Products
                     </p>
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                       {order.items?.map((item) => (
-                        <div key={item.id} className="flex items-center gap-4">
-                          <span className="text-sm font-semibold text-gray-900 flex-1">
-                            {item.name}
-                          </span>
-                          <div className="flex gap-1">
+                        <div
+                          key={item.productId}
+                          className="border-b pb-4 last:border-b-0 last:pb-0"
+                        >
+                          <p className="text-sm font-semibold text-gray-900 mb-3">
+                            {item.productName || item.name}
+                          </p>
+                          <div className="flex gap-1 mb-3">
                             {[1, 2, 3, 4, 5].map((star) => (
                               <button
                                 key={star}
                                 onClick={() =>
                                   setRatingValues({
                                     ...ratingValues,
-                                    [item.id]: star,
+                                    [item.productId]: star,
                                   })
                                 }
                                 className={`text-2xl transition-colors ${
-                                  (ratingValues[item.id] || 0) >= star
+                                  (ratingValues[item.productId] || 0) >= star
                                     ? "text-amber-400"
                                     : "text-gray-300"
                                 }`}
@@ -356,21 +418,33 @@ export default function OrdersPage() {
                               </button>
                             ))}
                           </div>
+                          <textarea
+                            placeholder="Share your experience with this product (optional)"
+                            value={reviewTexts[item.productId] || ""}
+                            onChange={(e) =>
+                              setReviewTexts({
+                                ...reviewTexts,
+                                [item.productId]: e.target.value,
+                              })
+                            }
+                            className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                            rows="3"
+                          />
                         </div>
                       ))}
                     </div>
                     <div className="flex gap-2 mt-4">
                       <button
-                        onClick={() => {
-                          toast.success("Ratings saved!");
-                          setRatingOrder(null);
-                        }}
+                        onClick={handleSubmitReviews}
                         className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors"
                       >
-                        Submit Ratings
+                        Submit Reviews
                       </button>
                       <button
-                        onClick={() => setRatingOrder(null)}
+                        onClick={() => {
+                          setRatingOrder(null);
+                          setReviewTexts({});
+                        }}
                         className="flex-1 bg-gray-200 text-gray-900 py-2 rounded-lg font-bold hover:bg-gray-300 transition-colors"
                       >
                         Cancel
