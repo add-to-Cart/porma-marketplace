@@ -1,8 +1,16 @@
+// ============================================
+// FIXED: orderController.js with Stock Management
+// ============================================
+
 import admin from "../config/firebaseAdmin.js";
+import { createNotification } from "./notificationController.js";
+
 const db = admin.firestore();
 
 // Create an order from cart items
 export const createOrder = async (req, res) => {
+  const batch = admin.firestore().batch(); // ✅ FIXED: Use admin.firestore().batch()
+
   try {
     const {
       buyerId,
@@ -16,6 +24,36 @@ export const createOrder = async (req, res) => {
 
     if (!buyerId || !items || items.length === 0) {
       return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    // ✅ CRITICAL: Reserve stock immediately when order is created
+    // This prevents overselling before payment
+    for (const item of items) {
+      const productRef = db.collection("products").doc(item.id);
+      const productDoc = await productRef.get();
+
+      if (!productDoc.exists) {
+        return res.status(404).json({
+          message: `Product ${item.name} not found`,
+        });
+      }
+
+      const product = productDoc.data();
+      const currentStock = product.stock || 0;
+
+      // Check if sufficient stock
+      if (currentStock < item.quantity) {
+        return res.status(400).json({
+          message: `Insufficient stock for ${item.name}. Available: ${currentStock}, Requested: ${item.quantity}`,
+        });
+      }
+
+      // Reserve stock (subtract from available)
+      batch.update(productRef, {
+        stock: currentStock - item.quantity,
+        reservedStock: (product.reservedStock || 0) + item.quantity,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
     }
 
     const order = {
@@ -41,6 +79,9 @@ export const createOrder = async (req, res) => {
       paymentVerifiedBy: null,
       // Delivery details
       deliveryDetails: deliveryDetails || {},
+      // Stock tracking
+      stockReserved: true,
+      stockReleased: false,
       // Timestamps
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -51,7 +92,33 @@ export const createOrder = async (req, res) => {
       buyerNotified: false,
     };
 
-    const docRef = await db.collection("orders").add(order);
+    const docRef = db.collection("orders").doc();
+    batch.set(docRef, order);
+
+    // Commit all stock updates and order creation together
+    await batch.commit();
+
+    // ✅ Notify sellers about new order
+    const sellers = [...new Set(items.map((i) => i.sellerId))];
+    for (const sellerId of sellers) {
+      const sellerItems = items.filter((i) => i.sellerId === sellerId);
+      const sellerTotal = sellerItems.reduce(
+        (sum, i) => sum + i.price * i.quantity,
+        0,
+      );
+
+      await createNotification(
+        sellerId,
+        "order_confirmed",
+        "New Order Received",
+        `You have a new order #${docRef.id.slice(-8).toUpperCase()} for ₱${sellerTotal.toLocaleString()}`,
+        {
+          orderId: docRef.id,
+          buyerId,
+          itemCount: sellerItems.length,
+        },
+      );
+    }
 
     res.json({
       id: docRef.id,
@@ -63,61 +130,10 @@ export const createOrder = async (req, res) => {
   }
 };
 
-// Upload payment proof with reference number
-export const uploadPaymentProof = async (req, res) => {
-  try {
-    const { orderId } = req.params;
-    const { paymentProofUrl, referenceNumber } = req.body;
-
-    if (!paymentProofUrl) {
-      return res
-        .status(400)
-        .json({ message: "Payment proof image is required" });
-    }
-
-    if (!referenceNumber || !referenceNumber.trim()) {
-      return res
-        .status(400)
-        .json({ message: "Transaction reference number is required" });
-    }
-
-    const orderDoc = await db.collection("orders").doc(orderId).get();
-    if (!orderDoc.exists) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    const order = orderDoc.data();
-
-    // Only allow uploads for online payment methods
-    if (order.paymentMethod === "cod") {
-      return res.status(400).json({
-        message: "Cannot upload payment proof for Cash on Delivery orders",
-      });
-    }
-
-    // Update the order with payment proof
-    await db.collection("orders").doc(orderId).update({
-      paymentProofUrl,
-      paymentReferenceNumber: referenceNumber.trim(),
-      paymentProofUploadedAt: admin.firestore.FieldValue.serverTimestamp(),
-      paymentStatus: "pending_verification",
-      status: "payment_submitted",
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    const updatedDoc = await db.collection("orders").doc(orderId).get();
-    res.json({
-      id: updatedDoc.id,
-      ...updatedDoc.data(),
-    });
-  } catch (err) {
-    console.error("Upload Payment Proof Error:", err);
-    res.status(500).json({ message: "Failed to upload payment proof" });
-  }
-};
-
-// Seller verifies payment (accepts or rejects)
+// Verify payment and confirm stock reservation
 export const verifyPayment = async (req, res) => {
+  const batch = admin.firestore().batch(); // ✅ FIXED
+
   try {
     const { orderId } = req.params;
     const { verified, sellerId, rejectionReason } = req.body;
@@ -139,32 +155,70 @@ export const verifyPayment = async (req, res) => {
         .json({ message: "Unauthorized to verify this order" });
     }
 
+    const orderRef = db.collection("orders").doc(orderId);
+
     if (verified) {
-      // Payment accepted
-      await db.collection("orders").doc(orderId).update({
+      // ✅ Payment accepted - keep stock reserved (don't change it)
+      batch.update(orderRef, {
         paymentStatus: "verified",
-        status: "pending", // Order now ready for processing
+        status: "pending",
         paymentVerifiedAt: admin.firestore.FieldValue.serverTimestamp(),
         paymentVerifiedBy: sellerId,
-        buyerNotified: false, // Will trigger notification
+        buyerNotified: false,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      // Notify buyer
+      await createNotification(
+        order.buyerId,
+        "payment_verified",
+        "Payment Confirmed",
+        `Your payment of ₱${order.total.toLocaleString()} has been confirmed. Your order is being prepared.`,
+        { orderId },
+      );
     } else {
-      // Payment rejected
-      await db
-        .collection("orders")
-        .doc(orderId)
-        .update({
-          paymentStatus: "rejected",
-          status: "payment_rejected",
-          paymentRejectionReason:
-            rejectionReason || "Payment could not be verified",
-          paymentRejectedAt: admin.firestore.FieldValue.serverTimestamp(),
-          paymentRejectedBy: sellerId,
-          buyerNotified: false,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+      // ✅ Payment rejected - RELEASE reserved stock back
+      for (const item of order.items) {
+        const productRef = db.collection("products").doc(item.productId);
+        const productDoc = await productRef.get();
+
+        if (productDoc.exists) {
+          const product = productDoc.data();
+          const currentStock = product.stock || 0;
+          const reservedStock = product.reservedStock || 0;
+
+          // Return stock to available
+          batch.update(productRef, {
+            stock: currentStock + item.quantity,
+            reservedStock: Math.max(0, reservedStock - item.quantity),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      batch.update(orderRef, {
+        paymentStatus: "rejected",
+        status: "payment_rejected",
+        paymentRejectionReason:
+          rejectionReason || "Payment could not be verified",
+        paymentRejectedAt: admin.firestore.FieldValue.serverTimestamp(),
+        paymentRejectedBy: sellerId,
+        stockReleased: true,
+        buyerNotified: false,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      // Notify buyer
+      await createNotification(
+        order.buyerId,
+        "payment_rejected",
+        "Payment Rejected",
+        `Your payment could not be verified. Reason: ${rejectionReason || "Payment not found"}. Stock has been released.`,
+        { orderId },
+      );
     }
+
+    await batch.commit();
 
     const updatedDoc = await db.collection("orders").doc(orderId).get();
     res.json({
@@ -174,6 +228,81 @@ export const verifyPayment = async (req, res) => {
   } catch (err) {
     console.error("Verify Payment Error:", err);
     res.status(500).json({ message: "Failed to verify payment" });
+  }
+};
+
+// Complete order and finalize stock
+export const completeOrder = async (req, res) => {
+  const batch = admin.firestore().batch(); // ✅ FIXED
+
+  try {
+    const { orderId } = req.params;
+
+    const orderDoc = await db.collection("orders").doc(orderId).get();
+    if (!orderDoc.exists) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    const order = orderDoc.data();
+    const orderRef = db.collection("orders").doc(orderId);
+
+    // ✅ Finalize stock: decrement from reserved, add to soldCount
+    for (const item of order.items) {
+      const productRef = db.collection("products").doc(item.productId);
+      const productDoc = await productRef.get();
+
+      if (productDoc.exists) {
+        const product = productDoc.data();
+        const reservedStock = product.reservedStock || 0;
+        const currentSoldCount = product.soldCount || 0;
+        const ratings = product.ratings || [];
+
+        const ratingAverage =
+          ratings.length > 0
+            ? ratings.reduce((a, b) => a + b) / ratings.length
+            : 0;
+
+        // Update product metrics
+        batch.update(productRef, {
+          reservedStock: Math.max(0, reservedStock - item.quantity),
+          soldCount: currentSoldCount + item.quantity,
+          ratingsCount: ratings.length,
+          ratingAverage: Math.round(ratingAverage * 10) / 10,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    // Mark order as completed
+    batch.update(orderRef, {
+      status: "completed",
+      deliveryStatus: "delivered",
+      paymentStatus:
+        order.paymentMethod === "cod" ? "cod_completed" : "verified_completed",
+      completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      stockReleased: true,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    // Notify buyer
+    await createNotification(
+      order.buyerId,
+      "order_delivered",
+      "Order Delivered",
+      `Your order #${orderId.slice(-8).toUpperCase()} has been delivered successfully!`,
+      { orderId },
+    );
+
+    const updatedDoc = await db.collection("orders").doc(orderId).get();
+    res.json({
+      id: updatedDoc.id,
+      ...updatedDoc.data(),
+    });
+  } catch (err) {
+    console.error("Complete Order Error:", err);
+    res.status(500).json({ message: "Failed to complete order" });
   }
 };
 
@@ -210,7 +339,7 @@ export const getBuyerOrders = async (req, res) => {
   }
 };
 
-// Get seller's orders (orders for products they sell)
+// Get seller's orders
 export const getSellerOrders = async (req, res) => {
   try {
     const { sellerId } = req.params;
@@ -220,14 +349,12 @@ export const getSellerOrders = async (req, res) => {
     let sellerOrders = [];
     snapshot.forEach((doc) => {
       const order = { id: doc.id, ...doc.data() };
-      // Filter orders that contain items from this seller
       order.items = order.items.filter((item) => item.sellerId === sellerId);
       if (order.items.length > 0) {
         sellerOrders.push(order);
       }
     });
 
-    // Sort by date
     sellerOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     res.json(sellerOrders);
@@ -258,7 +385,7 @@ export const getOrder = async (req, res) => {
   }
 };
 
-// Update order status (seller can update delivery status)
+// Update order status
 export const updateOrderStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -274,7 +401,20 @@ export const updateOrderStatus = async (req, res) => {
 
     await db.collection("orders").doc(orderId).update(updates);
 
+    // Get order details to notify buyer about status change
     const doc = await db.collection("orders").doc(orderId).get();
+    const order = doc.data();
+
+    if (deliveryStatus === "shipped") {
+      await createNotification(
+        order.buyerId,
+        "order_shipped",
+        "Order Shipped",
+        `Your order #${orderId.slice(-8).toUpperCase()} has been shipped!`,
+        { orderId, deliveryStatus },
+      );
+    }
+
     res.json({
       id: doc.id,
       ...doc.data(),
@@ -285,10 +425,23 @@ export const updateOrderStatus = async (req, res) => {
   }
 };
 
-// Complete order and update product ratings/soldCount
-export const completeOrder = async (req, res) => {
+// Upload payment proof
+export const uploadPaymentProof = async (req, res) => {
   try {
     const { orderId } = req.params;
+    const { paymentProofUrl, referenceNumber } = req.body;
+
+    if (!paymentProofUrl) {
+      return res
+        .status(400)
+        .json({ message: "Payment proof image is required" });
+    }
+
+    if (!referenceNumber || !referenceNumber.trim()) {
+      return res
+        .status(400)
+        .json({ message: "Transaction reference number is required" });
+    }
 
     const orderDoc = await db.collection("orders").doc(orderId).get();
     if (!orderDoc.exists) {
@@ -297,42 +450,20 @@ export const completeOrder = async (req, res) => {
 
     const order = orderDoc.data();
 
-    // Update product soldCount and compute rating averages
-    for (const item of order.items) {
-      const productRef = db.collection("products").doc(item.productId);
-      const productDoc = await productRef.get();
-
-      if (productDoc.exists) {
-        const product = productDoc.data();
-        const newSoldCount = (product.soldCount || 0) + item.quantity;
-        const ratings = product.ratings || [];
-        const ratingAverage =
-          ratings.length > 0
-            ? ratings.reduce((a, b) => a + b) / ratings.length
-            : 0;
-
-        await productRef.update({
-          soldCount: newSoldCount,
-          ratingsCount: ratings.length,
-          ratingAverage: Math.round(ratingAverage * 10) / 10,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
+    if (order.paymentMethod === "cod") {
+      return res.status(400).json({
+        message: "Cannot upload payment proof for Cash on Delivery orders",
+      });
     }
 
-    // Mark order as completed
-    await db
-      .collection("orders")
-      .doc(orderId)
-      .update({
-        status: "completed",
-        deliveryStatus: "delivered",
-        paymentStatus:
-          order.paymentMethod === "cod"
-            ? "cod_completed"
-            : "verified_completed",
-        completedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+    await db.collection("orders").doc(orderId).update({
+      paymentProofUrl,
+      paymentReferenceNumber: referenceNumber.trim(),
+      paymentProofUploadedAt: admin.firestore.FieldValue.serverTimestamp(),
+      paymentStatus: "pending_verification",
+      status: "payment_submitted",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
 
     const updatedDoc = await db.collection("orders").doc(orderId).get();
     res.json({
@@ -340,7 +471,7 @@ export const completeOrder = async (req, res) => {
       ...updatedDoc.data(),
     });
   } catch (err) {
-    console.error("Complete Order Error:", err);
-    res.status(500).json({ message: "Failed to complete order" });
+    console.error("Upload Payment Proof Error:", err);
+    res.status(500).json({ message: "Failed to upload payment proof" });
   }
 };

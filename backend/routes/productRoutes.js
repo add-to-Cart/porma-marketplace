@@ -15,6 +15,10 @@ import {
   addRating,
   addReview,
   getProductReviews,
+  checkProductStock,
+  checkMultipleStock,
+  getProductStockStatus,
+  getSellerInventoryStatus,
 } from "../controllers/productController.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -28,16 +32,25 @@ router.get("/deals", getDealsProducts);
 router.get("/tags", getProductsByTag);
 router.get("/seller/:sellerId", getProductsBySeller);
 
-// Specific :id routes (must be before generic /:id route)
-router.get("/:id/related", getRelatedProducts);
+// CRITICAL: Specific :id routes MUST come before generic /:id route
+// Review routes - THESE MUST BE BEFORE /:id
 router.get("/:id/reviews", getProductReviews);
-router.patch("/:id/view", incrementViewCount);
-router.post("/:id/rating", addRating);
 router.post("/:id/review", addReview);
 
-// Generic product CRUD (must be last)
+// Other specific :id routes
+router.get("/:id/related", getRelatedProducts);
+router.patch("/:id/view", incrementViewCount);
+router.post("/:id/rating", addRating);
+
+// Generic product CRUD (MUST BE LAST)
 router.get("/:id", getProductById);
 router.post("/", upload.single("image"), createProduct);
 router.patch("/:id", upload.single("image"), updateProduct);
+
+// Stock management routes
+router.get("/:id/stock", checkProductStock);
+router.post("/check-stock", checkMultipleStock);
+router.get("/:id/stock-status", getProductStockStatus);
+router.get("/seller/:sellerId/inventory", getSellerInventoryStatus);
 
 export default router;

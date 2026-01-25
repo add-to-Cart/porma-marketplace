@@ -52,14 +52,22 @@ export default function SellerDashboard() {
     try {
       setLoading(true);
 
+      console.log("Fetching seller data for:", user.uid);
+
       // Fetch orders and products in parallel
       const [ordersData, productsData] = await Promise.all([
         getSellerOrders(user.uid),
         getProductsBySeller(user.uid),
       ]);
 
+      console.log("Raw orders data:", ordersData);
+      console.log("Raw products data:", productsData);
+
       const sanitizedOrders = Array.isArray(ordersData) ? ordersData : [];
       const sanitizedProducts = Array.isArray(productsData) ? productsData : [];
+
+      console.log("Sanitized orders:", sanitizedOrders.length);
+      console.log("Sanitized products:", sanitizedProducts.length);
 
       setOrders(sanitizedOrders);
       setProducts(sanitizedProducts);
@@ -75,41 +83,79 @@ export default function SellerDashboard() {
   };
 
   const calculateStats = (ordersData, productsData) => {
-    // Calculate total sales from completed orders
-    const completedOrders = ordersData.filter((o) => o.status === "completed");
-    const totalSales = completedOrders.reduce(
-      (sum, order) => sum + (order.total || 0),
-      0,
-    );
+    console.log("Calculating stats from:", {
+      ordersCount: ordersData.length,
+      productsCount: productsData.length,
+    });
 
-    // Calculate pending orders (awaiting payment verification)
-    const pendingOrders = ordersData.filter(
-      (o) =>
-        o.paymentStatus === "pending_verification" || o.status === "pending",
-    ).length;
+    // CRITICAL FIX: Use Set.add() instead of .push()
+    let totalSales = 0;
+    let totalOrders = ordersData.length;
+    let pendingOrders = 0;
+    let thisMonthSales = 0;
+    const uniqueCustomers = new Set(); // ✅ Use Set for unique customers
 
-    // Calculate this month's sales
     const now = new Date();
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const thisMonthOrders = completedOrders.filter((order) => {
-      const orderDate =
-        order.completedAt?.toDate?.() ||
-        new Date(order.completedAt || order.createdAt);
-      return orderDate >= thisMonthStart;
-    });
-    const thisMonthSales = thisMonthOrders.reduce(
-      (sum, order) => sum + (order.total || 0),
-      0,
-    );
 
-    // Get unique customers
-    const uniqueCustomers = new Set(ordersData.map((o) => o.buyerId)).size;
+    ordersData.forEach((order) => {
+      // Count unique customers - use .add() for Set
+      if (order.buyerId) {
+        uniqueCustomers.add(order.buyerId); // ✅ FIXED: Use .add() not .push()
+      }
+
+      // Calculate this seller's portion of the order
+      let sellerOrderTotal = 0;
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach((item) => {
+          if (item.sellerId === user.uid) {
+            const itemTotal = (item.price || 0) * (item.quantity || 0);
+            sellerOrderTotal += itemTotal;
+          }
+        });
+      }
+
+      console.log("Order", order.id, "seller total:", sellerOrderTotal);
+
+      // Add to total sales if completed or verified
+      if (order.status === "completed" || order.paymentStatus === "verified") {
+        totalSales += sellerOrderTotal;
+
+        // Check if this month
+        const orderDate =
+          order.completedAt?.toDate?.() ||
+          order.paymentVerifiedAt?.toDate?.() ||
+          new Date(order.completedAt || order.createdAt);
+
+        if (orderDate >= thisMonthStart) {
+          thisMonthSales += sellerOrderTotal;
+        }
+      }
+
+      // Count pending orders
+      if (
+        order.paymentStatus === "pending_verification" ||
+        order.status === "pending" ||
+        order.status === "payment_submitted"
+      ) {
+        pendingOrders++;
+      }
+    });
+
+    console.log("Calculated totals:", {
+      totalSales,
+      totalOrders,
+      pendingOrders,
+      thisMonthSales,
+      uniqueCustomerCount: uniqueCustomers.size, // ✅ Get size from Set
+    });
 
     // Calculate total views and average rating from products
     const totalViews = productsData.reduce(
       (sum, p) => sum + (p.viewCount || 0),
       0,
     );
+
     const productsWithRatings = productsData.filter((p) => p.ratingsCount > 0);
     const avgRating =
       productsWithRatings.length > 0
@@ -119,16 +165,20 @@ export default function SellerDashboard() {
           ) / productsWithRatings.length
         : 0;
 
-    setStats({
+    const calculatedStats = {
       totalSales,
-      totalOrders: ordersData.length,
+      totalOrders,
       totalProducts: productsData.length,
       pendingOrders,
       avgRating: Math.round(avgRating * 10) / 10,
       totalViews,
-      totalCustomers: uniqueCustomers,
+      totalCustomers: uniqueCustomers.size, // ✅ FIXED: Use .size not .length
       thisMonthSales,
-    });
+    };
+
+    console.log("Final stats:", calculatedStats);
+
+    setStats(calculatedStats);
   };
 
   const calculateSalesData = () => {
@@ -154,18 +204,33 @@ export default function SellerDashboard() {
       const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
       const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
 
-      const monthOrders = orders.filter((order) => {
-        if (order.status !== "completed") return false;
+      let monthSales = 0;
+
+      orders.forEach((order) => {
+        // Only count completed or verified orders
+        if (
+          order.status !== "completed" &&
+          order.paymentStatus !== "verified"
+        ) {
+          return;
+        }
+
         const orderDate =
           order.completedAt?.toDate?.() ||
+          order.paymentVerifiedAt?.toDate?.() ||
           new Date(order.completedAt || order.createdAt);
-        return orderDate >= monthStart && orderDate <= monthEnd;
-      });
 
-      const monthSales = monthOrders.reduce(
-        (sum, order) => sum + (order.total || 0),
-        0,
-      );
+        if (orderDate >= monthStart && orderDate <= monthEnd) {
+          // Calculate seller's portion
+          if (order.items && Array.isArray(order.items)) {
+            order.items.forEach((item) => {
+              if (item.sellerId === user.uid) {
+                monthSales += (item.price || 0) * (item.quantity || 0);
+              }
+            });
+          }
+        }
+      });
 
       last5Months.push({
         month: monthNames[date.getMonth()],
@@ -173,6 +238,7 @@ export default function SellerDashboard() {
       });
     }
 
+    console.log("Sales data by month:", last5Months);
     setSalesData(last5Months);
   };
 
@@ -187,6 +253,7 @@ export default function SellerDashboard() {
         revenue: (product.soldCount || 0) * (product.price || 0),
       }));
 
+    console.log("Top products:", sorted);
     setTopProducts(sorted);
   };
 
@@ -215,6 +282,16 @@ export default function SellerDashboard() {
           </p>
         </div>
 
+        {/* Debug Info - Remove in production */}
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs">
+          <p>
+            <strong>Debug Info:</strong>
+          </p>
+          <p>Total Orders: {orders.length}</p>
+          <p>Total Products: {products.length}</p>
+          <p>Calculated Sales: ₱{stats.totalSales.toLocaleString()}</p>
+        </div>
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Total Sales */}
@@ -231,7 +308,7 @@ export default function SellerDashboard() {
             <p className="text-3xl font-black">
               ₱{stats.totalSales.toLocaleString()}
             </p>
-            <p className="text-blue-100 text-xs mt-2">From completed orders</p>
+            <p className="text-blue-100 text-xs mt-2">From verified orders</p>
           </div>
 
           {/* Total Orders */}
@@ -351,7 +428,7 @@ export default function SellerDashboard() {
                       <div className="flex-1 h-8 bg-gray-100 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-end pr-3"
-                          style={{ width: `${percentage}%` }}
+                          style={{ width: `${Math.max(percentage, 5)}%` }}
                         >
                           {item.sales > 0 && (
                             <span className="text-xs font-bold text-white">
@@ -434,14 +511,7 @@ export default function SellerDashboard() {
                 {stats.pendingOrders} pending
               </p>
             </button>
-            <button
-              onClick={() => (window.location.href = "/seller/analytics")}
-              className="bg-white/10 hover:bg-white/20 text-white p-4 rounded-lg transition-all border border-white/20 text-left"
-            >
-              <TrendingUp size={20} className="mb-2" />
-              <p className="font-bold text-sm">Analytics</p>
-              <p className="text-xs text-gray-300">View details</p>
-            </button>
+
             <button className="bg-white/10 hover:bg-white/20 text-white p-4 rounded-lg transition-all border border-white/20 text-left">
               <Star size={20} className="mb-2" />
               <p className="font-bold text-sm">Reviews</p>

@@ -20,7 +20,7 @@ import Cart from "@/pages/Cart";
 import Checkout from "@/pages/Checkout";
 import SellerDashboard from "@/pages/SellerDashboard";
 import SellerOrdersPage from "@/pages/SellerOrdersPage";
-import AnalyticsPage from "@/pages/AnalyticsPage";
+
 import OrdersPage from "@/pages/OrdersPage";
 import SellerAccount from "@/pages/SellerAccount";
 import SellerApplication from "@/pages/SellerApplication";
@@ -69,7 +69,7 @@ export default function AppRoutes() {
         <Route path="/seller/dashboard" element={<SellerDashboard />} />
         <Route path="/seller/product" element={<InventoryPage />} />
         <Route path="/seller/orders" element={<SellerOrdersPage />} />
-        <Route path="/seller/analytics" element={<AnalyticsPage />} />
+
         <Route path="/seller/account" element={<SellerAccount />} />
       </Route>
 

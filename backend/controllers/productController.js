@@ -2,6 +2,12 @@ import admin from "../config/firebaseAdmin.js";
 const db = admin.firestore();
 import { uploadProductImage } from "../services/cloudinary_service.js";
 import { getTrendingProducts as calculateTrendingProducts } from "../utils/trendingAlgorithm.js";
+import {
+  checkStockAvailability,
+  checkMultipleProductsStock,
+  getStockStatus,
+  getSellerStockStatus,
+} from "../utils/stockManagement.js";
 
 // Helper function to populate seller information for products
 const populateSellerInfo = async (products) => {
@@ -700,6 +706,95 @@ export const incrementViewCount = async (req, res) => {
     res.status(500).json({ message: "Failed to update view count" });
   }
 };
+/**
+ * Check stock availability for a single product
+ */
+export const checkProductStock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { quantity = 1 } = req.query;
+
+    const result = await checkStockAvailability(id, parseInt(quantity));
+
+    if (!result.available) {
+      return res.status(400).json(result);
+    }
+
+    res.json({
+      productId: id,
+      ...result,
+    });
+  } catch (err) {
+    console.error("Check stock error:", err);
+    res.status(500).json({ message: "Failed to check stock" });
+  }
+};
+
+/**
+ * Check stock for multiple products at once
+ */
+export const checkMultipleStock = async (req, res) => {
+  try {
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: "Items array is required" });
+    }
+
+    const result = await checkMultipleProductsStock(items);
+
+    res.json(result);
+  } catch (err) {
+    console.error("Check multiple stock error:", err);
+    res.status(500).json({ message: "Failed to check stock" });
+  }
+};
+
+/**
+ * Get detailed stock status for a product
+ */
+export const getProductStockStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const status = await getStockStatus(id);
+
+    if (!status) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    res.json(status);
+  } catch (err) {
+    console.error("Get stock status error:", err);
+    res.status(500).json({ message: "Failed to get stock status" });
+  }
+};
+
+/**
+ * Get stock status for all seller's products
+ */
+export const getSellerInventoryStatus = async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+
+    if (!sellerId) {
+      return res.status(400).json({ message: "Seller ID is required" });
+    }
+
+    const inventory = await getSellerStockStatus(sellerId);
+
+    res.json({
+      sellerId,
+      totalProducts: inventory.length,
+      outOfStockCount: inventory.filter((p) => p.isOutOfStock).length,
+      lowStockCount: inventory.filter((p) => p.isLowStock).length,
+      products: inventory,
+    });
+  } catch (err) {
+    console.error("Get inventory status error:", err);
+    res.status(500).json({ message: "Failed to get inventory status" });
+  }
+};
 
 export const addRating = async (req, res) => {
   try {
@@ -753,15 +848,21 @@ export const addRating = async (req, res) => {
 
 export const getProductReviews = async (req, res) => {
   try {
-    const { productId } = req.params;
+    const { id } = req.params; // Changed from productId to id to match route
 
-    if (!productId) {
-      return res.status(400).json({ message: "Product ID is required" });
+    console.log("Getting reviews for product ID:", id);
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Product ID is required",
+      });
     }
 
     const reviewsSnapshot = await db
       .collection("reviews")
-      .where("productId", "==", productId)
+      .where("productId", "==", id)
+      .orderBy("createdAt", "desc")
       .get();
 
     const reviews = [];
@@ -774,46 +875,56 @@ export const getProductReviews = async (req, res) => {
       });
     });
 
-    reviews.sort((a, b) => {
-      const timeA = new Date(a.createdAt).getTime();
-      const timeB = new Date(b.createdAt).getTime();
-      return timeB - timeA;
-    });
+    console.log(`Found ${reviews.length} reviews for product ${id}`);
 
     res.json(reviews);
   } catch (err) {
     console.error("Get Reviews Error:", err);
-    res
-      .status(500)
-      .json({ message: "Failed to fetch reviews", error: err.message });
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch reviews",
+      error: err.message,
+    });
   }
 };
 
 export const addReview = async (req, res) => {
   try {
-    const { productId } = req.params;
+    const { id } = req.params; // Changed from productId to id to match route
     const { rating, reviewText, buyerId, buyerName } = req.body;
 
-    if (!productId) {
+    console.log("Adding review:", {
+      productId: id,
+      rating,
+      reviewText,
+      buyerId,
+      buyerName,
+    });
+
+    if (!id) {
       return res.status(400).json({
+        success: false,
         message: "Product ID is required",
       });
     }
 
     if (!rating || typeof rating !== "number" || rating < 1 || rating > 5) {
       return res.status(400).json({
+        success: false,
         message: "Rating must be a number between 1 and 5",
       });
     }
 
     if (!buyerId) {
       return res.status(400).json({
+        success: false,
         message: "Buyer ID is required",
       });
     }
 
+    // Create review document
     const review = {
-      productId: productId,
+      productId: id,
       buyerId: buyerId,
       buyerName: buyerName || "Anonymous",
       rating: Number(rating),
@@ -821,9 +932,14 @@ export const addReview = async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
+    console.log("Creating review document:", review);
+
     const reviewDoc = await db.collection("reviews").add(review);
 
-    const productRef = db.collection("products").doc(productId);
+    console.log("Review created with ID:", reviewDoc.id);
+
+    // Update product ratings
+    const productRef = db.collection("products").doc(id);
     const productDoc = await productRef.get();
 
     if (productDoc.exists) {
@@ -842,17 +958,25 @@ export const addReview = async (req, res) => {
         ratingAverage: Math.round(ratingAverage * 10) / 10,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      console.log("Product ratings updated:", {
+        ratingsCount: ratings.length,
+        ratingAverage: Math.round(ratingAverage * 10) / 10,
+      });
     }
 
     res.json({
+      success: true,
       id: reviewDoc.id,
       ...review,
       createdAt: new Date(),
     });
   } catch (err) {
     console.error("Add Review Error:", err);
-    res
-      .status(500)
-      .json({ message: "Failed to add review", error: err.message });
+    res.status(500).json({
+      success: false,
+      message: "Failed to add review",
+      error: err.message,
+    });
   }
 };

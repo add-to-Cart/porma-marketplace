@@ -26,6 +26,7 @@ export default function OrdersPage() {
   const [ratingValues, setRatingValues] = useState({});
   const [reviewTexts, setReviewTexts] = useState({});
   const [receiptOrder, setReceiptOrder] = useState(null);
+  const [submittingReviews, setSubmittingReviews] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -49,60 +50,66 @@ export default function OrdersPage() {
     }
   };
 
-  const handleSubmitReviews = async () => {
+  const handleSubmitReviews = async (order) => {
     try {
-      // Submit ratings for all items with ratings
-      const ratingsToSubmit = order.items?.filter(
+      // Get items with ratings
+      const itemsWithRatings = order.items?.filter(
         (item) => ratingValues[item.productId] > 0,
       );
 
-      if (!ratingsToSubmit || ratingsToSubmit.length === 0) {
+      if (!itemsWithRatings || itemsWithRatings.length === 0) {
         toast.error("Please rate at least one product");
         return;
       }
 
+      setSubmittingReviews(true);
+
       // Submit each review
-      for (const item of ratingsToSubmit) {
+      let successCount = 0;
+      for (const item of itemsWithRatings) {
         try {
-          const reviewData = {
-            rating: Number(ratingValues[item.productId]),
-            reviewText: reviewTexts[item.productId] || "",
+          const rating = Number(ratingValues[item.productId]);
+          const reviewText = reviewTexts[item.productId] || "";
+
+          console.log("Submitting review for product:", item.productId, {
+            rating,
+            reviewText,
             buyerId: user.uid,
             buyerName: user.displayName || user.username || "Anonymous",
-          };
-
-          console.log("Submitting review:", {
-            productId: item.productId,
-            ...reviewData,
           });
 
           await addReview(
             item.productId,
-            reviewData.rating,
-            reviewData.reviewText,
-            reviewData.buyerId,
-            reviewData.buyerName,
+            rating,
+            reviewText,
+            user.uid,
+            user.displayName || user.username || "Anonymous",
           );
+
+          successCount++;
         } catch (err) {
           console.error(`Failed to submit review for ${item.productId}:`, err);
-          throw err; // Re-throw to be caught by outer try-catch
+          toast.error(
+            `Failed to submit review for ${item.productName || item.name}`,
+          );
         }
       }
 
-      toast.success(
-        `${ratingsToSubmit.length} review(s) submitted successfully!`,
-      );
-      setRatingOrder(null);
-      setRatingValues({});
-      setReviewTexts({});
-      // Refresh orders to reflect updated ratings
-      fetchOrders();
+      if (successCount > 0) {
+        toast.success(
+          `${successCount} review${successCount > 1 ? "s" : ""} submitted successfully!`,
+        );
+        setRatingOrder(null);
+        setRatingValues({});
+        setReviewTexts({});
+        // Refresh orders to reflect updated ratings
+        fetchOrders();
+      }
     } catch (err) {
       console.error("Failed to submit reviews:", err);
-      toast.error(
-        err.response?.data?.message ||
-          "Failed to submit reviews. Please try again.",
-      );
+      toast.error("Failed to submit reviews. Please try again.");
+    } finally {
+      setSubmittingReviews(false);
     }
   };
 
@@ -344,10 +351,12 @@ export default function OrdersPage() {
                             <button
                               onClick={() => {
                                 setRatingOrder(order.id);
-                                setRatingValues({
-                                  ...ratingValues,
-                                  [item.id]: ratingValues[item.id] || 0,
-                                });
+                                if (!ratingValues[item.productId]) {
+                                  setRatingValues((prev) => ({
+                                    ...prev,
+                                    [item.productId]: 0,
+                                  }));
+                                }
                               }}
                               className="text-blue-600 font-bold text-sm hover:text-blue-700 flex items-center gap-1"
                             >
@@ -435,17 +444,19 @@ export default function OrdersPage() {
                     </div>
                     <div className="flex gap-2 mt-4">
                       <button
-                        onClick={handleSubmitReviews}
-                        className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors"
+                        onClick={() => handleSubmitReviews(order)}
+                        disabled={submittingReviews}
+                        className="flex-1 bg-blue-600 text-white py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        Submit Reviews
+                        {submittingReviews ? "Submitting..." : "Submit Reviews"}
                       </button>
                       <button
                         onClick={() => {
                           setRatingOrder(null);
                           setReviewTexts({});
                         }}
-                        className="flex-1 bg-gray-200 text-gray-900 py-2 rounded-lg font-bold hover:bg-gray-300 transition-colors"
+                        disabled={submittingReviews}
+                        className="flex-1 bg-gray-200 text-gray-900 py-2 rounded-lg font-bold hover:bg-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Cancel
                       </button>

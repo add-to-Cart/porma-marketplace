@@ -10,7 +10,11 @@ import {
   incrementViewCount,
   getProductReviews,
 } from "@/api/products";
-import { createOrder } from "@/api/orders";
+import {
+  useStockCheck,
+  StockBadge,
+  StockCheckOverlay,
+} from "@/hooks/useStockCheck"; // ✅ ADD THIS
 import ProductCard from "@/components/ProductCard";
 import Rating from "@/components/Rating";
 import {
@@ -43,8 +47,13 @@ export default function ProductDetails() {
   const { addToCart } = useCart();
   const { user } = useAuth();
 
-  // SOLUTION 1: Use ref to track if view has been counted
+  // ✅ ADD THIS: Stock management
+  const { checkStock } = useStockCheck();
+  const [availableStock, setAvailableStock] = useState(0);
+
+  // CRITICAL FIX: Use ref to track if view has been counted
   const viewCounted = useRef(false);
+  const productIdRef = useRef(null);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -52,11 +61,15 @@ export default function ProductDetails() {
         const data = await getProductById(id);
         setProduct(data);
 
-        // CRITICAL FIX: Only increment view count ONCE
-        // Check if view hasn't been counted yet
+        // CRITICAL FIX: Only increment view count ONCE per product
+        if (productIdRef.current !== id) {
+          productIdRef.current = id;
+          viewCounted.current = false;
+        }
+
         if (!viewCounted.current) {
           await incrementViewCount(id);
-          viewCounted.current = true; // Mark as counted
+          viewCounted.current = true;
         }
       } catch (err) {
         console.error("Error fetching product:", err);
@@ -65,10 +78,17 @@ export default function ProductDetails() {
       }
     };
 
-    // Reset the ref when product ID changes
-    viewCounted.current = false;
     fetchProduct();
   }, [id]);
+
+  // ✅ ADD THIS: Check stock when product loads
+  useEffect(() => {
+    if (product?.id) {
+      checkStock(product.id, 1).then((result) => {
+        setAvailableStock(result.availableStock || product.stock || 0);
+      });
+    }
+  }, [product?.id, checkStock]);
 
   useEffect(() => {
     if (product && id) {
@@ -113,19 +133,17 @@ export default function ProductDetails() {
     );
 
   const isUniversal = product.vehicleCompatibility?.isUniversalFit;
-  // Fallback check for compatibility data
   const hasCompatibilityData =
     product.vehicleCompatibility?.type ||
     (product.vehicleCompatibility?.makes &&
       product.vehicleCompatibility.makes.length > 0) ||
     (product.vehicleCompatibility?.models &&
       product.vehicleCompatibility.models.length > 0);
-  // Logic for expandable reviews
   const reviewsToShow = showAllReviews ? reviews : reviews.slice(0, 3);
 
   return (
     <div className="max-w-[1200px] mx-auto p-4 md:p-6 lg:pt-10">
-      {/* 1. Slim Breadcrumbs */}
+      {/* Breadcrumbs */}
       <nav className="flex items-center gap-2 text-[11px] uppercase tracking-wider font-bold text-gray-400 mb-6">
         <Link to="/" className="hover:text-blue-600">
           Marketplace
@@ -135,7 +153,7 @@ export default function ProductDetails() {
       </nav>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
-        {/* 2. Media Section */}
+        {/* Media Section */}
         <div className="lg:col-span-6">
           <div className="sticky top-28 bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
             <div className="aspect-square rounded-xl overflow-hidden bg-gray-50 flex items-center justify-center">
@@ -148,7 +166,7 @@ export default function ProductDetails() {
           </div>
         </div>
 
-        {/* 3. Buying Section */}
+        {/* Product Info Section */}
         <div className="lg:col-span-6 flex flex-col">
           <div className="flex flex-col gap-2">
             <div>
@@ -183,6 +201,15 @@ export default function ProductDetails() {
               </span>
             </div>
 
+            {/* ✅ ADD THIS: Stock Badge */}
+            <div className="mt-3">
+              <StockBadge
+                stock={availableStock}
+                isLowStock={availableStock < 5 && availableStock > 0}
+                isOutOfStock={availableStock === 0}
+              />
+            </div>
+
             {/* Metadata Display */}
             <div className="grid grid-cols-3 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-100 my-4">
               <div className="text-center">
@@ -213,7 +240,6 @@ export default function ProductDetails() {
               </div>
             </div>
 
-            {/* FIX: Rating Details Fallback */}
             <div className="text-sm text-gray-600 mb-4">
               {product.ratingsCount && product.ratingsCount > 0 ? (
                 <>
@@ -242,7 +268,7 @@ export default function ProductDetails() {
             )}
 
             {product.isBundle && (
-              <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-purple-600 bg-purple-50 px-2 py-1">
+              <span className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-purple-600 bg-purple-50 px-2 py-1 w-fit">
                 <ListChecks size={10} /> Bundle Pack
               </span>
             )}
@@ -260,12 +286,11 @@ export default function ProductDetails() {
               </div>
             )}
 
-            {/* Rating */}
             <Rating
               productId={product.id}
               averageRating={product.ratingAverage || 0}
               numRatings={product.ratingsCount || 0}
-              readOnly={true} // Add this if your Rating component supports it
+              readOnly={true}
             />
           </div>
 
@@ -348,6 +373,13 @@ export default function ProductDetails() {
             )}
           </div>
 
+          {/* ✅ ADD THIS: Stock Check Overlay */}
+          <StockCheckOverlay
+            quantity={quantity}
+            availableStock={availableStock}
+            onQuantityChange={setQuantity}
+          />
+
           {/* Quantity and Actions */}
           <div className="space-y-3 mb-8">
             {user?.uid === product.sellerId ? (
@@ -356,6 +388,11 @@ export default function ProductDetails() {
                   ⚠️ This is your product. You cannot purchase your own items.
                 </p>
               </div>
+            ) : availableStock === 0 ? (
+              // ✅ UPDATED: Out of stock button
+              <div className="w-full h-12 bg-gray-400 text-white rounded-lg font-bold flex items-center justify-center text-sm cursor-not-allowed shadow-md">
+                ❌ Out of Stock
+              </div>
             ) : (
               <>
                 <div className="flex items-center gap-3">
@@ -363,6 +400,7 @@ export default function ProductDetails() {
                     <button
                       onClick={() => setQuantity(Math.max(1, quantity - 1))}
                       className="px-3 hover:bg-gray-50"
+                      disabled={availableStock === 0}
                     >
                       <Minus size={14} />
                     </button>
@@ -370,14 +408,26 @@ export default function ProductDetails() {
                       {quantity}
                     </span>
                     <button
-                      onClick={() => setQuantity(quantity + 1)}
+                      onClick={() =>
+                        setQuantity(Math.min(availableStock, quantity + 1))
+                      }
                       className="px-3 hover:bg-gray-50"
+                      disabled={quantity >= availableStock}
                     >
                       <Plus size={14} />
                     </button>
                   </div>
                   <button
-                    onClick={() => addToCart({ ...product, quantity })}
+                    onClick={() => {
+                      if (quantity > availableStock) {
+                        toast.error(`Only ${availableStock} item(s) available`);
+                        return;
+                      }
+                      addToCart({ ...product, quantity });
+                      toast.success(`Added ${quantity} item(s) to cart`, {
+                        icon: "🛒",
+                      });
+                    }}
                     className="flex-grow h-12 bg-gray-900 text-white rounded-lg font-bold hover:bg-black transition-all flex items-center justify-center gap-2 text-sm"
                   >
                     <ShoppingCart size={18} />
@@ -392,6 +442,11 @@ export default function ProductDetails() {
                       return;
                     }
 
+                    if (quantity > availableStock) {
+                      toast.error(`Only ${availableStock} item(s) available`);
+                      return;
+                    }
+
                     navigate("/checkout", {
                       state: {
                         quickCheckout: {
@@ -401,12 +456,13 @@ export default function ProductDetails() {
                       },
                     });
                   }}
-                  className="w-full h-12 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-all text-sm mt-2"
+                  className="w-full h-12 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-all text-sm"
                 >
                   Buy Now
                 </button>
               </>
             )}
+
             {/* Trust Factors */}
             <div className="grid grid-cols-2 gap-4 pt-6 border-t border-gray-100">
               <div className="flex gap-3 items-center">
@@ -471,9 +527,10 @@ export default function ProductDetails() {
                           ))}
                         </div>
                         <p className="text-sm text-gray-700 font-medium leading-relaxed">
-                          "{review.comment}"
+                          "{review.reviewText || review.comment}"
                         </p>
                         <div className="mt-3 text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                          <span>{review.buyerName || "Anonymous"}</span>
                           <CheckCircle2
                             size={10}
                             className="text-emerald-500"
@@ -491,12 +548,13 @@ export default function ProductDetails() {
                       >
                         {showAllReviews ? (
                           <>
-                            Show Fewer Reviews <ChevronUp size={16} />
+                            Show Fewer Reviews{" "}
+                            <ChevronLeft size={16} className="rotate-90" />
                           </>
                         ) : (
                           <>
                             Show All {reviews.length} Reviews{" "}
-                            <ChevronDown size={16} />
+                            <ChevronLeft size={16} className="-rotate-90" />
                           </>
                         )}
                       </button>

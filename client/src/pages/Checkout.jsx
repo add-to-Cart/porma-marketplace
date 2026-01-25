@@ -32,7 +32,6 @@ export default function Checkout() {
   const [referenceNumber, setReferenceNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Handle quick checkout from Buy Now button
   useEffect(() => {
     if (location.state?.quickCheckout) {
       const { product, quantity } = location.state.quickCheckout;
@@ -51,9 +50,9 @@ export default function Checkout() {
       setCheckoutDeliveryFee(deliveryFee);
       setCheckoutTotal(total);
     }
-  }, [location.state, cart, subtotal, deliveryFee, total]);
+  }, [location.state?.quickCheckout, cart, subtotal, deliveryFee, total]); // ✅ Proper dependencies
 
-  // Load user data into form
+  // ✅ FIXED: Load user data into form - Only once
   useEffect(() => {
     if (user) {
       setFormData((prev) => ({
@@ -62,9 +61,9 @@ export default function Checkout() {
         email: user.email || "",
       }));
     }
-  }, [user]);
+  }, [user?.uid]); // ✅ Dependency on user.uid, not user object
 
-  // FIXED: Always call useEffect, condition is inside
+  // ✅ FIXED: Handle step 3 completion - Only trigger once per step change
   useEffect(() => {
     if (currentStep === 3) {
       clearCart();
@@ -74,7 +73,7 @@ export default function Checkout() {
 
       return () => clearTimeout(timer);
     }
-  }, [currentStep, clearCart, navigate]);
+  }, [currentStep]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

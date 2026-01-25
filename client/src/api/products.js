@@ -123,7 +123,7 @@ export const addRating = async (productId, rating, buyerId) => {
 };
 
 /**
- * Add review to product
+ * Add review to product - FIXED VERSION
  */
 export const addReview = async (
   productId,
@@ -132,19 +132,46 @@ export const addReview = async (
   buyerId,
   buyerName,
 ) => {
-  const res = await api.post(`/products/${productId}/review`, {
-    rating,
-    reviewText,
-    buyerId,
-    buyerName,
-  });
-  return res.data;
+  try {
+    console.log("API call to add review:", {
+      productId,
+      rating,
+      reviewText,
+      buyerId,
+      buyerName,
+    });
+
+    const res = await api.post(`/products/${productId}/review`, {
+      rating: Number(rating),
+      reviewText: reviewText || "",
+      buyerId,
+      buyerName: buyerName || "Anonymous",
+    });
+
+    console.log("Review API response:", res.data);
+    return res.data;
+  } catch (error) {
+    console.error("Review API error:", error.response?.data || error);
+    throw error;
+  }
 };
 
 /**
- * Get reviews for a product
+ * Get reviews for a product - FIXED VERSION
  */
 export const getProductReviews = async (productId) => {
-  const res = await api.get(`/products/${productId}/reviews`);
-  return res.data;
+  try {
+    console.log("Fetching reviews for product:", productId);
+
+    if (!productId) {
+      throw new Error("Product ID is required");
+    }
+
+    const res = await api.get(`/products/${productId}/reviews`);
+    console.log("Reviews API response:", res.data);
+    return res.data;
+  } catch (error) {
+    console.error("Get reviews API error:", error.response?.data || error);
+    throw error;
+  }
 };

@@ -26,23 +26,18 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
   const [imageFile, setImageFile] = useState(null);
 
   const CATEGORIES = [
-    "Accessories",
-    "Body",
-    "Body Parts",
-    "Brakes",
-    "Electronics",
-    "Engine",
-    "Interior",
-    "Lighting",
-    "Maintenance",
-    "Performance",
-    "Protection",
-    "Rims",
-    "Storage",
-    "Suspension",
-    "Tools",
-    "Transmission",
+    "Braking Systems",
+    "Drivetrain & Transmission",
+    "Engine & Performance",
+    "Exhaust Systems",
+    "Suspension & Steering",
     "Wheels & Tires",
+    "Body & Fairings",
+    "Lighting & Electrical",
+    "Maintenance & Care",
+    "Tools & Garage",
+    "Rider Gear & Apparel",
+    "Accessories & Luggage",
   ];
 
   const VEHICLE_DATA = {
@@ -85,11 +80,12 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
 
   const [formData, setFormData] = useState({
     name: "",
-    category: "",
+    categories: [],
     description: "",
     price: "",
     stock: "1",
-    isUniversalFit: false,
+    isUniversalFit: false, // Global Universal
+    isUniversalMake: false, // Universal for specific Type
     isSeasonal: false,
     seasonalCategory: "",
     compareAtPrice: "",
@@ -231,6 +227,14 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
       models: prev.models?.includes(modelName)
         ? prev.models.filter((m) => m !== modelName)
         : [...(prev.models || []), modelName],
+    }));
+  };
+  const toggleCategory = (cat) => {
+    setFormData((prev) => ({
+      ...prev,
+      categories: prev.categories.includes(cat)
+        ? prev.categories.filter((c) => c !== cat)
+        : [...prev.categories, cat],
     }));
   };
 
@@ -451,22 +455,24 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
               <div className="grid grid-cols-2 gap-8">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">
-                    Category
+                    Categories (Select Multiple)
                   </label>
-                  <select
-                    required
-                    name="category"
-                    value={formData.category}
-                    onChange={handleChange}
-                    className="w-full border-b-2 border-zinc-100 p-2 text-xs font-bold outline-none bg-transparent"
-                  >
-                    <option value="">-- SELECT CLASSIFICATION --</option>
+                  <div className="flex flex-wrap gap-2">
                     {CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat.toUpperCase()}
-                      </option>
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => toggleCategory(cat)}
+                        className={`px-3 py-1 text-[10px] border-2 font-bold uppercase transition-all ${
+                          formData.categories.includes(cat)
+                            ? "bg-zinc-900 text-white border-zinc-900"
+                            : "bg-white text-zinc-400 border-zinc-100"
+                        }`}
+                      >
+                        {cat}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-zinc-400 tracking-widest">
@@ -531,7 +537,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
 
           {/* VEHICLE COMPATIBILITY MATRIX */}
           <div className="border-t-2 border-zinc-900 border-dashed pt-10">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">
                 <div className="p-1.5 bg-zinc-900 text-amber-500">
                   <Truck size={14} />
@@ -541,27 +547,41 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                 </h3>
               </div>
 
-              {formData.vehicleType &&
-                formData.vehicleType !== "GENERAL / ALL TYPES" && (
-                  <div className="flex items-center gap-3 bg-zinc-50 px-4 py-2 border-2 border-zinc-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+              <div className="flex flex-wrap gap-3">
+                {/* Global Universal Toggle */}
+                <div className="flex items-center gap-3 bg-zinc-50 px-4 py-2 border-2 border-zinc-900 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+                  <input
+                    type="checkbox"
+                    name="isUniversalFit"
+                    checked={formData.isUniversalFit}
+                    onChange={handleChange}
+                    className="w-4 h-4 accent-zinc-900 cursor-pointer"
+                  />
+                  <span className="text-[10px] font-black uppercase tracking-widest">
+                    Universal (All Vehicles)
+                  </span>
+                </div>
+
+                {/* Type-Specific Universal Toggle */}
+                {formData.vehicleType && formData.vehicleType !== "" && (
+                  <div className="flex items-center gap-3 bg-zinc-50 px-4 py-2 border-2 border-zinc-900 shadow-[4px_4px_0px_0px_rgba(245,158,11,1)]">
                     <input
                       type="checkbox"
-                      name="isUniversalFit"
-                      checked={formData.isUniversalFit}
+                      name="isUniversalMake"
+                      checked={formData.isUniversalMake}
                       onChange={handleChange}
                       className="w-4 h-4 accent-zinc-900 cursor-pointer"
                     />
                     <span className="text-[10px] font-black uppercase tracking-widest">
-                      Universal Fitment
+                      Fits all {formData.vehicleType}s
                     </span>
                   </div>
                 )}
+              </div>
             </div>
 
             {!formData.isUniversalFit && (
               <div className="space-y-8">
-                {" "}
-                {/* Changed to a vertical stack for better flow */}
                 {/* ROW 1: Type and Year Range */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
@@ -574,7 +594,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                       onChange={handleChange}
                       className="w-full border-2 border-zinc-100 p-3 text-[10px] font-black uppercase outline-none focus:border-zinc-900"
                     >
-                      <option value="">GENERAL / ALL TYPES</option>
+                      <option value="">SELECT TYPE</option>
                       {Object.keys(VEHICLE_DATA).map((v) => (
                         <option key={v} value={v}>
                           {v}
@@ -607,69 +627,74 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
                     </div>
                   </div>
                 </div>
-                {/* ROW 2: Makes */}
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black text-zinc-400 uppercase">
-                    Brands / Makes (Select Multiple)
-                  </label>
-                  <div className="flex flex-wrap gap-2 p-4 bg-zinc-50 border-2 border-zinc-100">
-                    {formData.vehicleType &&
-                      VEHICLE_DATA[formData.vehicleType] &&
-                      Object.keys(VEHICLE_DATA[formData.vehicleType]).map(
-                        (make) => {
-                          const isActive = formData.vehicleMake.includes(make);
-                          return (
-                            <button
-                              key={make}
-                              type="button"
-                              onClick={() => toggleMake(make)}
-                              className={`px-4 py-2 text-xs border-2 uppercase font-black transition-all ${
-                                isActive
-                                  ? "bg-zinc-900 text-white border-zinc-900 shadow-[4px_4px_0px_0px_rgba(245,158,11,1)]"
-                                  : "bg-white text-zinc-900 border-zinc-200 hover:border-zinc-900"
-                              }`}
-                            >
-                              {make}
-                            </button>
-                          );
-                        },
-                      )}
-                  </div>
-                </div>
-                {/* ROW 3: Models */}
-                {formData.vehicleMake.length > 0 && (
+
+                {/* ROW 2: Makes (Hidden if Type-Universal or Global-Universal) */}
+                {!formData.isUniversalMake && formData.vehicleType && (
                   <div className="space-y-2">
                     <label className="text-[9px] font-black text-zinc-400 uppercase">
-                      Specific Models
+                      Brands / Makes (Select Multiple)
                     </label>
-                    <div className="flex flex-wrap gap-2">
-                      {formData.vehicleMake.map((make) =>
-                        VEHICLE_DATA[formData.vehicleType][make]?.map(
-                          (model) => {
-                            const active = formData.models?.includes(model);
+                    <div className="flex flex-wrap gap-2 p-4 bg-zinc-50 border-2 border-zinc-100">
+                      {VEHICLE_DATA[formData.vehicleType] &&
+                        Object.keys(VEHICLE_DATA[formData.vehicleType]).map(
+                          (make) => {
+                            const isActive =
+                              formData.vehicleMake?.includes(make);
                             return (
                               <button
-                                key={model}
+                                key={make}
                                 type="button"
-                                onClick={() => toggleModel(model)}
-                                className={`px-3 py-1 text-[10px] border-2 uppercase font-bold transition-all ${
-                                  active
-                                    ? "bg-amber-500 text-zinc-900 border-zinc-900"
-                                    : "bg-zinc-100 text-zinc-400 border-transparent hover:border-zinc-200"
+                                onClick={() => toggleMake(make)}
+                                className={`px-4 py-2 text-xs border-2 uppercase font-black transition-all ${
+                                  isActive
+                                    ? "bg-zinc-900 text-white border-zinc-900 shadow-[4px_4px_0px_0px_rgba(245,158,11,1)]"
+                                    : "bg-white text-zinc-900 border-zinc-200 hover:border-zinc-900"
                                 }`}
                               >
-                                <span className="opacity-50 mr-1 text-[8px]">
-                                  {make}
-                                </span>{" "}
-                                {model}
+                                {make}
                               </button>
                             );
                           },
-                        ),
-                      )}
+                        )}
                     </div>
                   </div>
                 )}
+
+                {/* ROW 3: Models (Hidden if Type-Universal or Global-Universal) */}
+                {!formData.isUniversalMake &&
+                  formData.vehicleMake?.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-zinc-400 uppercase">
+                        Specific Models
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {formData.vehicleMake.map((make) =>
+                          VEHICLE_DATA[formData.vehicleType][make]?.map(
+                            (model) => {
+                              const active = formData.models?.includes(model);
+                              return (
+                                <button
+                                  key={model}
+                                  type="button"
+                                  onClick={() => toggleModel(model)}
+                                  className={`px-3 py-1 text-[10px] border-2 uppercase font-bold transition-all ${
+                                    active
+                                      ? "bg-amber-500 text-zinc-900 border-zinc-900"
+                                      : "bg-zinc-100 text-zinc-400 border-transparent hover:border-zinc-200"
+                                  }`}
+                                >
+                                  <span className="opacity-50 mr-1 text-[8px]">
+                                    {make}
+                                  </span>{" "}
+                                  {model}
+                                </button>
+                              );
+                            },
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  )}
               </div>
             )}
           </div>

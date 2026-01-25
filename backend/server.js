@@ -4,6 +4,7 @@ import authRoutes from "./routes/authRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import testRoutes from "./routes/testRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 
 import cors from "cors";
 
@@ -28,6 +29,7 @@ app.use("/products", productRoutes);
 app.use("/auth", authRoutes);
 app.use("/orders", orderRoutes);
 app.use("/cart", cartRoutes);
+app.use("/notifications", notificationRoutes);
 app.use("/test", testRoutes);
 
 app.listen(PORT, () => {

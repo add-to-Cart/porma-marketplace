@@ -6,10 +6,13 @@ import { FilterProvider } from "@/contexts/FilterContext";
 import { SearchProvider } from "@/contexts/SearchContext.jsx";
 import { CartProvider } from "@/contexts/CartContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 
 createRoot(document.getElementById("root")).render(
-  <StrictMode>
-    <AuthProvider>
+  <AuthProvider>
+    <NotificationProvider>
+      {" "}
+      {/* ✅ ADD THIS */}
       <SearchProvider>
         <FilterProvider>
           <CartProvider>
@@ -17,6 +20,6 @@ createRoot(document.getElementById("root")).render(
           </CartProvider>
         </FilterProvider>
       </SearchProvider>
-    </AuthProvider>
-  </StrictMode>,
+    </NotificationProvider>
+  </AuthProvider>,
 );
