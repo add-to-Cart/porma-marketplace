@@ -27,7 +27,14 @@ export default function SellerAccount() {
     accountName: "",
     qrCodeFile: null,
     qrCodePreview: null,
+    bankQrCodeFile: null,
+    bankQrCodePreview: null,
+    avatarFile: null,
   });
+
+  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState(null);
 
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -49,8 +56,11 @@ export default function SellerAccount() {
         accountNumber: paymentDetails.bank?.accountNumber || "",
         accountName: paymentDetails.bank?.accountName || "",
         qrCodeFile: null,
-        qrCodePreview: paymentDetails.qrCodeUrl || null,
+        qrCodePreview: paymentDetails.gcash?.qrCodeUrl || null,
+        bankQrCodeFile: null,
+        bankQrCodePreview: paymentDetails.bank?.qrCodeUrl || null,
       });
+      setAvatarUrl(user.sellerAvatarUrl || null);
     } else if (
       user?.sellerApplication &&
       user.sellerApplication.status === "pending"
@@ -70,7 +80,10 @@ export default function SellerAccount() {
         accountName: paymentDetails.bank?.accountName || "",
         qrCodeFile: null,
         qrCodePreview: paymentDetails.qrCodeUrl || null,
+        bankQrCodeFile: null,
+        bankQrCodePreview: paymentDetails.bank?.qrCodeUrl || null,
       });
+      setAvatarUrl(user.sellerAvatarUrl || null);
     }
   }, [user]);
 
@@ -121,12 +134,66 @@ export default function SellerAccount() {
     }
   };
 
+  const handleBankQRUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        setErrors((prev) => ({
+          ...prev,
+          bankQrCode: "Please upload an image file",
+        }));
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        setErrors((prev) => ({
+          ...prev,
+          bankQrCode: "File size must be less than 5MB",
+        }));
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData((prev) => ({
+          ...prev,
+          bankQrCodeFile: file,
+          bankQrCodePreview: reader.result,
+        }));
+      };
+      reader.readAsDataURL(file);
+
+      if (errors.bankQrCode) {
+        setErrors((prev) => ({ ...prev, bankQrCode: "" }));
+      }
+    }
+  };
+
   const removeQRCode = () => {
     setFormData((prev) => ({
       ...prev,
       qrCodeFile: null,
       qrCodePreview: null,
     }));
+  };
+
+  const removeBankQRCode = () => {
+    setFormData((prev) => ({
+      ...prev,
+      bankQrCodeFile: null,
+      bankQrCodePreview: null,
+    }));
+  };
+
+  const handleAvatarUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setFormData((prev) => ({
+        ...prev,
+        avatarFile: file,
+      }));
+      setAvatarPreview(URL.createObjectURL(file)); // Added
+    }
   };
 
   const validateForm = () => {
@@ -190,6 +257,21 @@ export default function SellerAccount() {
         return;
       }
 
+      // Upload avatar if selected
+      let avatarUrl = null;
+      if (formData.avatarFile) {
+        const avatarResponse = await authAPI.uploadSellerAvatar(
+          token,
+          formData.avatarFile,
+        );
+        if (avatarResponse.success) {
+          avatarUrl = avatarResponse.url;
+        } else {
+          toast.error("Failed to upload avatar");
+          return;
+        }
+      }
+
       // Create FormData for file upload
       const formDataToSend = new FormData();
       formDataToSend.append("storeName", formData.storeName.trim());
@@ -209,9 +291,17 @@ export default function SellerAccount() {
         formDataToSend.append("accountName", formData.accountName.trim());
       }
 
-      // Append QR code file
+      // Append avatar URL if uploaded
+      if (avatarUrl) {
+        formDataToSend.append("avatarUrl", avatarUrl);
+      }
+
+      // Append QR code files
       if (formData.qrCodeFile) {
-        formDataToSend.append("qrCode", formData.qrCodeFile);
+        formDataToSend.append("gcashQr", formData.qrCodeFile);
+      }
+      if (formData.bankQrCodeFile) {
+        formDataToSend.append("bankQr", formData.bankQrCodeFile);
       }
 
       console.log("Submitting seller application...");
@@ -221,26 +311,12 @@ export default function SellerAccount() {
         console.log(pair[0], pair[1]);
       }
 
-      // Determine which API to use
-      const isApprovedSeller = user.role === "seller";
-      const hasPendingApplication =
-        user.sellerApplication?.status === "pending";
-
-      let response;
-      if (isApprovedSeller) {
-        // Update approved seller profile
-        response = await authAPI.updateSellerProfile(token, formDataToSend);
-      } else if (hasPendingApplication) {
-        // Update pending application
-        response = await authAPI.updateSellerApplication(token, formDataToSend);
-      } else {
-        toast.error("No seller profile or application found");
-        return;
-      }
+      // Update seller profile
+      const response = await authAPI.updateSellerProfile(token, formDataToSend);
 
       if (response.success) {
         toast.success(
-          isApprovedSeller
+          user.role === "seller"
             ? "Seller profile updated successfully!"
             : "Application updated successfully!",
         );
@@ -270,6 +346,42 @@ export default function SellerAccount() {
                 ? "Manage your seller profile and payment information"
                 : "Update your seller application details"}
             </p>
+          </div>
+
+          {/* Avatar Section */}
+          <div className="flex flex-col items-center gap-4 p-6 bg-gray-50 border-b border-gray-200">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Seller Avatar"
+                className="w-28 h-28 rounded-full object-cover border-4 border-white shadow-lg"
+              />
+            ) : (
+              <div className="w-28 h-28 rounded-full bg-gray-200 border-4 border-white shadow-lg flex items-center justify-center text-gray-500 text-sm font-medium">
+                No Avatar
+              </div>
+            )}
+            <div className="flex flex-col items-center gap-2">
+              <label
+                htmlFor="seller-avatar-upload"
+                className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-md cursor-pointer transition duration-200"
+              >
+                {avatarLoading
+                  ? "Uploading..."
+                  : formData.avatarFile
+                    ? "Avatar Selected"
+                    : avatarUrl
+                      ? "Change Avatar"
+                      : "Select Avatar"}
+              </label>
+              <input
+                id="seller-avatar-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                className="hidden"
+              />
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
@@ -531,7 +643,8 @@ export default function SellerAccount() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Payment QR Code *
+                  {formData.paymentMethod === "gcash" ? "GCash" : "Bank"} QR
+                  Code *
                 </label>
                 <p className="text-sm text-gray-600 mb-3">
                   Upload your{" "}
@@ -539,7 +652,9 @@ export default function SellerAccount() {
                   code so buyers can easily send payments
                 </p>
 
-                {!formData.qrCodePreview ? (
+                {!(formData.paymentMethod === "gcash"
+                  ? formData.qrCodePreview
+                  : formData.bankQrCodePreview) ? (
                   <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-all">
                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                       <Upload className="w-12 h-12 mb-3 text-gray-400" />
@@ -555,19 +670,31 @@ export default function SellerAccount() {
                       type="file"
                       className="hidden"
                       accept="image/*"
-                      onChange={handleQRUpload}
+                      onChange={
+                        formData.paymentMethod === "gcash"
+                          ? handleQRUpload
+                          : handleBankQRUpload
+                      }
                     />
                   </label>
                 ) : (
                   <div className="relative">
                     <img
-                      src={formData.qrCodePreview}
+                      src={
+                        formData.paymentMethod === "gcash"
+                          ? formData.qrCodePreview
+                          : formData.bankQrCodePreview
+                      }
                       alt="QR Code Preview"
                       className="w-full max-w-sm mx-auto rounded-lg border-2 border-gray-200"
                     />
                     <button
                       type="button"
-                      onClick={removeQRCode}
+                      onClick={
+                        formData.paymentMethod === "gcash"
+                          ? removeQRCode
+                          : removeBankQRCode
+                      }
                       className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 transition-colors shadow-lg"
                     >
                       <X size={20} />

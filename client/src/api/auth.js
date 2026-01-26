@@ -72,6 +72,19 @@ export const authAPI = {
     return data;
   },
 
+  updateSellerProfile: async (token, formData) => {
+    const response = await fetch(`${API_BASE}/seller/profile`, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+    return data;
+  },
+
   uploadAvatar: async (token, file) => {
     const formData = new FormData();
     formData.append("avatar", file);
@@ -191,6 +204,18 @@ export const authAPI = {
       body: JSON.stringify({ reason }),
     });
 
+    const data = await response.json();
+    return data;
+  },
+
+  uploadSellerAvatar: async (token, file) => {
+    const formData = new FormData();
+    formData.append("avatar", file);
+    const response = await fetch(`${API_BASE}/seller/avatar`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
     const data = await response.json();
     return data;
   },

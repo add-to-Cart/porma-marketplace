@@ -169,22 +169,47 @@ export default function ProductDetails() {
         {/* Product Info Section */}
         <div className="lg:col-span-6 flex flex-col">
           <div className="flex flex-col gap-2">
-            <div>
+            <div className="space-y-4">
+              {/* Title */}
               <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900">
                 {product.name}
               </h1>
-              <div className="text-sm text-gray-600 mt-1">
-                Sold by:{" "}
-                {product.storeName ? (
-                  <Link
-                    to={product.owner ? `/seller/${product.owner}` : "#"}
-                    className="text-blue-600 font-bold hover:underline"
-                  >
-                    {product.storeName}
-                  </Link>
+
+              {/* Seller Info Row - The Layout Fix */}
+              <div className="flex items-center gap-3">
+                {/* Avatar / Placeholder */}
+                {product.sellerAvatarUrl ? (
+                  <img
+                    src={product.sellerAvatarUrl}
+                    alt="Seller Avatar"
+                    className="w-10 h-10 rounded-full object-cover border border-blue-100"
+                  />
                 ) : (
-                  <span className="font-medium">Unknown Seller</span>
+                  <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
+                    <span className="text-xs font-bold text-blue-600 uppercase">
+                      {product.storeName?.charAt(0)}
+                    </span>
+                  </div>
                 )}
+
+                {/* Text Details */}
+                <div className="flex flex-col">
+                  <span className="text-[10px] uppercase tracking-wider text-gray-400 font-bold leading-none">
+                    Sold by
+                  </span>
+                  {product.storeName ? (
+                    <Link
+                      to={product.owner ? `/seller/${product.owner}` : "#"}
+                      className="text-sm text-blue-600 font-bold hover:underline mt-1"
+                    >
+                      {product.storeName}
+                    </Link>
+                  ) : (
+                    <span className="text-sm font-medium text-gray-600">
+                      Unknown Seller
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -514,28 +539,45 @@ export default function ProductDetails() {
                         key={review.id}
                         className="bg-white p-5 border-l-4 border-zinc-900 shadow-sm transition-all"
                       >
-                        <div className="flex text-amber-400 text-xs mb-2 pointer-events-none">
-                          {[...Array(5)].map((_, i) => (
-                            <span
-                              key={i}
-                              className={
-                                i < review.rating ? "opacity-100" : "opacity-20"
-                              }
-                            >
-                              ★
-                            </span>
-                          ))}
-                        </div>
-                        <p className="text-sm text-gray-700 font-medium leading-relaxed">
-                          "{review.reviewText || review.comment}"
-                        </p>
-                        <div className="mt-3 text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                          <span>{review.buyerName || "Anonymous"}</span>
-                          <CheckCircle2
-                            size={10}
-                            className="text-emerald-500"
-                          />{" "}
-                          Verified Purchase
+                        <div className="flex items-start gap-3">
+                          {review.buyerAvatarUrl ? (
+                            <img
+                              src={review.buyerAvatarUrl}
+                              alt="Buyer Avatar"
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-bold text-gray-600">
+                              {review.buyerName?.charAt(0).toUpperCase() || "A"}
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            <div className="flex text-amber-400 text-xs mb-2 pointer-events-none">
+                              {[...Array(5)].map((_, i) => (
+                                <span
+                                  key={i}
+                                  className={
+                                    i < review.rating
+                                      ? "opacity-100"
+                                      : "opacity-20"
+                                  }
+                                >
+                                  ★
+                                </span>
+                              ))}
+                            </div>
+                            <p className="text-sm text-gray-700 font-medium leading-relaxed">
+                              "{review.reviewText || review.comment}"
+                            </p>
+                            <div className="mt-3 text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                              <span>{review.buyerName || "Anonymous"}</span>
+                              <CheckCircle2
+                                size={10}
+                                className="text-emerald-500"
+                              />{" "}
+                              Verified Purchase
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}

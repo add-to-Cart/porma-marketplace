@@ -19,6 +19,8 @@ export default function ProfilePage() {
   const [zipCode, setZipCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [avatarPreview, setAvatarPreview] = useState(null);
 
   useEffect(() => {
     if (user) {
@@ -34,25 +36,11 @@ export default function ProfilePage() {
     }
   }, [user]);
 
-  const handleAvatarUpload = async (e) => {
+  const handleAvatarUpload = (e) => {
     const file = e.target.files[0];
-    if (!file) return;
-
-    setAvatarLoading(true);
-    try {
-      const token = localStorage.getItem("authToken");
-      const response = await authAPI.uploadAvatar(token, file);
-      if (response.success) {
-        setAvatarUrl(response.url);
-        await refreshProfile();
-        toast.success("Avatar uploaded!");
-      } else {
-        toast.error("Failed to upload avatar.");
-      }
-    } catch (error) {
-      toast.error("Failed to upload avatar.");
-    } finally {
-      setAvatarLoading(false);
+    if (file) {
+      setAvatarFile(file);
+      setAvatarPreview(URL.createObjectURL(file)); // Added
     }
   };
 
@@ -72,6 +60,20 @@ export default function ProfilePage() {
 
     setLoading(true);
     try {
+      let uploadedAvatarUrl = avatarUrl;
+
+      // Upload avatar if selected
+      if (avatarFile) {
+        const token = localStorage.getItem("authToken");
+        const response = await authAPI.uploadAvatar(token, avatarFile);
+        if (response.success) {
+          uploadedAvatarUrl = response.url;
+        } else {
+          toast.error("Failed to upload avatar");
+          return;
+        }
+      }
+
       const data = {
         username: username.trim(),
         birthday: birthday.trim(),
@@ -80,6 +82,7 @@ export default function ProfilePage() {
         barangay: barangay.trim(),
         city: city.trim(),
         province: province.trim(),
+        avatarUrl: uploadedAvatarUrl,
         zipCode: zipCode.trim(),
       };
       const res = await updateProfile(data);
@@ -101,11 +104,17 @@ export default function ProfilePage() {
       <h2 className="text-2xl font-semibold mb-8">Edit Profile</h2>
 
       <div className="flex flex-col md:flex-row gap-10">
-        <div className="flex flex-col items-center md:items-start gap-4">
-          {avatarUrl ? (
+        <div className="flex flex-col items-center gap-4 mb-6">
+          {avatarPreview ? (
+            <img
+              src={avatarPreview}
+              alt="Avatar Preview"
+              className="w-28 h-28 rounded-full object-cover border shadow-sm"
+            />
+          ) : avatarUrl ? (
             <img
               src={avatarUrl}
-              alt="Avatar"
+              alt="Current Avatar"
               className="w-28 h-28 rounded-full object-cover border shadow-sm"
             />
           ) : (
@@ -113,20 +122,19 @@ export default function ProfilePage() {
               No Avatar
             </div>
           )}
-
-          <div className="flex flex-col items-center md:items-start gap-2">
+          <div className="flex flex-col items-center gap-2">
             <label
-              htmlFor="avatar-upload"
+              htmlFor="seller-avatar-upload"
               className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-medium rounded-md cursor-pointer transition duration-200"
             >
-              {avatarLoading
-                ? "Uploading..."
+              {avatarFile
+                ? "Avatar Selected"
                 : avatarUrl
                   ? "Change Avatar"
-                  : "Upload Avatar"}
+                  : "Select Avatar"}
             </label>
             <input
-              id="avatar-upload"
+              id="seller-avatar-upload"
               type="file"
               accept="image/*"
               onChange={handleAvatarUpload}

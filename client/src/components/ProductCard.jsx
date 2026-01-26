@@ -1,5 +1,3 @@
-import { useAuth } from "@/contexts/AuthContext";
-
 export default function ProductCard({ product, onClick }) {
   // Extract compatibility data for cleaner code
   const vc = product.vehicleCompatibility;
@@ -129,11 +127,19 @@ export default function ProductCard({ product, onClick }) {
 
           {/* Store Info */}
           <div className="flex items-center gap-2 pt-3 mt-3 border-t border-gray-50">
-            <div className="w-5 h-5 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
-              <span className="text-[8px] font-bold text-blue-600 uppercase">
-                {product.storeName?.charAt(0)}
-              </span>
-            </div>
+            {product.sellerAvatarUrl ? (
+              <img
+                src={product.sellerAvatarUrl}
+                alt="Seller Avatar"
+                className="w-5 h-5 rounded-full object-cover border border-blue-100"
+              />
+            ) : (
+              <div className="w-5 h-5 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
+                <span className="text-[8px] font-bold text-blue-600 uppercase">
+                  {product.storeName?.charAt(0)}
+                </span>
+              </div>
+            )}
             <p className="text-[10px] text-gray-500 font-semibold truncate">
               {product.storeName}
             </p>

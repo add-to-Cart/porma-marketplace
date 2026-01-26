@@ -136,9 +136,9 @@ export default function Navbar() {
                 className="flex items-center gap-2 pl-2 pr-4 py-1.5 hover:bg-gray-50 rounded-full transition-colors border border-transparent hover:border-gray-200"
               >
                 <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
-                  {user?.photoURL ? (
+                  {user?.avatarUrl ? (
                     <img
-                      src={user.photoURL}
+                      src={user.avatarUrl}
                       alt="avatar"
                       className="w-full h-full object-cover"
                     />

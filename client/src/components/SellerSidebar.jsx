@@ -22,6 +22,11 @@ export default function SellerSidebar() {
 
   const menuItems = [
     {
+      label: "RETURN TO SHOP",
+      icon: <User size={18} />, // Or use 'Home' from lucide-react
+      path: "/",
+    },
+    {
       label: "DASHBOARD",
       icon: <LayoutDashboard size={18} />,
       path: "/seller/dashboard",
@@ -102,7 +107,15 @@ export default function SellerSidebar() {
           {/* Account Info */}
           <div className="flex items-center gap-3 px-3 py-2">
             <div className="w-8 h-8 bg-zinc-700 border border-zinc-600 flex items-center justify-center rounded-sm">
-              <User size={16} className="text-zinc-400" />
+              {user?.sellerAvatarUrl ? (
+                <img
+                  src={user.sellerAvatarUrl}
+                  alt="Avatar"
+                  className="w-full h-full object-cover rounded-sm"
+                />
+              ) : (
+                <User size={16} className="text-zinc-400" />
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-black text-white leading-none uppercase truncate">

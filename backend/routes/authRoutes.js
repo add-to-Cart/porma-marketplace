@@ -5,6 +5,8 @@ import multer from "multer";
 import {
   uploadAvatar,
   uploadProductImage,
+  uploadQr,
+  deleteImage,
 } from "../services/cloudinary_service.js";
 
 const router = express.Router();
@@ -154,6 +156,18 @@ router.post("/signin", async (req, res) => {
     const userDoc = await db.collection("users").doc(userRecord.uid).get();
     const userData = userDoc.data();
 
+    // Fetch seller data if user is a seller
+    let sellerData = null;
+    if (userData?.role === "seller") {
+      const sellerDoc = await db
+        .collection("sellers")
+        .doc(userRecord.uid)
+        .get();
+      if (sellerDoc.exists) {
+        sellerData = sellerDoc.data();
+      }
+    }
+
     res.json({
       success: true,
       message: "Sign in successful",
@@ -165,7 +179,8 @@ router.post("/signin", async (req, res) => {
         role: userData?.role || "buyer",
         isSeller: userData?.role === "seller",
         sellerApplication: userData?.sellerApplication,
-        seller: userData?.seller, // Include seller profile data
+        seller: sellerData, // Include seller profile data from sellers collection
+        sellerAvatarUrl: sellerData?.avatarUrl, // Quick access for frontend
       },
       customToken,
     });
@@ -256,6 +271,7 @@ router.post("/google-signin", async (req, res) => {
         email,
         displayName: name || email.split("@")[0],
         photoURL: picture || null,
+        googlePhotoURL: picture || null, // Store Google photo separately
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         role: "buyer",
         provider: "google",
@@ -263,12 +279,36 @@ router.post("/google-signin", async (req, res) => {
       await db.collection("users").doc(uid).set(userData);
     } else {
       userData = userDoc.data();
-      if (picture && picture !== userData.photoURL) {
+      // Always update the Google photo URL
+      if (picture !== userData.googlePhotoURL) {
         await db.collection("users").doc(uid).update({
-          photoURL: picture,
+          googlePhotoURL: picture,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        userData.photoURL = picture;
+        userData.googlePhotoURL = picture;
+      }
+
+      // Set photoURL: custom avatar takes precedence, then Google photo as fallback
+      let finalPhotoURL = userData.photoURL;
+
+      if (userData.photoPublicId) {
+        // User has custom avatar - keep it
+        finalPhotoURL = userData.photoURL;
+      } else if (picture) {
+        // No custom avatar - use Google photo
+        finalPhotoURL = picture;
+      } else if (userData.googlePhotoURL) {
+        // Fallback to stored Google photo
+        finalPhotoURL = userData.googlePhotoURL;
+      }
+
+      // Update photoURL if it changed
+      if (finalPhotoURL !== userData.photoURL) {
+        await db.collection("users").doc(uid).update({
+          photoURL: finalPhotoURL,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        userData.photoURL = finalPhotoURL;
       }
     }
 
@@ -320,6 +360,7 @@ router.post("/token-verify", async (req, res) => {
         email,
         displayName: name || email.split("@")[0],
         photoURL: picture || null,
+        googlePhotoURL: picture || null, // Store Google photo separately
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         role: "buyer",
         provider: decoded.firebase?.sign_in_provider || "unknown",
@@ -327,12 +368,45 @@ router.post("/token-verify", async (req, res) => {
       await userDocRef.set(userData);
     } else {
       userData = userDoc.data();
-      if (picture && picture !== userData.photoURL) {
+      // Always update the Google photo URL
+      if (picture !== userData.googlePhotoURL) {
         await userDocRef.update({
-          photoURL: picture,
+          googlePhotoURL: picture,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        userData.photoURL = picture;
+        userData.googlePhotoURL = picture;
+      }
+
+      // Set photoURL: custom avatar takes precedence, then Google photo as fallback
+      let finalPhotoURL = userData.photoURL;
+
+      if (userData.photoPublicId) {
+        // User has custom avatar - keep it
+        finalPhotoURL = userData.photoURL;
+      } else if (picture) {
+        // No custom avatar - use current Google photo
+        finalPhotoURL = picture;
+      } else if (userData.googlePhotoURL) {
+        // Fallback to stored Google photo
+        finalPhotoURL = userData.googlePhotoURL;
+      }
+
+      // Update photoURL if it changed
+      if (finalPhotoURL !== userData.photoURL) {
+        await userDocRef.update({
+          photoURL: finalPhotoURL,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        userData.photoURL = finalPhotoURL;
+      }
+    }
+
+    // Fetch seller data if user is a seller
+    let sellerData = null;
+    if (userData.role === "seller") {
+      const sellerDoc = await db.collection("sellers").doc(userData.uid).get();
+      if (sellerDoc.exists) {
+        sellerData = sellerDoc.data();
       }
     }
 
@@ -343,12 +417,13 @@ router.post("/token-verify", async (req, res) => {
         email: userData.email,
         displayName: userData.displayName,
         username: userData.username,
-        avatarUrl: userData.photoURL,
+        avatarUrl: userData.photoURL || userData.googlePhotoURL || null,
         role: userData.role,
         isAdmin: userData.isAdmin === true || userData.role === "admin",
         isSeller: userData.role === "seller",
         sellerApplication: userData.sellerApplication,
-        seller: userData.seller, // Include full seller profile
+        seller: sellerData, // Include seller profile from sellers collection
+        sellerAvatarUrl: sellerData?.avatarUrl, // Quick access for frontend
       },
     });
   } catch (err) {
@@ -372,6 +447,15 @@ router.get("/profile", verifyAuth, async (req, res) => {
 
     const userData = userDoc.data();
 
+    // Fetch seller data if user is a seller
+    let sellerData = null;
+    if (userData.role === "seller") {
+      const sellerDoc = await db.collection("sellers").doc(req.user.uid).get();
+      if (sellerDoc.exists) {
+        sellerData = sellerDoc.data();
+      }
+    }
+
     res.json({
       success: true,
       user: {
@@ -390,10 +474,11 @@ router.get("/profile", verifyAuth, async (req, res) => {
         city: userData.city,
         province: userData.province,
         zipCode: userData.zipCode,
-        avatarUrl: userData.photoURL,
+        avatarUrl: userData.photoURL || userData.googlePhotoURL || null,
         sellerApplication: userData.sellerApplication,
-        seller: userData.seller, // Seller profile data
-        storeName: userData.seller?.storeName, // Quick access
+        seller: sellerData, // Seller profile data from sellers collection
+        storeName: sellerData?.storeName, // Quick access
+        sellerAvatarUrl: sellerData?.avatarUrl, // Quick access for frontend
       },
     });
   } catch (error) {
@@ -458,9 +543,21 @@ router.post(
           .json({ success: false, message: "No file uploaded" });
       }
 
+      const db = admin.firestore();
+      const userDoc = await db.collection("users").doc(req.user.uid).get();
+      const userData = userDoc.data();
+
+      // Delete old avatar if exists
+      if (userData.photoPublicId) {
+        try {
+          await deleteImage(userData.photoPublicId);
+        } catch (error) {
+          console.warn("Failed to delete old avatar:", error);
+        }
+      }
+
       const uploadResult = await uploadAvatar(req.file);
 
-      const db = admin.firestore();
       await db.collection("users").doc(req.user.uid).update({
         photoURL: uploadResult.url,
         photoPublicId: uploadResult.publicId,
@@ -560,7 +657,7 @@ router.post(
       }
 
       // Upload QR code to Cloudinary
-      const qrUploadResult = await uploadProductImage(
+      const qrUploadResult = await uploadQr(
         req.file,
         `qr_codes/${req.user.uid}-${Date.now()}`,
       );
@@ -691,7 +788,18 @@ router.put(
 
       // Update QR code if new file uploaded
       if (req.file) {
-        const qrUploadResult = await uploadProductImage(
+        // Delete old QR code if exists
+        if (userData.sellerApplication?.paymentDetails?.qrCodePublicId) {
+          try {
+            await deleteImage(
+              userData.sellerApplication.paymentDetails.qrCodePublicId,
+            );
+          } catch (error) {
+            console.warn("Failed to delete old QR:", error);
+          }
+        }
+
+        const qrUploadResult = await uploadQr(
           req.file,
           `qr_codes/${req.user.uid}-${Date.now()}`,
         );
@@ -720,105 +828,269 @@ router.put(
 );
 
 // ============================================
-// SELLER PROFILE UPDATE (For approved sellers only)
+// SELLER PROFILE UPDATE (For approved sellers and pending applications)
 // ============================================
-router.put(
-  "/seller/profile",
-  verifyAuth,
-  upload.single("qrCode"),
-  async (req, res) => {
-    try {
-      const db = admin.firestore();
-      const userDoc = await db.collection("users").doc(req.user.uid).get();
-      const userData = userDoc.data();
+router.put("/seller/profile", verifyAuth, upload.any(), async (req, res) => {
+  try {
+    const db = admin.firestore();
+    const userDoc = await db.collection("users").doc(req.user.uid).get();
+    const userData = userDoc.data();
 
-      // Check if user is an approved seller
-      if (userData.role !== "seller") {
-        return res.status(403).json({
-          success: false,
-          message: "Only approved sellers can update their profile",
-        });
+    // Check if user is an approved seller or has pending application
+    if (
+      userData.role !== "seller" &&
+      !(userData.sellerApplication?.status === "pending")
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Only approved sellers or applicants with pending applications can update their profile",
+      });
+    }
+
+    console.log(
+      "Updating seller profile for user:",
+      req.user.uid,
+      "role:",
+      userData.role,
+    );
+
+    const {
+      storeName,
+      storeDescription,
+      paymentMethod,
+      gcashNumber,
+      gcashName,
+      bankName,
+      accountNumber,
+      accountName,
+      avatarUrl,
+    } = req.body;
+
+    const updates = {};
+    const sellerUpdates = {
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    // Update store name
+    if (storeName && storeName.trim()) {
+      if (userData.role === "seller") {
+        sellerUpdates.storeName = storeName.trim();
+      } else {
+        updates["sellerApplication.storeName"] = storeName.trim();
+      }
+    }
+
+    // Update store description
+    if (storeDescription !== undefined) {
+      if (userData.role === "seller") {
+        sellerUpdates.storeDescription = storeDescription.trim();
+      } else {
+        updates["sellerApplication.storeDescription"] = storeDescription.trim();
+      }
+    }
+
+    // Update payment method if provided
+    if (paymentMethod) {
+      if (userData.role === "seller") {
+        sellerUpdates.paymentDetails = sellerUpdates.paymentDetails || {};
+        sellerUpdates.paymentDetails.method = paymentMethod;
+      } else {
+        updates["sellerApplication.paymentDetails.method"] = paymentMethod;
       }
 
-      const {
-        storeName,
-        storeDescription,
-        paymentMethod,
-        gcashNumber,
-        gcashName,
-        bankName,
-        accountNumber,
-        accountName,
-      } = req.body;
-
-      const updates = {
-        "seller.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
-      };
-
-      // Update store name
-      if (storeName && storeName.trim()) {
-        updates["seller.storeName"] = storeName.trim();
-      }
-
-      // Update store description
-      if (storeDescription !== undefined) {
-        updates["seller.storeDescription"] = storeDescription.trim();
-      }
-
-      // Update payment method if provided
-      if (paymentMethod) {
-        updates["seller.paymentDetails.method"] = paymentMethod;
-
-        if (paymentMethod === "gcash") {
-          if (gcashNumber)
-            updates["seller.paymentDetails.gcash.number"] = gcashNumber.trim();
-          if (gcashName)
-            updates["seller.paymentDetails.gcash.name"] = gcashName.trim();
-        } else if (paymentMethod === "bank") {
-          if (bankName)
-            updates["seller.paymentDetails.bank.bankName"] = bankName.trim();
-          if (accountNumber)
-            updates["seller.paymentDetails.bank.accountNumber"] =
+      if (paymentMethod === "gcash") {
+        if (gcashNumber) {
+          if (userData.role === "seller") {
+            sellerUpdates.paymentDetails.gcash =
+              sellerUpdates.paymentDetails.gcash || {};
+            sellerUpdates.paymentDetails.gcash.number = gcashNumber.trim();
+          } else {
+            updates["sellerApplication.paymentDetails.gcash.number"] =
+              gcashNumber.trim();
+          }
+        }
+        if (gcashName) {
+          if (userData.role === "seller") {
+            sellerUpdates.paymentDetails.gcash =
+              sellerUpdates.paymentDetails.gcash || {};
+            sellerUpdates.paymentDetails.gcash.name = gcashName.trim();
+          } else {
+            updates["sellerApplication.paymentDetails.gcash.name"] =
+              gcashName.trim();
+          }
+        }
+      } else if (paymentMethod === "bank") {
+        if (bankName) {
+          if (userData.role === "seller") {
+            sellerUpdates.paymentDetails.bank =
+              sellerUpdates.paymentDetails.bank || {};
+            sellerUpdates.paymentDetails.bank.bankName = bankName.trim();
+          } else {
+            updates["sellerApplication.paymentDetails.bank.bankName"] =
+              bankName.trim();
+          }
+        }
+        if (accountNumber) {
+          if (userData.role === "seller") {
+            sellerUpdates.paymentDetails.bank =
+              sellerUpdates.paymentDetails.bank || {};
+            sellerUpdates.paymentDetails.bank.accountNumber =
               accountNumber.trim();
-          if (accountName)
-            updates["seller.paymentDetails.bank.accountName"] =
+          } else {
+            updates["sellerApplication.paymentDetails.bank.accountNumber"] =
+              accountNumber.trim();
+          }
+        }
+        if (accountName) {
+          if (userData.role === "seller") {
+            sellerUpdates.paymentDetails.bank =
+              sellerUpdates.paymentDetails.bank || {};
+            sellerUpdates.paymentDetails.bank.accountName = accountName.trim();
+          } else {
+            updates["sellerApplication.paymentDetails.bank.accountName"] =
               accountName.trim();
+          }
+        }
+      }
+    }
+
+    // Update avatar URL if provided
+    if (avatarUrl) {
+      if (userData.role === "seller") {
+        sellerUpdates.avatarUrl = avatarUrl;
+      } else if (userData.sellerApplication?.status === "pending") {
+        updates["sellerApplication.avatarUrl"] = avatarUrl;
+      }
+    }
+
+    // Update QR codes if new files uploaded
+    const gcashQrFile = req.files?.find((f) => f.fieldname === "gcashQr");
+    if (gcashQrFile) {
+      // Delete old QR code if exists
+      if (
+        userData.role === "seller" &&
+        userData.seller?.paymentDetails?.gcash?.qrCodePublicId
+      ) {
+        try {
+          await deleteImage(
+            userData.seller.paymentDetails.gcash.qrCodePublicId,
+          );
+        } catch (error) {
+          console.warn("Failed to delete old gcash QR:", error);
+        }
+      } else if (
+        userData.sellerApplication?.status === "pending" &&
+        userData.sellerApplication?.paymentDetails?.gcash?.qrCodePublicId
+      ) {
+        try {
+          await deleteImage(
+            userData.sellerApplication.paymentDetails.gcash.qrCodePublicId,
+          );
+        } catch (error) {
+          console.warn("Failed to delete old gcash QR:", error);
         }
       }
 
-      // Update QR code if new file uploaded
-      if (req.file) {
-        const qrUploadResult = await uploadProductImage(
-          req.file,
-          `qr_codes/${req.user.uid}-${Date.now()}`,
-        );
-        updates["seller.paymentDetails.qrCodeUrl"] = qrUploadResult.url;
-        updates["seller.paymentDetails.qrCodePublicId"] =
+      const qrUploadResult = await uploadQr(
+        gcashQrFile,
+        `qr_codes/${req.user.uid}-gcash-${Date.now()}`,
+      );
+      if (userData.role === "seller") {
+        sellerUpdates.paymentDetails = sellerUpdates.paymentDetails || {};
+        sellerUpdates.paymentDetails.gcash =
+          sellerUpdates.paymentDetails.gcash || {};
+        sellerUpdates.paymentDetails.gcash.qrCodeUrl = qrUploadResult.url;
+        sellerUpdates.paymentDetails.gcash.qrCodePublicId =
+          qrUploadResult.publicId;
+      } else if (userData.sellerApplication?.status === "pending") {
+        updates["sellerApplication.paymentDetails.gcash.qrCodeUrl"] =
+          qrUploadResult.url;
+        updates["sellerApplication.paymentDetails.gcash.qrCodePublicId"] =
           qrUploadResult.publicId;
       }
+    }
 
-      // Apply updates
+    const bankQrFile = req.files?.find((f) => f.fieldname === "bankQr");
+    if (bankQrFile) {
+      // Delete old QR code if exists
+      if (
+        userData.role === "seller" &&
+        userData.seller?.paymentDetails?.bank?.qrCodePublicId
+      ) {
+        try {
+          await deleteImage(userData.seller.paymentDetails.bank.qrCodePublicId);
+        } catch (error) {
+          console.warn("Failed to delete old bank QR:", error);
+        }
+      } else if (
+        userData.sellerApplication?.status === "pending" &&
+        userData.sellerApplication?.paymentDetails?.bank?.qrCodePublicId
+      ) {
+        try {
+          await deleteImage(
+            userData.sellerApplication.paymentDetails.bank.qrCodePublicId,
+          );
+        } catch (error) {
+          console.warn("Failed to delete old bank QR:", error);
+        }
+      }
+
+      const qrUploadResult = await uploadQr(
+        bankQrFile,
+        `qr_codes/${req.user.uid}-bank-${Date.now()}`,
+      );
+      if (userData.role === "seller") {
+        sellerUpdates.paymentDetails = sellerUpdates.paymentDetails || {};
+        sellerUpdates.paymentDetails.bank =
+          sellerUpdates.paymentDetails.bank || {};
+        sellerUpdates.paymentDetails.bank.qrCodeUrl = qrUploadResult.url;
+        sellerUpdates.paymentDetails.bank.qrCodePublicId =
+          qrUploadResult.publicId;
+      } else if (userData.sellerApplication?.status === "pending") {
+        updates["sellerApplication.paymentDetails.bank.qrCodeUrl"] =
+          qrUploadResult.url;
+        updates["sellerApplication.paymentDetails.bank.qrCodePublicId"] =
+          qrUploadResult.publicId;
+      }
+    }
+
+    // Apply updates to users collection for applications
+    if (Object.keys(updates).length > 0) {
       await db.collection("users").doc(req.user.uid).update(updates);
+    }
 
-      // Fetch updated data
+    // Apply updates to sellers collection for approved sellers
+    if (userData.role === "seller" && Object.keys(sellerUpdates).length > 1) {
+      // More than just updatedAt
+      await db.collection("sellers").doc(req.user.uid).update(sellerUpdates);
+    }
+
+    // Fetch updated data
+    let sellerData = null;
+    if (userData.role === "seller") {
+      const sellerDoc = await db.collection("sellers").doc(req.user.uid).get();
+      sellerData = sellerDoc.data();
+    } else {
       const updatedDoc = await db.collection("users").doc(req.user.uid).get();
       const updatedData = updatedDoc.data();
-
-      res.json({
-        success: true,
-        message: "Seller profile updated successfully",
-        seller: updatedData.seller,
-      });
-    } catch (error) {
-      console.error("Update seller profile error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Failed to update seller profile",
-        error: error.message,
-      });
+      sellerData = updatedData.sellerApplication;
     }
-  },
-);
+
+    res.json({
+      success: true,
+      message: "Seller profile updated successfully",
+      seller: sellerData,
+    });
+  } catch (error) {
+    console.error("Update seller profile error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update seller profile",
+      error: error.message,
+    });
+  }
+});
 
 // ============================================
 // ADMIN: GET SELLER APPLICATIONS
@@ -912,12 +1184,19 @@ router.put("/approve-seller/:uid", verifyAuth, async (req, res) => {
     });
 
     // Create document in sellers collection
-    await db.collection("sellers").doc(uid).set({
-      sellerId: uid,
-      storeName: application.storeName,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    await db
+      .collection("sellers")
+      .doc(uid)
+      .set({
+        userId: uid,
+        storeName: application.storeName,
+        ownerName: application.storeName, // Default to store name, can be updated later
+        avatarUrl: application.avatarUrl || null,
+        qrCodeUrl: application.paymentDetails?.qrCodeUrl || null,
+        paymentDetails: application.paymentDetails,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
 
     res.json({
       success: true,
@@ -974,6 +1253,90 @@ router.put("/reject-seller/:uid", verifyAuth, async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to reject seller application",
+    });
+  }
+});
+
+// Upload seller avatar
+router.post(
+  "/seller/avatar",
+  verifyAuth,
+  upload.single("avatar"),
+  async (req, res) => {
+    try {
+      const db = admin.firestore();
+      const userDoc = await db.collection("users").doc(req.user.uid).get();
+      const userData = userDoc.data();
+      if (
+        userData.role !== "seller" &&
+        !(userData.sellerApplication?.status === "pending")
+      ) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Only approved sellers or pending applicants can upload avatar",
+        });
+      }
+      if (!req.file) {
+        return res
+          .status(400)
+          .json({ success: false, message: "No file uploaded" });
+      }
+      const uploadResult = await uploadAvatar(req.file);
+      const updateData = {
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      if (userData.role === "seller") {
+        updateData["seller.avatarUrl"] = uploadResult.url;
+        updateData["seller.avatarPublicId"] = uploadResult.publicId;
+      } else if (userData.sellerApplication?.status === "pending") {
+        updateData["sellerApplication.avatarUrl"] = uploadResult.url;
+        updateData["sellerApplication.avatarPublicId"] = uploadResult.publicId;
+      }
+      await db.collection("users").doc(req.user.uid).update(updateData);
+      res.json({
+        success: true,
+        url: uploadResult.url,
+        publicId: uploadResult.publicId,
+      });
+    } catch (error) {
+      console.error("Seller avatar upload error:", error);
+      res.status(500).json({ success: false, message: "Avatar upload failed" });
+    }
+  },
+);
+
+// ============================================
+// GET SELLER PAYMENT DETAILS (For checkout)
+// ============================================
+router.get("/seller/:sellerId/payment-details", async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+    const db = admin.firestore();
+
+    const sellerDoc = await db.collection("sellers").doc(sellerId).get();
+    if (!sellerDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Seller not found",
+      });
+    }
+
+    const sellerData = sellerDoc.data();
+
+    res.json({
+      success: true,
+      seller: {
+        sellerId: sellerData.userId,
+        storeName: sellerData.storeName,
+        paymentDetails: sellerData.paymentDetails,
+      },
+    });
+  } catch (error) {
+    console.error("Get seller payment details error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
     });
   }
 });

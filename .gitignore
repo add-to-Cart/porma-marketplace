@@ -27,4 +27,4 @@ serviceAccountKey.json
 .env
 .env.local
 .env.*.local
-response.json
+*.json

@@ -31,6 +31,8 @@ export default function Checkout() {
   const [paymentProofFile, setPaymentProofFile] = useState(null);
   const [referenceNumber, setReferenceNumber] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [sellerPaymentDetails, setSellerPaymentDetails] = useState({});
+  const [itemsBySeller, setItemsBySeller] = useState({});
 
   useEffect(() => {
     if (location.state?.quickCheckout) {
@@ -74,6 +76,102 @@ export default function Checkout() {
       return () => clearTimeout(timer);
     }
   }, [currentStep]);
+
+  // Fetch seller payment details and group items by seller
+  useEffect(() => {
+    const fetchSellerDetails = async () => {
+      if (checkoutItems.length === 0) return;
+
+      const sellerIds = [
+        ...new Set(checkoutItems.map((item) => item.sellerId)),
+      ];
+      const groupedItems = {};
+      const paymentDetails = {};
+
+      // Group items by seller
+      checkoutItems.forEach((item) => {
+        if (!groupedItems[item.sellerId]) {
+          groupedItems[item.sellerId] = [];
+        }
+        groupedItems[item.sellerId].push(item);
+      });
+      setItemsBySeller(groupedItems);
+
+      // Fetch seller payment details from API
+      try {
+        const sellerPromises = sellerIds.map(async (sellerId) => {
+          const response = await fetch(
+            `http://localhost:3000/auth/seller/${sellerId}/payment-details`,
+          );
+          if (response.ok) {
+            const data = await response.json();
+            return { sellerId, data: data.seller };
+          } else {
+            console.warn(`Failed to fetch details for seller ${sellerId}`);
+            return { sellerId, data: null };
+          }
+        });
+
+        const sellerResults = await Promise.all(sellerPromises);
+
+        sellerResults.forEach(({ sellerId, data }) => {
+          if (data) {
+            paymentDetails[sellerId] = data;
+          } else {
+            // Fallback for sellers without payment details
+            paymentDetails[sellerId] = {
+              storeName:
+                checkoutItems.find((item) => item.sellerId === sellerId)
+                  ?.storeName || "Unknown Seller",
+              paymentDetails: {
+                method: formData.paymentMethod,
+                gcash: {
+                  qrCodeUrl: null,
+                  number: "Contact seller",
+                  name: "Seller",
+                },
+                bank: {
+                  qrCodeUrl: null,
+                  bankName: "Contact seller",
+                  accountNumber: "Contact seller",
+                  accountName: "Seller",
+                },
+              },
+            };
+          }
+        });
+
+        setSellerPaymentDetails(paymentDetails);
+      } catch (error) {
+        console.error("Error fetching seller details:", error);
+        // Set fallback data
+        sellerIds.forEach((sellerId) => {
+          paymentDetails[sellerId] = {
+            storeName:
+              checkoutItems.find((item) => item.sellerId === sellerId)
+                ?.storeName || "Unknown Seller",
+            paymentDetails: {
+              method: formData.paymentMethod,
+              gcash: {
+                qrCodeUrl: null,
+                number: "Contact seller",
+                name: "Seller",
+              },
+              bank: {
+                qrCodeUrl: null,
+                bankName: "Contact seller",
+                accountNumber: "Contact seller",
+                accountName: "Seller",
+              },
+            },
+          };
+        });
+        setSellerPaymentDetails(paymentDetails);
+      }
+    };
+
+    fetchSellerDetails();
+  }, [checkoutItems, formData.paymentMethod]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -471,24 +569,96 @@ export default function Checkout() {
               </p>
             </div>
 
-            {/* QR Code */}
-            <div className="bg-gray-50 border-2 rounded-lg p-6 mb-6">
-              <h3 className="font-bold text-center mb-4">
-                {formData.paymentMethod === "gcash" ? "GCash" : "Bank"} QR Code
-              </h3>
-              <div className="flex justify-center mb-4">
-                <div className="w-64 h-64 bg-white border-4 rounded-lg shadow-lg flex items-center justify-center">
-                  <img
-                    src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=GCash:09123456789"
-                    alt="Payment QR"
-                    className="w-full h-full"
-                  />
-                </div>
-              </div>
-              <div className="text-center">
-                <p className="text-sm text-gray-600">Amount to pay:</p>
-                <p className="text-2xl font-black">
-                  ₱{checkoutTotal.toLocaleString()}
+            {/* QR Codes for each seller */}
+            <div className="space-y-6">
+              {Object.entries(itemsBySeller).map(([sellerId, items]) => {
+                const sellerDetail = sellerPaymentDetails[sellerId];
+                const sellerTotal = items.reduce(
+                  (sum, item) => sum + item.price * item.quantity,
+                  0,
+                );
+                const qrCodeUrl =
+                  formData.paymentMethod === "gcash"
+                    ? sellerDetail?.paymentDetails?.gcash?.qrCodeUrl
+                    : sellerDetail?.paymentDetails?.bank?.qrCodeUrl;
+
+                return (
+                  <div
+                    key={sellerId}
+                    className="bg-gray-50 border-2 rounded-lg p-6"
+                  >
+                    <h3 className="font-bold text-center mb-2">
+                      Pay {sellerDetail?.storeName || "Seller"}
+                    </h3>
+                    <p className="text-sm text-center text-gray-600 mb-4">
+                      {formData.paymentMethod === "gcash" ? "GCash" : "Bank"}{" "}
+                      Payment
+                    </p>
+
+                    <div className="flex justify-center mb-4">
+                      <div className="w-48 h-48 bg-white border-4 rounded-lg shadow-lg flex items-center justify-center">
+                        {qrCodeUrl ? (
+                          <img
+                            src={qrCodeUrl}
+                            alt={`${formData.paymentMethod} QR Code`}
+                            className="w-full h-full rounded"
+                          />
+                        ) : (
+                          <div className="text-center text-gray-500">
+                            <p className="text-sm">QR Code not available</p>
+                            <p className="text-xs mt-1">
+                              Contact seller for payment details
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-center">
+                      <p className="text-sm text-gray-600">
+                        Amount to pay to this seller:
+                      </p>
+                      <p className="text-xl font-black">
+                        ₱{sellerTotal.toLocaleString()}
+                      </p>
+                      {formData.paymentMethod === "gcash" &&
+                        sellerDetail?.paymentDetails?.gcash && (
+                          <div className="mt-2 text-xs text-gray-600">
+                            <p>
+                              GCash: {sellerDetail.paymentDetails.gcash.number}
+                            </p>
+                            <p>
+                              Name: {sellerDetail.paymentDetails.gcash.name}
+                            </p>
+                          </div>
+                        )}
+                      {formData.paymentMethod === "bank" &&
+                        sellerDetail?.paymentDetails?.bank && (
+                          <div className="mt-2 text-xs text-gray-600">
+                            <p>
+                              Bank: {sellerDetail.paymentDetails.bank.bankName}
+                            </p>
+                            <p>
+                              Account:{" "}
+                              {sellerDetail.paymentDetails.bank.accountNumber}
+                            </p>
+                            <p>
+                              Name:{" "}
+                              {sellerDetail.paymentDetails.bank.accountName}
+                            </p>
+                          </div>
+                        )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
+                <p className="text-sm text-blue-900 font-semibold">
+                  💰 Total Payment Required: ₱{checkoutTotal.toLocaleString()}
+                </p>
+                <p className="text-xs text-blue-700 mt-1">
+                  Make separate payments to each seller shown above.
                 </p>
               </div>
             </div>

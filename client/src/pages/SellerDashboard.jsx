@@ -5,12 +5,12 @@ import { getProductsBySeller } from "@/api/products";
 import {
   TrendingUp,
   Package,
-  DollarSign,
   ShoppingCart,
   Eye,
   Star,
   Users,
   Calendar,
+  LucidePhilippinePeso,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -298,7 +298,7 @@ export default function SellerDashboard() {
           <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-white/20 rounded-lg">
-                <DollarSign size={24} />
+                <LucidePhilippinePeso size={24} />
               </div>
               <TrendingUp size={20} className="opacity-80" />
             </div>

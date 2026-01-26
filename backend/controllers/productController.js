@@ -15,10 +15,12 @@ const populateSellerInfo = async (products) => {
     ...new Set(products.map((p) => p.sellerId).filter((id) => id)),
   ];
 
+  console.log("Seller IDs found:", sellerIds);
+
   if (sellerIds.length === 0) return products;
 
   const sellerPromises = sellerIds.map((id) =>
-    db.collection("users").doc(id).get(),
+    db.collection("sellers").doc(id).get(),
   );
   const sellerDocs = await Promise.all(sellerPromises);
 
@@ -28,24 +30,21 @@ const populateSellerInfo = async (products) => {
       const sellerData = doc.data();
       const sellerId = sellerIds[index];
 
-      if (sellerData.role === "seller" && sellerData.seller) {
-        sellerMap[sellerId] = {
-          storeName: sellerData.seller.storeName,
-          owner: sellerData.seller.storeName,
-        };
-      } else if (sellerData.sellerApplication?.status === "pending") {
-        sellerMap[sellerId] = {
-          storeName: sellerData.sellerApplication.storeName,
-          owner: sellerData.sellerApplication.storeName,
-        };
-      } else {
-        sellerMap[sellerId] = {
-          storeName: sellerData.displayName || "Unknown Seller",
-          owner: sellerData.displayName || "Unknown Seller",
-        };
-      }
+      console.log(`Seller ${sellerId} data:`, sellerData);
+
+      sellerMap[sellerId] = {
+        storeName: sellerData.storeName,
+        owner: sellerData.ownerName || sellerData.storeName,
+        sellerAvatarUrl: sellerData.avatarUrl || null,
+      };
+
+      console.log(`Seller ${sellerId} avatar:`, sellerData.avatarUrl);
+    } else {
+      console.log(`Seller document ${sellerIds[index]} does not exist`);
     }
   });
+
+  console.log("Seller map:", sellerMap);
 
   return products.map((product) => ({
     ...product,
@@ -403,43 +402,11 @@ export const getProductById = async (req, res) => {
 
     const productData = snapshot.data();
 
-    // Fetch seller information if sellerId exists
-    let sellerInfo = null;
-    if (productData.sellerId) {
-      try {
-        const sellerDoc = await db
-          .collection("users")
-          .doc(productData.sellerId)
-          .get();
-        if (sellerDoc.exists) {
-          const sellerData = sellerDoc.data();
-          if (sellerData.role === "seller" && sellerData.seller) {
-            sellerInfo = {
-              storeName: sellerData.seller.storeName,
-              owner: sellerData.seller.storeName,
-            };
-          } else if (sellerData.sellerApplication?.status === "pending") {
-            sellerInfo = {
-              storeName: sellerData.sellerApplication.storeName,
-              owner: sellerData.sellerApplication.storeName,
-            };
-          } else {
-            sellerInfo = {
-              storeName: sellerData.displayName || "Unknown Seller",
-              owner: sellerData.displayName || "Unknown Seller",
-            };
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching seller info:", error);
-      }
-    }
+    const product = { id: snapshot.id, ...productData };
 
-    res.json({
-      id: snapshot.id,
-      ...productData,
-      ...sellerInfo,
-    });
+    const populated = await populateSellerInfo([product]);
+
+    res.json(populated[0]);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch product" });
   }
@@ -927,6 +894,31 @@ export const getProductReviews = async (req, res) => {
         createdAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
       });
     });
+
+    // Populate buyer avatars
+    const buyerIds = [
+      ...new Set(reviews.map((r) => r.buyerId).filter((id) => id)),
+    ];
+    if (buyerIds.length > 0) {
+      const buyerPromises = buyerIds.map((id) =>
+        db.collection("users").doc(id).get(),
+      );
+      const buyerDocs = await Promise.all(buyerPromises);
+      const buyerMap = {};
+      buyerDocs.forEach((doc, index) => {
+        if (doc.exists) {
+          const userData = doc.data();
+          buyerMap[buyerIds[index]] = {
+            avatarUrl: userData.photoURL || null,
+          };
+        }
+      });
+      reviews.forEach((review) => {
+        if (review.buyerId && buyerMap[review.buyerId]) {
+          review.buyerAvatarUrl = buyerMap[review.buyerId].avatarUrl;
+        }
+      });
+    }
 
     console.log(`Found ${reviews.length} reviews for product ${id}`);
 
