@@ -473,9 +473,22 @@ export default function SellerOrdersPage() {
                       </p>
                       <p className="text-xs text-gray-500 mt-1">
                         Completed:{" "}
-                        {order.completedAt
-                          ? new Date(order.completedAt).toLocaleDateString()
-                          : "N/A"}
+                        {(() => {
+                          const date = order.completedAt;
+                          let timestamp = null;
+                          if (date) {
+                            if (typeof date === "string") {
+                              timestamp = new Date(date).getTime() / 1000;
+                            } else if (date._seconds) {
+                              timestamp = date._seconds;
+                            } else if (date.seconds) {
+                              timestamp = date.seconds;
+                            }
+                          }
+                          return timestamp
+                            ? new Date(timestamp * 1000).toLocaleDateString()
+                            : "N/A";
+                        })()}
                       </p>
                     </div>
                     <div className="text-right">

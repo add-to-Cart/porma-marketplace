@@ -282,16 +282,6 @@ export default function SellerDashboard() {
           </p>
         </div>
 
-        {/* Debug Info - Remove in production */}
-        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs">
-          <p>
-            <strong>Debug Info:</strong>
-          </p>
-          <p>Total Orders: {orders.length}</p>
-          <p>Total Products: {products.length}</p>
-          <p>Calculated Sales: ₱{stats.totalSales.toLocaleString()}</p>
-        </div>
-
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* Total Sales */}

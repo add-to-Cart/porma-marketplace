@@ -499,6 +499,7 @@ export const createProduct = async (req, res) => {
       stock,
       compareAtPrice,
       isSeasonal,
+      isBundle,
       seasonalCategory,
       vehicleCompatibility,
       isUniversalFit,
@@ -516,6 +517,7 @@ export const createProduct = async (req, res) => {
       compareAtPrice: compareAtPrice ? Number(compareAtPrice) : null,
       isSeasonal: isSeasonal === "true",
       seasonalCategory: seasonalCategory ? seasonalCategory.trim() : null,
+      isBundle: isBundle === "true",
       vehicleCompatibility: vehicleCompatibility
         ? JSON.parse(vehicleCompatibility)
         : {},
@@ -531,9 +533,6 @@ export const createProduct = async (req, res) => {
       );
     }
 
-    // Ensure Booleans and Numbers are correctly casted
-    productData.isBundle = productData.isBundle === "true";
-    productData.isSeasonal = productData.isSeasonal === "true";
     productData.price = Number(productData.price);
 
     if (productData.compareAtPrice) {

@@ -92,21 +92,6 @@ export default function TrendingProduct() {
                   onClick={() => navigate(`/products/${product.id}`)}
                 />
               </div>
-
-              {/* Trending Stats for Top 10 */}
-              {!isUserSearching && index < 10 && (
-                <div className="mt-2 flex items-center justify-between text-xs text-gray-600 px-2">
-                  <span className="flex items-center gap-1">
-                    📈 {product.soldCount || 0} sold
-                  </span>
-                  <span className="flex items-center gap-1">
-                    👁️ {product.viewCount || 0} views
-                  </span>
-                  <span className="flex items-center gap-1">
-                    ⭐ {(product.ratingAverage || 0).toFixed(1)}
-                  </span>
-                </div>
-              )}
             </div>
           ))
         ) : (

@@ -5,7 +5,7 @@ import { Outlet, useLocation } from "react-router-dom";
 
 export default function MarketPlaceLayout() {
   const location = useLocation();
-  const showSidebar = ["/", "/trending", "/deals"].includes(location.pathname);
+  const showSidebar = location.pathname === "/";
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">

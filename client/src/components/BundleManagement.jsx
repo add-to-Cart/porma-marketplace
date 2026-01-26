@@ -122,7 +122,7 @@ export default function BundleManagement({ onBundleCreate }) {
         bundleForm.compareAtPrice || totalPrice,
       );
       bundleData.append("isBundle", "true");
-      bundleData.append("category", "Bundles");
+      bundleData.append("categories", JSON.stringify(["Bundles"]));
       bundleData.append("stock", "1");
       bundleData.append("sellerId", user.uid);
       bundleData.append(
@@ -254,7 +254,7 @@ export default function BundleManagement({ onBundleCreate }) {
       bundleData.append("price", bundlePrice);
       bundleData.append("compareAtPrice", totalPrice);
       bundleData.append("isBundle", "true");
-      bundleData.append("category", "Bundles");
+      bundleData.append("categories", JSON.stringify(["Bundles"]));
       bundleData.append("stock", "1");
       bundleData.append("sellerId", user.uid);
       bundleData.append(

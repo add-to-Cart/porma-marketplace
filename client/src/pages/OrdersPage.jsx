@@ -346,6 +346,12 @@ export default function OrdersPage() {
                             ₱{(item.price * item.quantity).toLocaleString()}
                           </p>
                         </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Seller</p>
+                          <p className="font-semibold text-gray-900">
+                            {item.storeName || "Unknown Seller"}
+                          </p>
+                        </div>
                         {order.status === "completed" && (
                           <div className="flex flex-col items-end gap-2">
                             <button

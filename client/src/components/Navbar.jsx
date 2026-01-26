@@ -3,7 +3,6 @@ import SearchEngine from "./SearchEngine";
 import {
   ShoppingCart,
   User,
-  Bell,
   LayoutGrid,
   TrendingUp,
   Tag,
@@ -92,10 +91,6 @@ export default function Navbar() {
         {/* 4. Action Buttons */}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
-            <button className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors relative">
-              <Bell size={20} />
-              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
             <NavLink
               to="/cart"
               className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors relative"
