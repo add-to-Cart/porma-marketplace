@@ -52,22 +52,14 @@ export default function SellerDashboard() {
     try {
       setLoading(true);
 
-      console.log("Fetching seller data for:", user.uid);
-
       // Fetch orders and products in parallel
       const [ordersData, productsData] = await Promise.all([
         getSellerOrders(user.uid),
         getProductsBySeller(user.uid),
       ]);
 
-      console.log("Raw orders data:", ordersData);
-      console.log("Raw products data:", productsData);
-
       const sanitizedOrders = Array.isArray(ordersData) ? ordersData : [];
       const sanitizedProducts = Array.isArray(productsData) ? productsData : [];
-
-      console.log("Sanitized orders:", sanitizedOrders.length);
-      console.log("Sanitized products:", sanitizedProducts.length);
 
       setOrders(sanitizedOrders);
       setProducts(sanitizedProducts);
@@ -75,7 +67,6 @@ export default function SellerDashboard() {
       // Calculate statistics
       calculateStats(sanitizedOrders, sanitizedProducts);
     } catch (err) {
-      console.error("Error fetching dashboard data:", err);
       toast.error("Failed to load dashboard data");
     } finally {
       setLoading(false);
@@ -83,11 +74,6 @@ export default function SellerDashboard() {
   };
 
   const calculateStats = (ordersData, productsData) => {
-    console.log("Calculating stats from:", {
-      ordersCount: ordersData.length,
-      productsCount: productsData.length,
-    });
-
     // CRITICAL FIX: Use Set.add() instead of .push()
     let totalSales = 0;
     let totalOrders = ordersData.length;
@@ -115,8 +101,6 @@ export default function SellerDashboard() {
         });
       }
 
-      console.log("Order", order.id, "seller total:", sellerOrderTotal);
-
       // Add to total sales if completed or verified
       if (order.status === "completed" || order.paymentStatus === "verified") {
         totalSales += sellerOrderTotal;
@@ -140,14 +124,6 @@ export default function SellerDashboard() {
       ) {
         pendingOrders++;
       }
-    });
-
-    console.log("Calculated totals:", {
-      totalSales,
-      totalOrders,
-      pendingOrders,
-      thisMonthSales,
-      uniqueCustomerCount: uniqueCustomers.size, // ✅ Get size from Set
     });
 
     // Calculate total views and average rating from products
@@ -175,8 +151,6 @@ export default function SellerDashboard() {
       totalCustomers: uniqueCustomers.size, // ✅ FIXED: Use .size not .length
       thisMonthSales,
     };
-
-    console.log("Final stats:", calculatedStats);
 
     setStats(calculatedStats);
   };
@@ -238,7 +212,6 @@ export default function SellerDashboard() {
       });
     }
 
-    console.log("Sales data by month:", last5Months);
     setSalesData(last5Months);
   };
 
@@ -253,7 +226,6 @@ export default function SellerDashboard() {
         revenue: (product.soldCount || 0) * (product.price || 0),
       }));
 
-    console.log("Top products:", sorted);
     setTopProducts(sorted);
   };
 

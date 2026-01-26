@@ -20,7 +20,6 @@ export default function TrendingProduct() {
         const data = await getTrendingProducts(24); // Get top 24 trending products
         setTrending(data || []);
       } catch (error) {
-        console.error("Failed to load trending products:", error);
       } finally {
         setLoading(false);
       }

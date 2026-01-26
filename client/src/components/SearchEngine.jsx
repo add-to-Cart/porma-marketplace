@@ -34,7 +34,6 @@ export default function SearchEngine() {
         });
         setSearchResults(data);
       } catch (error) {
-        console.error("Search failed:", error);
       } finally {
         setIsSearching(false);
       }

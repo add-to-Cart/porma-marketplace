@@ -23,7 +23,6 @@ export default function SellerInventoryDashboard() {
       const res = await api.get(`/products/seller/${user.uid}/inventory`);
       setInventory(res.data);
     } catch (err) {
-      console.error("Error fetching inventory:", err);
       toast.error("Failed to load inventory");
     } finally {
       setLoading(false);

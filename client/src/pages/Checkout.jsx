@@ -107,7 +107,6 @@ export default function Checkout() {
             const data = await response.json();
             return { sellerId, data: data.seller };
           } else {
-            console.warn(`Failed to fetch details for seller ${sellerId}`);
             return { sellerId, data: null };
           }
         });
@@ -143,7 +142,6 @@ export default function Checkout() {
 
         setSellerPaymentDetails(paymentDetails);
       } catch (error) {
-        console.error("Error fetching seller details:", error);
         // Set fallback data
         sellerIds.forEach((sellerId) => {
           paymentDetails[sellerId] = {
@@ -229,7 +227,6 @@ export default function Checkout() {
       setCurrentStep(formData.paymentMethod === "cod" ? 3 : 2);
       toast.success("Order created successfully!");
     } catch (error) {
-      console.error("Order creation failed:", error);
       toast.error("Failed to create order. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -256,7 +253,6 @@ export default function Checkout() {
       setCurrentStep(3);
       toast.success("Payment proof submitted! Awaiting seller verification.");
     } catch (error) {
-      console.error("Payment proof upload failed:", error);
       toast.error("Failed to upload payment proof. Please try again.");
     } finally {
       setIsSubmitting(false);

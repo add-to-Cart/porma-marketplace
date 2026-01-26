@@ -26,7 +26,6 @@ export const getNotifications = async (req, res) => {
 
     res.json(notifications);
   } catch (err) {
-    console.error("Get notifications error:", err);
     res.status(500).json({ message: "Failed to fetch notifications" });
   }
 };
@@ -55,7 +54,6 @@ export const markAsRead = async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error("Mark as read error:", err);
     res.status(500).json({ message: "Failed to mark as read" });
   }
 };
@@ -81,7 +79,6 @@ export const deleteNotification = async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error("Delete notification error:", err);
     res.status(500).json({ message: "Failed to delete notification" });
   }
 };
@@ -109,7 +106,6 @@ export const clearAllNotifications = async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error("Clear all notifications error:", err);
     res.status(500).json({ message: "Failed to clear notifications" });
   }
 };
@@ -132,9 +128,7 @@ export const createNotification = async (
       read: false,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-  } catch (err) {
-    console.error("Create notification error:", err);
-  }
+  } catch (err) {}
 };
 
 export default {

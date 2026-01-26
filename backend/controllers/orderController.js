@@ -112,7 +112,6 @@ export const createOrder = async (req, res) => {
       ...order,
     });
   } catch (err) {
-    console.error("Create Order Error:", err);
     res.status(500).json({ message: "Failed to create order" });
   }
 };
@@ -209,7 +208,6 @@ export const verifyPayment = async (req, res) => {
       ...updatedDoc.data(),
     });
   } catch (err) {
-    console.error("Verify Payment Error:", err);
     res.status(500).json({ message: "Failed to verify payment" });
   }
 };
@@ -239,21 +237,12 @@ export const completeOrder = async (req, res) => {
         const reservedStock = product.reservedStock || 0;
         const currentSoldCount = product.soldCount || 0;
 
-        console.log(`[COMPLETE ORDER] Product: ${item.productName}`);
-        console.log(
-          `[BEFORE] Reserved: ${reservedStock}, Sold: ${currentSoldCount}`,
-        );
-
         // ✅ KEY UPDATE: Increment soldCount, decrement reservedStock
         batch.update(productRef, {
           soldCount: currentSoldCount + item.quantity,
           reservedStock: Math.max(0, reservedStock - item.quantity),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-
-        console.log(
-          `[AFTER] Reserved: ${Math.max(0, reservedStock - item.quantity)}, Sold: ${currentSoldCount + item.quantity}`,
-        );
       }
     }
 
@@ -285,7 +274,6 @@ export const completeOrder = async (req, res) => {
       ...updatedDoc.data(),
     });
   } catch (err) {
-    console.error("Complete Order Error:", err);
     res.status(500).json({ message: "Failed to complete order" });
   }
 };
@@ -313,7 +301,6 @@ export const getBuyerOrders = async (req, res) => {
 
     res.json(orders);
   } catch (err) {
-    console.error("Get Buyer Orders Error:", err);
     res.status(500).json({ message: "Failed to fetch buyer orders" });
   }
 };
@@ -338,7 +325,6 @@ export const getSellerOrders = async (req, res) => {
 
     res.json(sellerOrders);
   } catch (err) {
-    console.error("Get Seller Orders Error:", err);
     res.status(500).json({ message: "Failed to fetch seller orders" });
   }
 };
@@ -359,7 +345,6 @@ export const getOrder = async (req, res) => {
       ...doc.data(),
     });
   } catch (err) {
-    console.error("Get Order Error:", err);
     res.status(500).json({ message: "Failed to fetch order" });
   }
 };
@@ -398,7 +383,6 @@ export const updateOrderStatus = async (req, res) => {
       ...doc.data(),
     });
   } catch (err) {
-    console.error("Update Order Status Error:", err);
     res.status(500).json({ message: "Failed to update order" });
   }
 };
@@ -449,7 +433,6 @@ export const uploadPaymentProof = async (req, res) => {
       ...updatedDoc.data(),
     });
   } catch (err) {
-    console.error("Upload Payment Proof Error:", err);
     res.status(500).json({ message: "Failed to upload payment proof" });
   }
 };

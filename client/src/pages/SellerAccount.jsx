@@ -304,11 +304,8 @@ export default function SellerAccount() {
         formDataToSend.append("bankQr", formData.bankQrCodeFile);
       }
 
-      console.log("Submitting seller application...");
-
       // Log FormData contents for debugging
       for (let pair of formDataToSend.entries()) {
-        console.log(pair[0], pair[1]);
       }
 
       // Update seller profile
@@ -325,7 +322,6 @@ export default function SellerAccount() {
         toast.error(response.message || "Failed to update");
       }
     } catch (error) {
-      console.error("Apply seller error:", error);
       toast.error("Failed to submit application. Please try again.");
     } finally {
       setLoading(false);

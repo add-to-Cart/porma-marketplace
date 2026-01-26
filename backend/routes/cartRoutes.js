@@ -39,7 +39,6 @@ router.get("/:userId", verifyAuth, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Get cart error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to get cart",
@@ -81,7 +80,6 @@ router.put("/:userId", verifyAuth, async (req, res) => {
       message: "Cart updated successfully",
     });
   } catch (error) {
-    console.error("Update cart error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update cart",
@@ -109,7 +107,6 @@ router.delete("/:userId", verifyAuth, async (req, res) => {
       message: "Cart cleared successfully",
     });
   } catch (error) {
-    console.error("Clear cart error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to clear cart",

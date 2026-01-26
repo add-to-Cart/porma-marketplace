@@ -24,13 +24,11 @@ export const AuthProvider = ({ children }) => {
           setLoading(true);
           const res = await authAPI.getProfile(token);
           if (res.success) {
-            console.log("User loaded:", res.user);
             setUser(res.user);
           } else {
             localStorage.removeItem("authToken");
           }
         } catch (e) {
-          console.warn("Auth init failed", e);
           localStorage.removeItem("authToken");
         } finally {
           setLoading(false);
@@ -86,7 +84,7 @@ export const AuthProvider = ({ children }) => {
         const verifyResponse = await authAPI.verifyToken(idToken);
         if (verifyResponse.success) {
           localStorage.setItem("authToken", idToken);
-          console.log("User signed in:", verifyResponse.user);
+
           setUser(verifyResponse.user);
           return { success: true, user: verifyResponse.user };
         }
@@ -119,7 +117,7 @@ export const AuthProvider = ({ children }) => {
         const verifyResponse = await authAPI.verifyToken(idToken);
         if (verifyResponse.success) {
           localStorage.setItem("authToken", idToken);
-          console.log("Admin signed in:", verifyResponse.user);
+
           setUser(verifyResponse.user);
           return { success: true, user: verifyResponse.user };
         }
@@ -165,7 +163,6 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       await firebaseSignOut(auth);
     } catch (err) {
-      console.warn("firebase signout failed", err);
     } finally {
       localStorage.removeItem("authToken");
       setUser(null);
@@ -196,7 +193,6 @@ export const AuthProvider = ({ children }) => {
       if (!token) return null;
       const res = await authAPI.getProfile(token);
       if (res.success) {
-        console.log("Profile refreshed:", res.user);
         setUser(res.user);
       }
       return res;

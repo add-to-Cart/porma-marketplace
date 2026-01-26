@@ -59,8 +59,6 @@ router.post("/signup", async (req, res) => {
       customToken,
     });
   } catch (error) {
-    console.error("Signup error:", error);
-
     if (error.code === "auth/email-already-exists") {
       return res.status(400).json({
         success: false,
@@ -185,7 +183,6 @@ router.post("/signin", async (req, res) => {
       customToken,
     });
   } catch (error) {
-    console.error("Signin error:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -241,7 +238,6 @@ router.post("/signin-admin", async (req, res) => {
       customToken,
     });
   } catch (error) {
-    console.error("Admin Login Error:", error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 });
@@ -328,7 +324,6 @@ router.post("/google-signin", async (req, res) => {
       customToken,
     });
   } catch (error) {
-    console.error("Google signin error:", error);
     res.status(500).json({
       success: false,
       message: "Google sign in failed",
@@ -427,7 +422,6 @@ router.post("/token-verify", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("Token verify error:", err);
     res.status(401).json({ success: false, message: "Invalid token" });
   }
 });
@@ -482,7 +476,6 @@ router.get("/profile", verifyAuth, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Profile fetch error:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -522,7 +515,6 @@ router.put("/profile", verifyAuth, async (req, res) => {
       message: "Profile updated successfully",
     });
   } catch (error) {
-    console.error("Profile update error:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -551,9 +543,7 @@ router.post(
       if (userData.photoPublicId) {
         try {
           await deleteImage(userData.photoPublicId);
-        } catch (error) {
-          console.warn("Failed to delete old avatar:", error);
-        }
+        } catch (error) {}
       }
 
       const uploadResult = await uploadAvatar(req.file);
@@ -570,7 +560,6 @@ router.post(
         publicId: uploadResult.publicId,
       });
     } catch (error) {
-      console.error("Avatar upload error:", error);
       res.status(500).json({ success: false, message: "Avatar upload failed" });
     }
   },
@@ -584,7 +573,6 @@ router.post("/signout", verifyAuth, async (req, res) => {
       message: "Sign out successful",
     });
   } catch (error) {
-    console.error("Signout error:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -702,7 +690,6 @@ router.post(
         application: applicationData,
       });
     } catch (error) {
-      console.error("Apply seller error:", error);
       res.status(500).json({
         success: false,
         message: "Failed to submit seller application",
@@ -794,9 +781,7 @@ router.put(
             await deleteImage(
               userData.sellerApplication.paymentDetails.qrCodePublicId,
             );
-          } catch (error) {
-            console.warn("Failed to delete old QR:", error);
-          }
+          } catch (error) {}
         }
 
         const qrUploadResult = await uploadQr(
@@ -817,7 +802,6 @@ router.put(
         message: "Seller application updated successfully",
       });
     } catch (error) {
-      console.error("Update seller application error:", error);
       res.status(500).json({
         success: false,
         message: "Failed to update seller application",
@@ -847,13 +831,6 @@ router.put("/seller/profile", verifyAuth, upload.any(), async (req, res) => {
           "Only approved sellers or applicants with pending applications can update their profile",
       });
     }
-
-    console.log(
-      "Updating seller profile for user:",
-      req.user.uid,
-      "role:",
-      userData.role,
-    );
 
     const {
       storeName,
@@ -976,9 +953,7 @@ router.put("/seller/profile", verifyAuth, upload.any(), async (req, res) => {
           await deleteImage(
             userData.seller.paymentDetails.gcash.qrCodePublicId,
           );
-        } catch (error) {
-          console.warn("Failed to delete old gcash QR:", error);
-        }
+        } catch (error) {}
       } else if (
         userData.sellerApplication?.status === "pending" &&
         userData.sellerApplication?.paymentDetails?.gcash?.qrCodePublicId
@@ -987,9 +962,7 @@ router.put("/seller/profile", verifyAuth, upload.any(), async (req, res) => {
           await deleteImage(
             userData.sellerApplication.paymentDetails.gcash.qrCodePublicId,
           );
-        } catch (error) {
-          console.warn("Failed to delete old gcash QR:", error);
-        }
+        } catch (error) {}
       }
 
       const qrUploadResult = await uploadQr(
@@ -1020,9 +993,7 @@ router.put("/seller/profile", verifyAuth, upload.any(), async (req, res) => {
       ) {
         try {
           await deleteImage(userData.seller.paymentDetails.bank.qrCodePublicId);
-        } catch (error) {
-          console.warn("Failed to delete old bank QR:", error);
-        }
+        } catch (error) {}
       } else if (
         userData.sellerApplication?.status === "pending" &&
         userData.sellerApplication?.paymentDetails?.bank?.qrCodePublicId
@@ -1031,9 +1002,7 @@ router.put("/seller/profile", verifyAuth, upload.any(), async (req, res) => {
           await deleteImage(
             userData.sellerApplication.paymentDetails.bank.qrCodePublicId,
           );
-        } catch (error) {
-          console.warn("Failed to delete old bank QR:", error);
-        }
+        } catch (error) {}
       }
 
       const qrUploadResult = await uploadQr(
@@ -1083,7 +1052,6 @@ router.put("/seller/profile", verifyAuth, upload.any(), async (req, res) => {
       seller: sellerData,
     });
   } catch (error) {
-    console.error("Update seller profile error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update seller profile",
@@ -1124,7 +1092,6 @@ router.get("/seller-applications", verifyAuth, async (req, res) => {
       applications,
     });
   } catch (error) {
-    console.error("Get seller applications error:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -1203,7 +1170,6 @@ router.put("/approve-seller/:uid", verifyAuth, async (req, res) => {
       message: "Seller application approved successfully",
     });
   } catch (error) {
-    console.error("Approve seller error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to approve seller application",
@@ -1249,7 +1215,6 @@ router.put("/reject-seller/:uid", verifyAuth, async (req, res) => {
       message: "Seller application rejected",
     });
   } catch (error) {
-    console.error("Reject seller error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to reject seller application",
@@ -1300,7 +1265,6 @@ router.post(
         publicId: uploadResult.publicId,
       });
     } catch (error) {
-      console.error("Seller avatar upload error:", error);
       res.status(500).json({ success: false, message: "Avatar upload failed" });
     }
   },
@@ -1333,7 +1297,6 @@ router.get("/seller/:sellerId/payment-details", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Get seller payment details error:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",

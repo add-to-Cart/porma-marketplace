@@ -53,7 +53,6 @@ export default function Marketplace() {
         data.hasMore !== false && (data.products || data).length === 20,
       );
     } catch (error) {
-      console.error("Failed to fetch products", error);
     } finally {
       setLoading(false);
     }

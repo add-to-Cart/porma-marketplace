@@ -188,7 +188,6 @@ export default function SellerApplication() {
         toast.error(response.message || "Failed to submit application");
       }
     } catch (error) {
-      console.error("Error submitting application:", error);
       toast.error("Failed to submit application. Please try again.");
     } finally {
       setLoading(false);

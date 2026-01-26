@@ -14,7 +14,6 @@ export const getUsers = async (req, res) => {
 
     res.status(200).json(users);
   } catch (err) {
-    console.error("Fetch Error:", err);
     res
       .status(500)
       .json({ message: "Failed to fetch users", error: err.message });
@@ -33,7 +32,6 @@ export const getSellers = async (req, res) => {
 
     res.status(200).json(users);
   } catch (err) {
-    console.error("Fetch Error:", err);
     res
       .status(500)
       .json({ message: "Failed to fetch users", error: err.message });
@@ -52,7 +50,6 @@ export const getReviews = async (req, res) => {
 
     res.status(200).json(users);
   } catch (err) {
-    console.error("Fetch Error:", err);
     res
       .status(500)
       .json({ message: "Failed to fetch users", error: err.message });

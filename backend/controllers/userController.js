@@ -20,7 +20,6 @@ export const createOrUpdateUser = async (req, res) => {
     const snap = await userRef.get();
     res.json({ id: snap.id, ...snap.data() });
   } catch (err) {
-    console.error("Error saving user:", err);
     res.status(500).json({ error: "Failed to save user" });
   }
 };
@@ -41,7 +40,6 @@ export const resolveEmail = async (req, res) => {
     const data = snap.docs[0].data();
     res.json({ email: data.email });
   } catch (err) {
-    console.error("Error resolving email:", err);
     res.status(500).json({ error: "Resolve failed" });
   }
 };
@@ -58,7 +56,6 @@ export const getUserById = async (req, res) => {
     if (sellerSnap.exists) userData.seller = sellerSnap.data();
     res.json(userData);
   } catch (err) {
-    console.error("Error fetching user:", err);
     res.status(500).json({ error: "Failed to fetch user" });
   }
 };
@@ -108,7 +105,6 @@ export const applySeller = async (req, res) => {
 
     res.json({ success: true, message: "Application submitted" });
   } catch (err) {
-    console.error("Apply Seller Error:", err);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };

@@ -42,7 +42,6 @@ export default function OrdersPage() {
       const data = await getBuyerOrders(user.uid);
       setOrders(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Error fetching orders:", err);
       toast.error("Failed to load orders");
       setOrders([]);
     } finally {
@@ -71,13 +70,6 @@ export default function OrdersPage() {
           const rating = Number(ratingValues[item.productId]);
           const reviewText = reviewTexts[item.productId] || "";
 
-          console.log("Submitting review for product:", item.productId, {
-            rating,
-            reviewText,
-            buyerId: user.uid,
-            buyerName: user.displayName || user.username || "Anonymous",
-          });
-
           await addReview(
             item.productId,
             rating,
@@ -88,7 +80,6 @@ export default function OrdersPage() {
 
           successCount++;
         } catch (err) {
-          console.error(`Failed to submit review for ${item.productId}:`, err);
           toast.error(
             `Failed to submit review for ${item.productName || item.name}`,
           );
@@ -106,7 +97,6 @@ export default function OrdersPage() {
         fetchOrders();
       }
     } catch (err) {
-      console.error("Failed to submit reviews:", err);
       toast.error("Failed to submit reviews. Please try again.");
     } finally {
       setSubmittingReviews(false);

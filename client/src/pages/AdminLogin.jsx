@@ -16,8 +16,6 @@ export default function AdminLogin() {
   // Redirect based on user role
   useEffect(() => {
     if (user) {
-      console.log("Current user in AdminLogin:", user);
-
       // Check if user is admin
       if (user.isAdmin === true || user.role === "admin") {
         console.log("Navigating to /admin");

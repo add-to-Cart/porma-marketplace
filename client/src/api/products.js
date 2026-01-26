@@ -106,9 +106,7 @@ export const incrementViewCount = async (id) => {
   try {
     const res = await api.patch(`/products/${id}/view`);
     return res.data;
-  } catch (err) {
-    console.error("Failed to update view count:", err);
-  }
+  } catch (err) {}
 };
 
 /**
@@ -133,14 +131,6 @@ export const addReview = async (
   buyerName,
 ) => {
   try {
-    console.log("API call to add review:", {
-      productId,
-      rating,
-      reviewText,
-      buyerId,
-      buyerName,
-    });
-
     const res = await api.post(`/products/${productId}/review`, {
       rating: Number(rating),
       reviewText: reviewText || "",
@@ -148,10 +138,8 @@ export const addReview = async (
       buyerName: buyerName || "Anonymous",
     });
 
-    console.log("Review API response:", res.data);
     return res.data;
   } catch (error) {
-    console.error("Review API error:", error.response?.data || error);
     throw error;
   }
 };
@@ -161,17 +149,14 @@ export const addReview = async (
  */
 export const getProductReviews = async (productId) => {
   try {
-    console.log("Fetching reviews for product:", productId);
-
     if (!productId) {
       throw new Error("Product ID is required");
     }
 
     const res = await api.get(`/products/${productId}/reviews`);
-    console.log("Reviews API response:", res.data);
+
     return res.data;
   } catch (error) {
-    console.error("Get reviews API error:", error.response?.data || error);
     throw error;
   }
 };
@@ -181,8 +166,6 @@ export const getProductReviews = async (productId) => {
  */
 export const replyToReview = async (reviewId, replyText) => {
   try {
-    console.log("Replying to review:", { reviewId, replyText });
-
     if (!reviewId) {
       throw new Error("Review ID is required");
     }
@@ -208,10 +191,8 @@ export const replyToReview = async (reviewId, replyText) => {
       },
     );
 
-    console.log("Reply API response:", res.data);
     return res.data;
   } catch (error) {
-    console.error("Reply API error:", error.response?.data || error);
     throw error;
   }
 };

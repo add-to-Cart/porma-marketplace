@@ -45,7 +45,6 @@ export const NotificationProvider = ({ children }) => {
         setUnreadCount(unread);
       }
     } catch (error) {
-      console.error("Failed to fetch notifications:", error);
     } finally {
       setLoading(false);
     }
@@ -71,9 +70,7 @@ export const NotificationProvider = ({ children }) => {
         );
         setUnreadCount((prev) => Math.max(0, prev - 1));
       }
-    } catch (error) {
-      console.error("Failed to mark notification as read:", error);
-    }
+    } catch (error) {}
   };
 
   const deleteNotification = async (notificationId) => {
@@ -92,9 +89,7 @@ export const NotificationProvider = ({ children }) => {
       if (response.ok) {
         setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
       }
-    } catch (error) {
-      console.error("Failed to delete notification:", error);
-    }
+    } catch (error) {}
   };
 
   const clearAllNotifications = async () => {
@@ -114,9 +109,7 @@ export const NotificationProvider = ({ children }) => {
         setNotifications([]);
         setUnreadCount(0);
       }
-    } catch (error) {
-      console.error("Failed to clear notifications:", error);
-    }
+    } catch (error) {}
   };
 
   const value = {

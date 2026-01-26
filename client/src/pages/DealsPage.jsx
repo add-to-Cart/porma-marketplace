@@ -19,11 +19,10 @@ export default function DealsPage() {
     const fetchDeals = async () => {
       try {
         const response = await api.get("/products/deals");
-        console.log("Fetched deals:", response.data); // Add this
+
         setBundles(response.data.bundles || []);
         setSeasonal(response.data.seasonal || []);
       } catch (err) {
-        console.error("Error loading deals", err);
       } finally {
         setLoading(false);
       }

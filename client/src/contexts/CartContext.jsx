@@ -41,9 +41,7 @@ export const CartProvider = ({ children }) => {
         // Save to localStorage for guests
         try {
           localStorage.setItem("cart", JSON.stringify(cart));
-        } catch (error) {
-          console.error("Failed to save to localStorage:", error);
-        }
+        } catch (error) {}
       }
     } else {
       // Debounce the save operation for additions
@@ -54,9 +52,7 @@ export const CartProvider = ({ children }) => {
           // Save to localStorage for guests
           try {
             localStorage.setItem("cart", JSON.stringify(cart));
-          } catch (error) {
-            console.error("Failed to save to localStorage:", error);
-          }
+          } catch (error) {}
         }
       }, 500); // Wait 500ms before saving
 
@@ -88,7 +84,6 @@ export const CartProvider = ({ children }) => {
         }
       }
     } catch (error) {
-      console.error("Failed to load cart from Firestore:", error);
       loadCartFromLocalStorage(); // Fallback to localStorage
     } finally {
       setLoading(false);
@@ -104,7 +99,6 @@ export const CartProvider = ({ children }) => {
         prevCartLengthRef.current = parsedCart.length; // Update previous length
       }
     } catch (error) {
-      console.error("Failed to load cart from localStorage:", error);
       setCart([]);
     }
   };
@@ -133,7 +127,6 @@ export const CartProvider = ({ children }) => {
         body: JSON.stringify({ items: cart }),
       });
     } catch (error) {
-      console.error("Failed to save cart to Firestore:", error);
     } finally {
       isSavingRef.current = false;
     }

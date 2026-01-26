@@ -72,7 +72,6 @@ export default function ProductDetails() {
           viewCounted.current = true;
         }
       } catch (err) {
-        console.error("Error fetching product:", err);
       } finally {
         setLoading(false);
       }
@@ -112,7 +111,6 @@ export default function ProductDetails() {
       const data = await getProductReviews(id);
       setReviews(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Failed to fetch reviews:", err);
       setReviews([]);
     } finally {
       setReviewsLoading(false);

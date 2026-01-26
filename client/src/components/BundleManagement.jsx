@@ -52,9 +52,7 @@ export default function BundleManagement({ onBundleCreate }) {
     try {
       const data = await getProductsBySeller(user.uid);
       setProducts(data);
-    } catch (err) {
-      console.error("Failed to fetch products:", err);
-    }
+    } catch (err) {}
   };
 
   // ==================== EXISTING SELECT BUNDLE METHODS ====================
@@ -154,7 +152,6 @@ export default function BundleManagement({ onBundleCreate }) {
       fetchProducts();
       onBundleCreate && onBundleCreate();
     } catch (err) {
-      console.error(err);
       toast.error("Failed to create bundle");
     } finally {
       setLoading(false);
@@ -287,7 +284,6 @@ export default function BundleManagement({ onBundleCreate }) {
       fetchProducts();
       onBundleCreate && onBundleCreate();
     } catch (err) {
-      console.error(err);
       toast.error("Failed to create manual bundle");
     } finally {
       setLoading(false);

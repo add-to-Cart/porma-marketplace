@@ -12,30 +12,17 @@ export default function SellerProducts({
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  console.log("SellerProducts user:", user);
-
   useEffect(() => {
     const fetchMyProducts = async () => {
       if (!user?.uid) {
-        console.log("No user UID available");
         return;
       }
 
-      console.log(
-        "Fetching products for user:",
-        user.uid,
-        "isSeller:",
-        user.isSeller,
-        "role:",
-        user.role,
-      );
-
       try {
         const data = await getProductsBySeller(user.uid);
-        console.log("Fetched products:", data);
+
         setProducts(Array.isArray(data) ? data : []);
       } catch (err) {
-        console.error("Error fetching products:", err);
       } finally {
         setLoading(false);
       }

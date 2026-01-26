@@ -28,7 +28,6 @@ export default function AdminPage() {
         toast.error(response.message || "Failed to fetch applications");
       }
     } catch (error) {
-      console.error("Error fetching applications:", error);
       toast.error("Failed to fetch applications");
     } finally {
       setLoading(false);
@@ -47,7 +46,6 @@ export default function AdminPage() {
         toast.error(response.message || "Failed to approve");
       }
     } catch (error) {
-      console.error("Error approving application:", error);
       toast.error("Failed to approve");
     }
   };
@@ -65,7 +63,6 @@ export default function AdminPage() {
         toast.error(response.message || "Failed to reject");
       }
     } catch (error) {
-      console.error("Error rejecting application:", error);
       toast.error("Failed to reject");
     }
   };

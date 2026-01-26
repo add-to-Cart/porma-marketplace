@@ -110,9 +110,7 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
     try {
       const data = await getProductsBySeller(user.uid);
       setSellerProducts(data || []);
-    } catch (err) {
-      console.error("Failed to fetch seller products:", err);
-    }
+    } catch (err) {}
   };
 
   const populateFromProduct = (product) => {
@@ -343,7 +341,6 @@ export default function ProductForm({ selectedProduct, onProductUpdate }) {
         fetchSellerProducts();
       }
     } catch (err) {
-      console.error("Submit Error:", err);
       const errorMessage =
         err.response?.data?.message || "Failed to save product";
       toast.error(errorMessage);

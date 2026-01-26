@@ -85,10 +85,6 @@ export function calculateTrendingScore(product) {
 
     return trendingScore;
   } catch (error) {
-    console.error(
-      `Error calculating trending score for product ${product.id}:`,
-      error,
-    );
     return 0;
   }
 }

@@ -15,8 +15,6 @@ const populateSellerInfo = async (products) => {
     ...new Set(products.map((p) => p.sellerId).filter((id) => id)),
   ];
 
-  console.log("Seller IDs found:", sellerIds);
-
   if (sellerIds.length === 0) return products;
 
   const sellerPromises = sellerIds.map((id) =>
@@ -30,21 +28,14 @@ const populateSellerInfo = async (products) => {
       const sellerData = doc.data();
       const sellerId = sellerIds[index];
 
-      console.log(`Seller ${sellerId} data:`, sellerData);
-
       sellerMap[sellerId] = {
         storeName: sellerData.storeName,
         owner: sellerData.ownerName || sellerData.storeName,
         sellerAvatarUrl: sellerData.avatarUrl || null,
       };
-
-      console.log(`Seller ${sellerId} avatar:`, sellerData.avatarUrl);
     } else {
-      console.log(`Seller document ${sellerIds[index]} does not exist`);
     }
   });
-
-  console.log("Seller map:", sellerMap);
 
   return products.map((product) => ({
     ...product,
@@ -191,13 +182,7 @@ export const getAllProducts = async (req, res) => {
       hasMore,
       total: products.length,
     });
-  } catch (err) {
-    console.error("Marketplace Error:", err);
-    res.status(500).json({
-      message: "Failed to fetch marketplace",
-      error: err.message,
-    });
-  }
+  } catch (err) {}
 };
 
 // 2. TRENDING: Refined algorithm using normalized metrics
@@ -239,13 +224,7 @@ export const getTrendingProducts = async (req, res) => {
     const productsWithSellerInfo = await populateSellerInfo(trendingProducts);
 
     res.json(productsWithSellerInfo);
-  } catch (err) {
-    console.error("Trending Error:", err);
-    res.status(500).json({
-      message: "Failed to fetch trending products",
-      error: err.message,
-    });
-  }
+  } catch (err) {}
 };
 
 // 3. DEALS PAGE: Bundles and Seasonal Items
@@ -283,13 +262,7 @@ export const getDealsProducts = async (req, res) => {
       bundles: bundlesWithSeller,
       seasonal: seasonalWithSeller,
     });
-  } catch (err) {
-    console.error("Deals Error:", err);
-    res.status(500).json({
-      message: "Failed to fetch deals",
-      error: err.message,
-    });
-  }
+  } catch (err) {}
 };
 
 // Get products by seller with pagination
@@ -332,13 +305,7 @@ export const getProductsBySeller = async (req, res) => {
       limit: limitNum,
       hasMore,
     });
-  } catch (err) {
-    console.error("Failed to fetch seller products:", err);
-    return res.status(500).json({
-      message: "Failed to fetch seller products",
-      error: err.message,
-    });
-  }
+  } catch (err) {}
 };
 
 // Get related products
@@ -477,7 +444,6 @@ export const searchProducts = async (req, res) => {
 
     res.json(products);
   } catch (err) {
-    console.error("Search Error:", err);
     res.status(500).json({ message: "Search failed", error: err.message });
   }
 };
@@ -587,7 +553,6 @@ export const createProduct = async (req, res) => {
 
     res.status(201).json({ id: docRef.id, ...productData });
   } catch (err) {
-    console.error("Error in createProduct:", err);
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 };
@@ -675,7 +640,6 @@ export const updateProduct = async (req, res) => {
 
     res.json({ id, ...finalUpdate });
   } catch (err) {
-    console.error("Update Product Error:", err);
     res.status(500).json({ message: "Failed to update product" });
   }
 };
@@ -721,7 +685,6 @@ export const incrementViewCount = async (req, res) => {
       viewCount: currentViewCount + 1,
     });
   } catch (err) {
-    console.error("Increment View Count Error:", err);
     res.status(500).json({ message: "Failed to update view count" });
   }
 };
@@ -744,7 +707,6 @@ export const checkProductStock = async (req, res) => {
       ...result,
     });
   } catch (err) {
-    console.error("Check stock error:", err);
     res.status(500).json({ message: "Failed to check stock" });
   }
 };
@@ -764,7 +726,6 @@ export const checkMultipleStock = async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    console.error("Check multiple stock error:", err);
     res.status(500).json({ message: "Failed to check stock" });
   }
 };
@@ -784,7 +745,6 @@ export const getProductStockStatus = async (req, res) => {
 
     res.json(status);
   } catch (err) {
-    console.error("Get stock status error:", err);
     res.status(500).json({ message: "Failed to get stock status" });
   }
 };
@@ -810,7 +770,6 @@ export const getSellerInventoryStatus = async (req, res) => {
       products: inventory,
     });
   } catch (err) {
-    console.error("Get inventory status error:", err);
     res.status(500).json({ message: "Failed to get inventory status" });
   }
 };
@@ -860,7 +819,6 @@ export const addRating = async (req, res) => {
       ...updatedDoc.data(),
     });
   } catch (err) {
-    console.error("Add Rating Error:", err);
     res.status(500).json({ message: "Failed to add rating" });
   }
 };
@@ -868,8 +826,6 @@ export const addRating = async (req, res) => {
 export const getProductReviews = async (req, res) => {
   try {
     const { id } = req.params; // Changed from productId to id to match route
-
-    console.log("Getting reviews for product ID:", id);
 
     if (!id) {
       return res.status(400).json({
@@ -962,11 +918,8 @@ export const getProductReviews = async (req, res) => {
       });
     }
 
-    console.log(`Found ${reviews.length} reviews for product ${id}`);
-
     res.json(reviews);
   } catch (err) {
-    console.error("Get Reviews Error:", err);
     res.status(500).json({
       success: false,
       message: "Failed to fetch reviews",
@@ -979,14 +932,6 @@ export const addReview = async (req, res) => {
   try {
     const { id } = req.params; // product ID
     const { rating, reviewText, buyerId, buyerName } = req.body;
-
-    console.log("Adding review:", {
-      productId: id,
-      rating,
-      reviewText,
-      buyerId,
-      buyerName,
-    });
 
     if (!id) {
       return res.status(400).json({
@@ -1045,13 +990,8 @@ export const addReview = async (req, res) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
-    console.log("Creating review document:", review);
-
     const reviewDoc = await db.collection("reviews").add(review);
 
-    console.log("Review created with ID:", reviewDoc.id);
-
-    // ✅ Update product ratings (NOT soldCount - that's done in completeOrder)
     const productRef = db.collection("products").doc(id);
     const productDoc = await productRef.get();
 
@@ -1071,11 +1011,6 @@ export const addReview = async (req, res) => {
         ratingAverage: Math.round(ratingAverage * 10) / 10,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-
-      console.log("Product ratings updated:", {
-        ratingsCount: ratings.length,
-        ratingAverage: Math.round(ratingAverage * 10) / 10,
-      });
     }
 
     res.json({
@@ -1085,7 +1020,6 @@ export const addReview = async (req, res) => {
       createdAt: new Date(),
     });
   } catch (err) {
-    console.error("Add Review Error:", err);
     res.status(500).json({
       success: false,
       message: "Failed to add review",
@@ -1099,8 +1033,6 @@ export const replyToReview = async (req, res) => {
     const { reviewId } = req.params;
     const { replyText } = req.body;
     const sellerId = req.user.uid; // Get from authenticated user
-
-    console.log("Replying to review:", { reviewId, replyText, sellerId });
 
     if (!reviewId) {
       return res.status(400).json({
@@ -1162,8 +1094,6 @@ export const replyToReview = async (req, res) => {
 
     await db.collection("reviews").doc(reviewId).update(updateData);
 
-    console.log("Seller reply added to review:", reviewId);
-
     res.json({
       success: true,
       message: "Reply added successfully",
@@ -1174,7 +1104,6 @@ export const replyToReview = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("Reply to Review Error:", err);
     res.status(500).json({
       success: false,
       message: "Failed to add reply",

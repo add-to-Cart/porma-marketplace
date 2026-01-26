@@ -35,7 +35,6 @@ export default function SellerReviewsPage() {
         setSelectedProduct(sellerProducts[0]);
       }
     } catch (error) {
-      console.error("Failed to fetch seller products:", error);
       toast.error("Failed to load products");
     } finally {
       setLoading(false);
@@ -47,7 +46,6 @@ export default function SellerReviewsPage() {
       const productReviews = await getProductReviews(productId);
       setReviews(productReviews);
     } catch (error) {
-      console.error("Failed to fetch reviews:", error);
       toast.error("Failed to load reviews");
     }
   };
@@ -70,7 +68,6 @@ export default function SellerReviewsPage() {
       setReplyingTo(null);
       setReplyText("");
     } catch (error) {
-      console.error("Failed to send reply:", error);
       toast.error("Failed to send reply");
     }
   };

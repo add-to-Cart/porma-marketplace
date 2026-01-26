@@ -29,7 +29,6 @@ export default function SellerOrdersPage() {
       const data = await getSellerOrders(user.uid);
       setOrders(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Error fetching orders:", err);
       toast.error("Failed to load orders");
       setOrders([]);
     } finally {
@@ -89,7 +88,6 @@ export default function SellerOrdersPage() {
         toast.error(data.message || "Failed to verify payment");
       }
     } catch (err) {
-      console.error("Verify payment error:", err);
       toast.error("Failed to verify payment");
     }
   };
@@ -111,7 +109,6 @@ export default function SellerOrdersPage() {
       }
       await fetchOrders();
     } catch (err) {
-      console.error("Update delivery error:", err);
       toast.error("Failed to update delivery status");
     }
   };
