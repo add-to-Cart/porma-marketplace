@@ -577,6 +577,25 @@ export default function ProductDetails() {
                               />{" "}
                               Verified Purchase
                             </div>
+
+                            {/* Seller Reply */}
+                            {review.sellerReply && (
+                              <div className="mt-4 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">
+                                    Seller Response
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    {new Date(
+                                      review.sellerReply.repliedAt,
+                                    ).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-700">
+                                  {review.sellerReply.text}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>

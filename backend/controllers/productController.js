@@ -892,6 +892,15 @@ export const getProductReviews = async (req, res) => {
         id: doc.id,
         ...data,
         createdAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
+        sellerReply: data.sellerReply
+          ? {
+              ...data.sellerReply,
+              repliedAt:
+                data.sellerReply.repliedAt?.toDate?.() ||
+                data.sellerReply.repliedAt ||
+                null,
+            }
+          : null,
       });
     });
 
@@ -916,6 +925,40 @@ export const getProductReviews = async (req, res) => {
       reviews.forEach((review) => {
         if (review.buyerId && buyerMap[review.buyerId]) {
           review.buyerAvatarUrl = buyerMap[review.buyerId].avatarUrl;
+        }
+      });
+    }
+
+    // Populate seller avatars for replies
+    const sellerIds = [
+      ...new Set(
+        reviews.map((r) => r.sellerReply?.sellerId).filter((id) => id),
+      ),
+    ];
+    if (sellerIds.length > 0) {
+      const sellerPromises = sellerIds.map((id) =>
+        db.collection("users").doc(id).get(),
+      );
+      const sellerDocs = await Promise.all(sellerPromises);
+      const sellerMap = {};
+      sellerDocs.forEach((doc, index) => {
+        if (doc.exists) {
+          const userData = doc.data();
+          sellerMap[sellerIds[index]] = {
+            avatarUrl: userData.photoURL || null,
+            name: userData.displayName || userData.name || "Seller",
+          };
+        }
+      });
+      reviews.forEach((review) => {
+        if (
+          review.sellerReply?.sellerId &&
+          sellerMap[review.sellerReply.sellerId]
+        ) {
+          review.sellerReply.sellerAvatarUrl =
+            sellerMap[review.sellerReply.sellerId].avatarUrl;
+          review.sellerReply.sellerName =
+            sellerMap[review.sellerReply.sellerId].name;
         }
       });
     }
@@ -1047,6 +1090,95 @@ export const addReview = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to add review",
+      error: err.message,
+    });
+  }
+};
+
+export const replyToReview = async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    const { replyText } = req.body;
+    const sellerId = req.user.uid; // Get from authenticated user
+
+    console.log("Replying to review:", { reviewId, replyText, sellerId });
+
+    if (!reviewId) {
+      return res.status(400).json({
+        success: false,
+        message: "Review ID is required",
+      });
+    }
+
+    if (!replyText || replyText.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Reply text is required",
+      });
+    }
+
+    // Get the review document
+    const reviewDoc = await db.collection("reviews").doc(reviewId).get();
+
+    if (!reviewDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Review not found",
+      });
+    }
+
+    const review = reviewDoc.data();
+
+    // Verify the seller owns the product
+    const productDoc = await db
+      .collection("products")
+      .doc(review.productId)
+      .get();
+
+    if (!productDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    const product = productDoc.data();
+
+    if (product.sellerId !== sellerId) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only reply to reviews on your own products",
+      });
+    }
+
+    // Update the review with seller reply
+    const updateData = {
+      sellerReply: {
+        text: replyText.trim(),
+        repliedAt: admin.firestore.FieldValue.serverTimestamp(),
+        sellerId: sellerId,
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await db.collection("reviews").doc(reviewId).update(updateData);
+
+    console.log("Seller reply added to review:", reviewId);
+
+    res.json({
+      success: true,
+      message: "Reply added successfully",
+      sellerReply: {
+        text: replyText.trim(),
+        repliedAt: new Date(),
+        sellerId: sellerId,
+      },
+    });
+  } catch (err) {
+    console.error("Reply to Review Error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to add reply",
       error: err.message,
     });
   }

@@ -175,3 +175,43 @@ export const getProductReviews = async (productId) => {
     throw error;
   }
 };
+
+/**
+ * Reply to a review as a seller
+ */
+export const replyToReview = async (reviewId, replyText) => {
+  try {
+    console.log("Replying to review:", { reviewId, replyText });
+
+    if (!reviewId) {
+      throw new Error("Review ID is required");
+    }
+
+    if (!replyText || replyText.trim() === "") {
+      throw new Error("Reply text is required");
+    }
+
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      throw new Error("Authentication required");
+    }
+
+    const res = await api.put(
+      `/products/reviews/${reviewId}/reply`,
+      {
+        replyText,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    console.log("Reply API response:", res.data);
+    return res.data;
+  } catch (error) {
+    console.error("Reply API error:", error.response?.data || error);
+    throw error;
+  }
+};

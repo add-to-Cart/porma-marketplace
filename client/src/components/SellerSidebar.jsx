@@ -6,6 +6,7 @@ import {
   Settings,
   LogOut,
   User,
+  MessageSquare,
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -40,6 +41,11 @@ export default function SellerSidebar() {
       label: "ORDER DESK",
       icon: <ShoppingCart size={18} />,
       path: "/seller/orders",
+    },
+    {
+      label: "REVIEWS",
+      icon: <MessageSquare size={18} />,
+      path: "/seller/reviews",
     },
   ];
 

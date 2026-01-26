@@ -1,5 +1,6 @@
 import express from "express";
 import multer from "multer";
+import { verifyAuth } from "../middleware/auth.js";
 import {
   getAllProducts,
   getTrendingProducts,
@@ -15,6 +16,7 @@ import {
   addRating,
   addReview,
   getProductReviews,
+  replyToReview,
   checkProductStock,
   checkMultipleStock,
   getProductStockStatus,
@@ -36,6 +38,7 @@ router.get("/seller/:sellerId", getProductsBySeller);
 // Review routes - THESE MUST BE BEFORE /:id
 router.get("/:id/reviews", getProductReviews);
 router.post("/:id/review", addReview);
+router.put("/reviews/:reviewId/reply", verifyAuth, replyToReview);
 
 // Other specific :id routes
 router.get("/:id/related", getRelatedProducts);

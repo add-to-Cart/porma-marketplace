@@ -711,27 +711,6 @@ export default function SellerAccount() {
               </div>
             </div>
 
-            <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4">
-              <div className="flex gap-3">
-                <AlertCircle
-                  className="text-amber-600 flex-shrink-0"
-                  size={20}
-                />
-                <div className="text-sm text-amber-800">
-                  <p className="font-bold mb-1">Important Notes:</p>
-                  <ul className="list-disc list-inside space-y-1">
-                    <li>
-                      Your payment details will be shown to buyers during
-                      checkout
-                    </li>
-                    <li>Make sure your QR code is clear and scannable</li>
-                    <li>Double-check all information before submitting</li>
-                    <li>Admin will review your application before approval</li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-
             <button
               type="submit"
               disabled={loading}

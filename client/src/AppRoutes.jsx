@@ -24,6 +24,7 @@ import SellerOrdersPage from "@/pages/SellerOrdersPage";
 import OrdersPage from "@/pages/OrdersPage";
 import SellerAccount from "@/pages/SellerAccount";
 import SellerApplication from "@/pages/SellerApplication";
+import SellerReviewsPage from "@/pages/SellerReviewsPage";
 
 export default function AppRoutes() {
   return (
@@ -69,6 +70,7 @@ export default function AppRoutes() {
         <Route path="/seller/dashboard" element={<SellerDashboard />} />
         <Route path="/seller/product" element={<InventoryPage />} />
         <Route path="/seller/orders" element={<SellerOrdersPage />} />
+        <Route path="/seller/reviews" element={<SellerReviewsPage />} />
 
         <Route path="/seller/account" element={<SellerAccount />} />
       </Route>
