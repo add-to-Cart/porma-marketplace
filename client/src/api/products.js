@@ -57,6 +57,17 @@ export const getTrendingProducts = async (limit = 20) => {
 };
 
 /**
+ * Get trending products for a specific seller
+ */
+export const getTrendingProductsBySeller = async (sellerId, limit = 20) => {
+  if (!sellerId) return [];
+  const res = await api.get(
+    `/products/seller/${sellerId}/trending?limit=${limit}`,
+  );
+  return res.data || [];
+};
+
+/**
  * Get related products for a specific product
  */
 export const getRelatedProducts = async (id, params) => {

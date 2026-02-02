@@ -8,6 +8,7 @@ import SignupPage from "@/pages/SignupPage";
 import ProfilePage from "@/pages/ProfilePage";
 import AdminPage from "@/pages/AdminPage";
 import AdminLogin from "@/pages/AdminLogin";
+import CompleteProfilePage from "@/pages/CompleteProfilePage";
 
 import MarketPlace from "@/pages/Marketplace";
 import ProductUpdate from "@/pages/ProductUpdate";
@@ -30,6 +31,7 @@ export default function AppRoutes() {
   return (
     <Routes>
       {/* Auth Routes */}
+      <Route path="/complete-profile" element={<CompleteProfilePage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/admin-login" element={<AdminLogin />} />
@@ -58,6 +60,9 @@ export default function AppRoutes() {
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/apply-seller" element={<SellerApplication />} />
       </Route>
+
+      {/* Complete profile (used after social sign-in) */}
+      <Route path="/complete-profile" element={<ProfilePage />} />
 
       {/* Seller Layout - Protected Routes */}
       <Route

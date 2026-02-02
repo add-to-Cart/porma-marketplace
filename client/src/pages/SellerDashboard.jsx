@@ -32,6 +32,7 @@ export default function SellerDashboard() {
 
   const [salesData, setSalesData] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
+  const [trendingProducts, setTrendingProducts] = useState([]);
 
   useEffect(() => {
     if (user) {
@@ -52,10 +53,14 @@ export default function SellerDashboard() {
     try {
       setLoading(true);
 
-      // Fetch orders and products in parallel
-      const [ordersData, productsData] = await Promise.all([
+      // Fetch orders, products and seller-trending in parallel
+      const [ordersData, productsData, trendingData] = await Promise.all([
         getSellerOrders(user.uid),
         getProductsBySeller(user.uid),
+        // lazy-import to avoid circular deps
+        import("@/api/products").then((m) =>
+          m.getTrendingProductsBySeller(user.uid, 10),
+        ),
       ]);
 
       const sanitizedOrders = Array.isArray(ordersData) ? ordersData : [];
@@ -63,6 +68,7 @@ export default function SellerDashboard() {
 
       setOrders(sanitizedOrders);
       setProducts(sanitizedProducts);
+      setTrendingProducts(Array.isArray(trendingData) ? trendingData : []);
 
       // Calculate statistics
       calculateStats(sanitizedOrders, sanitizedProducts);
@@ -364,6 +370,35 @@ export default function SellerDashboard() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Trending Products */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 mb-8">
+          <h2 className="text-lg font-bold text-gray-900 mb-4">
+            Trending Products
+          </h2>
+          {trendingProducts.length === 0 ? (
+            <p className="text-sm text-gray-500">No trending products yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {trendingProducts.map((p) => (
+                <div key={p.id} className="p-4 bg-gray-50 rounded-lg">
+                  <p className="font-semibold text-gray-900">
+                    {p.name || p.productName}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Sold: {p.soldCount || 0}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Score:{" "}
+                    {p.trendingData?.score?.toFixed
+                      ? p.trendingData.score.toFixed(2)
+                      : p.trendingData?.score || 0}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Charts Section */}

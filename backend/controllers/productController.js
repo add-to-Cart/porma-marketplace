@@ -227,6 +227,53 @@ export const getTrendingProducts = async (req, res) => {
   } catch (err) {}
 };
 
+// Trending products filtered by seller
+export const getTrendingProductsBySeller = async (req, res) => {
+  try {
+    const { sellerId } = req.params;
+    const { limit = 20 } = req.query;
+    if (!sellerId)
+      return res.status(400).json({ message: "sellerId required" });
+
+    const snapshot = await db
+      .collection("products")
+      .where("sellerId", "==", sellerId)
+      .limit(200)
+      .get();
+    let products = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+
+    products = products.map((p) => {
+      let avgRating = p.ratingAverage || 0;
+      if (!avgRating && p.ratings && p.ratings.length > 0) {
+        avgRating = p.ratings.reduce((a, b) => a + b, 0) / p.ratings.length;
+      }
+
+      return {
+        ...p,
+        ratingAverage: parseFloat(avgRating.toFixed(1)),
+        soldCount: p.soldCount || 0,
+        viewCount: p.viewCount || 0,
+        ratingsCount: p.ratingsCount || 0,
+      };
+    });
+
+    const trendingProducts = calculateTrendingProducts(
+      products,
+      parseInt(limit),
+    );
+    const productsWithSellerInfo = await populateSellerInfo(trendingProducts);
+    res.json(productsWithSellerInfo);
+  } catch (err) {
+    console.error("getTrendingProductsBySeller error:", err);
+    res
+      .status(500)
+      .json({
+        message: "Failed to get trending products by seller",
+        error: err.message,
+      });
+  }
+};
+
 // 3. DEALS PAGE: Bundles and Seasonal Items
 export const getDealsProducts = async (req, res) => {
   try {

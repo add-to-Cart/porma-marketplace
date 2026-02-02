@@ -1304,4 +1304,104 @@ router.get("/seller/:sellerId/payment-details", async (req, res) => {
   }
 });
 
+// ============================================
+// ADMIN: BLOCK/UNBLOCK SELLER
+// ============================================
+router.put("/admin/block-seller/:sellerId", verifyAuth, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const { sellerId } = req.params;
+    const { blocked } = req.body;
+    const db = admin.firestore();
+
+    const sellerDoc = await db.collection("sellers").doc(sellerId).get();
+    if (!sellerDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "Seller not found",
+      });
+    }
+
+    // Update seller status
+    await db
+      .collection("sellers")
+      .doc(sellerId)
+      .update({
+        blocked: !!blocked,
+        blockedAt: blocked
+          ? admin.firestore.FieldValue.serverTimestamp()
+          : null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    // Also update user document
+    await db.collection("users").doc(sellerId).update({
+      blocked: !!blocked,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({
+      success: true,
+      message: blocked
+        ? "Seller blocked successfully"
+        : "Seller unblocked successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to update seller status",
+    });
+  }
+});
+
+// ============================================
+// ADMIN: RECOVER ACCOUNT
+// ============================================
+router.put("/admin/recover-account/:userId", verifyAuth, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    const { userId } = req.params;
+    const { reason } = req.body;
+    const db = admin.firestore();
+
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Re-enable the user in Firebase Auth
+    await admin.auth().updateUser(userId, { disabled: false });
+
+    // Update user document
+    await db
+      .collection("users")
+      .doc(userId)
+      .update({
+        disabled: false,
+        recoveredAt: admin.firestore.FieldValue.serverTimestamp(),
+        recoveryReason: reason || "Admin recovery",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    res.json({
+      success: true,
+      message: "Account recovered successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to recover account",
+    });
+  }
+});
+
 export default router;

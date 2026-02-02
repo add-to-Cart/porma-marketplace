@@ -10,23 +10,34 @@ import {
 } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useEffect, useState } from "react";
+import { getTopSellers } from "@/api/analytics";
 
 export default function SellerSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const [leadingStores, setLeadingStores] = useState([]);
 
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
   };
 
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const data = await getTopSellers(6);
+        if (mounted) setLeadingStores(Array.isArray(data) ? data : []);
+      } catch (err) {
+        // ignore
+      }
+    })();
+    return () => (mounted = false);
+  }, []);
+
   const menuItems = [
-    {
-      label: "RETURN TO SHOP",
-      icon: <User size={18} />, // Or use 'Home' from lucide-react
-      path: "/",
-    },
     {
       label: "DASHBOARD",
       icon: <LayoutDashboard size={18} />,
@@ -110,6 +121,40 @@ export default function SellerSidebar() {
       {/* FOOTER SECTION */}
       <div className="mt-auto p-6 border-t border-zinc-800 bg-black/20">
         <div className="space-y-4">
+          {/* Leading stores */}
+          {leadingStores.length > 0 && (
+            <div className="mb-2">
+              <p className="text-[10px] font-black uppercase text-zinc-700 tracking-[0.2em] mb-2">
+                Leading Stores
+              </p>
+              <div className="flex flex-col gap-2">
+                {leadingStores.slice(0, 4).map((s) => (
+                  <div key={s.id} className="flex items-center gap-2">
+                    <div className="w-10 h-10 bg-zinc-700 rounded-sm overflow-hidden flex-shrink-0">
+                      {s.sampleProduct && s.sampleProduct.image ? (
+                        <img
+                          src={s.sampleProduct.image}
+                          alt={s.sampleProduct.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-zinc-600" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold text-white truncate">
+                        {s.storeName}
+                      </p>
+                      <p className="text-[9px] text-zinc-500 truncate">
+                        {s.sampleProduct?.name ||
+                          `${s.totalProducts || 0} products`}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {/* Account Info */}
           <div className="flex items-center gap-3 px-3 py-2">
             <div className="w-8 h-8 bg-zinc-700 border border-zinc-600 flex items-center justify-center rounded-sm">

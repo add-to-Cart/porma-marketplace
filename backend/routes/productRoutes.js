@@ -4,6 +4,7 @@ import { verifyAuth } from "../middleware/auth.js";
 import {
   getAllProducts,
   getTrendingProducts,
+  getTrendingProductsBySeller,
   getDealsProducts,
   updateProduct,
   getProductById,
@@ -30,6 +31,7 @@ const router = express.Router();
 router.get("/", getAllProducts);
 router.get("/search", searchProducts);
 router.get("/trending", getTrendingProducts);
+router.get("/seller/:sellerId/trending", getTrendingProductsBySeller);
 router.get("/deals", getDealsProducts);
 router.get("/tags", getProductsByTag);
 router.get("/seller/:sellerId", getProductsBySeller);

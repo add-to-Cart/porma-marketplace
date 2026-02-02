@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { getAllProducts } from "@/api/products.js";
 import ProductCard from "@/components/ProductCard";
 import { useFilters } from "@/contexts/FilterContext";
@@ -7,12 +8,25 @@ import { useSearch } from "@/contexts/SearchContext";
 import Sidebar from "@/components/Sidebar";
 
 export default function Marketplace() {
+  const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const navigate = useNavigate();
   const observer = useRef();
+
+  // Redirect sellers to their dashboard — they should not see marketplace
+  useEffect(() => {
+    if (!user) return;
+    const isSeller =
+      (user.role || "").toLowerCase() === "seller" ||
+      user.isSeller ||
+      user.is_seller;
+    if (isSeller) {
+      navigate("/seller/dashboard");
+    }
+  }, [user, navigate]);
 
   const { filters, applyFilters } = useFilters();
   const { searchResults, searchQuery, isSearching } = useSearch();
@@ -138,7 +152,7 @@ export default function Marketplace() {
               const isLast = index === displayProducts.length - 1;
               return (
                 <div
-                  key={product.id}
+                  key={product.id || `product-${index}`}
                   ref={isLast && !isUserSearching ? lastProductRef : null}
                 >
                   <ProductCard
