@@ -16,23 +16,52 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Helper to check seller restriction
+  const isSellerRestricted = (userObj) => {
+    if (!userObj) return false;
+    const isSeller = userObj.isSeller === true || userObj.role === "seller";
+    const isDeactivated =
+      userObj.status === "deactivated" || userObj.isActive === false;
+    const isRestricted =
+      userObj.status === "restricted" || userObj.isRestricted === true;
+    return isSeller && (isDeactivated || isRestricted);
+  };
+
+  // Centralized user setter
+  const setUserWithRestriction = (userObj) => {
+    if (isSellerRestricted(userObj)) {
+      localStorage.removeItem("authToken");
+      setUser(null);
+      setError("Seller account is inactive or restricted.");
+      setLoading(false);
+      return false;
+    }
+    setUser(userObj);
+    setError(null);
+    setLoading(false);
+    return true;
+  };
+
+  // Set admin user directly (for admin login)
+  const setAdminUser = (adminObj) => {
+    setUser({ ...adminObj, isAdmin: true });
+    setError(null);
+    setLoading(false);
+  };
+
   useEffect(() => {
     const init = async () => {
       const token = localStorage.getItem("authToken");
       if (token) {
-        try {
-          setLoading(true);
-          const res = await authAPI.getProfile(token);
-          if (res.success) {
-            setUser(res.user);
-          } else {
-            localStorage.removeItem("authToken");
-          }
-        } catch (e) {
+        setLoading(true);
+        const res = await authAPI.getProfile(token);
+        if (res.success) {
+          setUserWithRestriction(res.user);
+        } else {
           localStorage.removeItem("authToken");
-        } finally {
-          setLoading(false);
+          setUser(null);
         }
+        setLoading(false);
       } else {
         setLoading(false);
       }
@@ -44,18 +73,21 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
-
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email,
         password,
       );
       const idToken = await userCredential.user.getIdToken();
-
       const response = await authAPI.verifyToken(idToken);
       if (response.success) {
         localStorage.setItem("authToken", idToken);
-        setUser(response.user);
+        if (!setUserWithRestriction(response.user)) {
+          return {
+            success: false,
+            message: "Seller account is inactive or restricted.",
+          };
+        }
         return { success: true };
       }
       setError(response.message);
@@ -72,27 +104,44 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
-
-      const response = await authAPI.signIn(identifier, password);
-      if (response.success) {
-        const userCredential = await signInWithCustomToken(
-          auth,
-          response.customToken,
-        );
-        const idToken = await userCredential.user.getIdToken();
-
-        const verifyResponse = await authAPI.verifyToken(idToken);
-        if (verifyResponse.success) {
-          localStorage.setItem("authToken", idToken);
-
-          setUser(verifyResponse.user);
-          return { success: true, user: verifyResponse.user };
+      let email = identifier;
+      // If identifier is not an email, resolve email from backend
+      if (!identifier.includes("@")) {
+        // Call backend to resolve email from username
+        const res = await authAPI.resolveEmail(identifier);
+        if (!res || !res.email) {
+          setError(
+            "Username not found. Please use your email or a valid username.",
+          );
+          setLoading(false);
+          return {
+            success: false,
+            message:
+              "Username not found. Please use your email or a valid username.",
+          };
         }
-        setError(verifyResponse.message);
-        return { success: false, message: verifyResponse.message };
+        email = res.email;
       }
-      setError(response.message);
-      return { success: false, message: response.message };
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password,
+      );
+      const idToken = await userCredential.user.getIdToken();
+      // Now verify idToken with backend to get user data
+      const verifyResponse = await authAPI.verifyToken(idToken);
+      if (verifyResponse.success) {
+        localStorage.setItem("authToken", idToken);
+        if (!setUserWithRestriction(verifyResponse.user)) {
+          return {
+            success: false,
+            message: "Seller account is inactive or restricted.",
+          };
+        }
+        return { success: true, user: verifyResponse.user };
+      }
+      setError(verifyResponse.message);
+      return { success: false, message: verifyResponse.message };
     } catch (err) {
       setError(err.message || "Sign in failed");
       return { success: false, message: err.message };
@@ -105,7 +154,6 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
-
       const response = await authAPI.signInAdmin(username, password);
       if (response.success) {
         const userCredential = await signInWithCustomToken(
@@ -113,12 +161,15 @@ export const AuthProvider = ({ children }) => {
           response.customToken,
         );
         const idToken = await userCredential.user.getIdToken();
-
         const verifyResponse = await authAPI.verifyToken(idToken);
         if (verifyResponse.success) {
           localStorage.setItem("authToken", idToken);
-
-          setUser(verifyResponse.user);
+          if (!setUserWithRestriction(verifyResponse.user)) {
+            return {
+              success: false,
+              message: "Seller account is inactive or restricted.",
+            };
+          }
           return { success: true, user: verifyResponse.user };
         }
         setError(verifyResponse.message);
@@ -138,15 +189,18 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       setError(null);
-
       const result = await signInWithPopup(auth, googleProvider);
       const idToken = await result.user.getIdToken();
-
       const response = await authAPI.verifyToken(idToken);
       if (response.success) {
         localStorage.setItem("authToken", idToken);
-        setUser(response.user);
-        return { success: true };
+        if (!setUserWithRestriction(response.user)) {
+          return {
+            success: false,
+            message: "Seller account is inactive or restricted.",
+          };
+        }
+        return { success: true, user: response.user };
       }
       setError(response.message);
       return { success: false, message: response.message };
@@ -201,20 +255,38 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const value = {
-    user,
-    loading,
-    error,
-    signUp,
-    signIn,
-    signInAdmin,
-    signInWithGoogle,
-    signOut,
-    updateProfile,
-    refreshProfile,
-  };
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        error,
+        signUp,
+        signIn,
+        signInAdmin,
+        signInWithGoogle,
+        setUserWithRestriction,
+        setAdminUser,
+        setUser,
+        setError,
+        setLoading,
+        signOut,
+        updateProfile, // Added this since you defined it but didn't export it
+        refreshProfile, // Added this since you defined it but didn't export it
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}; // <--- THIS WAS LIKELY MISSING
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+// You also need these to actually use the context in other files
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 };
 
-export const useAuth = () => useContext(AuthContext);
+export default AuthContext;

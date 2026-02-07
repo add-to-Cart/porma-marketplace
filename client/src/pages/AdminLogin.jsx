@@ -1,28 +1,26 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-export default function AdminLogin() {
-  const [identifier, setIdentifier] = useState("");
+// --- THE FIX: Wrap everything in a function component ---
+const AdminLogin = () => {
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [error, setError] = useState("");
 
   const navigate = useNavigate();
-  const { user, signInAdmin } = useAuth();
+  const { setAdminUser } = useAuth();
 
-  // Redirect based on user role
+  const { user } = useAuth();
   useEffect(() => {
-    if (user) {
-      // Check if user is admin
-      if (user.isAdmin === true || user.role === "admin") {
-        console.log("Navigating to /admin");
+    // Redirect if already logged in as admin
+    if (user && (user.isAdmin === true || user.role === "admin")) {
+      if (window.location.pathname !== "/admin") {
         navigate("/admin", { replace: true });
-      } else {
-        console.log("Not admin, navigating to /");
-        navigate("/", { replace: true });
       }
     }
   }, [user, navigate]);
@@ -30,28 +28,31 @@ export default function AdminLogin() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-
+    setError("");
     try {
-      const result = await signInAdmin(identifier, password);
-
-      if (result.success) {
-        toast.success("Admin Access Granted");
-        console.log("Admin login successful:", result.user);
-
-        // Navigation will be handled by useEffect when user state updates
-        // But as a backup, navigate immediately if isAdmin is true
-        if (result.user?.isAdmin || result.user?.role === "admin") {
-          navigate("/admin", { replace: true });
+      const res = await fetch("http://localhost:3000/auth/admin-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        localStorage.setItem("admin", JSON.stringify(data.admin));
+        if (data.token) {
+          localStorage.setItem("authToken", data.token);
         }
+        setAdminUser(data.admin);
+        toast.success("Login successful!");
+        navigate("/admin");
       } else {
-        toast.error(result.message || "Invalid Admin Credentials");
+        setError(data.message || "Invalid credentials");
+        toast.error(data.message || "Invalid credentials");
       }
-    } catch (error) {
-      console.error("Admin login error:", error);
-      toast.error(error.message || "Login failed");
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      setError("Server error. Please try again.");
+      toast.error("Server error. Please try again.");
     }
+    setLoading(false);
   };
 
   return (
@@ -59,7 +60,6 @@ export default function AdminLogin() {
       <ToastContainer position="top-center" autoClose={2000} hideProgressBar />
 
       <div className="w-full max-w-md bg-white p-8 rounded-xl shadow-sm border border-gray-100">
-        {/* Branding/Header */}
         <div className="text-center mb-8">
           <div className="bg-blue-600 w-12 h-12 rounded-lg mx-auto mb-4 flex items-center justify-center text-white font-bold text-xl">
             A
@@ -79,8 +79,8 @@ export default function AdminLogin() {
               type="text"
               placeholder="Enter admin username"
               className="w-full p-2.5 border rounded-lg border-gray-300 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
             />
           </div>
@@ -119,6 +119,7 @@ export default function AdminLogin() {
             </Link>
           </div>
 
+          {error && <div className="text-red-500 text-xs mb-2">{error}</div>}
           <button
             type="submit"
             disabled={loading}
@@ -143,4 +144,6 @@ export default function AdminLogin() {
       </div>
     </div>
   );
-}
+};
+
+export default AdminLogin;

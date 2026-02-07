@@ -2,6 +2,22 @@
 const API_BASE = "http://localhost:3000/auth";
 
 export const authAPI = {
+  // Resolve email from username
+  resolveEmail: async (identifier) => {
+    const response = await fetch(
+      `http://localhost:3000/users/resolve-email?identifier=${encodeURIComponent(identifier)}`,
+    );
+    return await response.json();
+  },
+  forgotPassword: async (email) => {
+    const response = await fetch(`${API_BASE}/forgot-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const data = await response.json();
+    return data;
+  },
   signUp: async (email, password, displayName) => {
     const response = await fetch(`${API_BASE}/signup`, {
       method: "POST",

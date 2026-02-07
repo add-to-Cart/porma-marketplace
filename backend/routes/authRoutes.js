@@ -1,4 +1,5 @@
 import express from "express";
+import bcrypt from "bcryptjs";
 import admin from "../config/firebaseAdmin.js";
 import { verifyAuth } from "../middleware/auth.js";
 import multer from "multer";
@@ -8,9 +9,85 @@ import {
   uploadQr,
   deleteImage,
 } from "../services/cloudinary_service.js";
+import nodemailer from "nodemailer";
+import { resolveEmail } from "../controllers/userController.js";
 
+// Initialize router and middleware before defining routes
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
+const db = admin.firestore();
+
+// ============================================
+// USER ROUTES
+// ============================================
+
+// Resolve email from username (for login)
+router.get("/users/resolve-email", resolveEmail);
+
+// Password reset
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Email is required" });
+    }
+    try {
+      const resetLink = await admin.auth().generatePasswordResetLink(email);
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_PASS,
+        },
+      });
+      await transporter.sendMail({
+        from: process.env.GMAIL_USER,
+        to: email,
+        subject: "Password Reset Request",
+        html: `<p>You requested a password reset for your account.</p><p><a href="${resetLink}">Click here to reset your password</a></p>`,
+      });
+      return res.json({ success: true, message: "Password reset email sent." });
+    } catch (err) {
+      return res
+        .status(500)
+        .json({ success: false, message: "Failed to send reset email" });
+    }
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to send reset email" });
+  }
+});
+
+// Admin Login
+router.post("/admin-login", async (req, res) => {
+  const { username, password } = req.body;
+  const snapshot = await db
+    .collection("admins")
+    .where("username", "==", username)
+    .get();
+  if (snapshot.empty)
+    return res
+      .status(401)
+      .json({ success: false, message: "Invalid credentials" });
+
+  const adminDoc = snapshot.docs[0].data();
+  const isMatch = await bcrypt.compare(password, adminDoc.passwordHash);
+  if (!isMatch)
+    return res
+      .status(401)
+      .json({ success: false, message: "Invalid credentials" });
+
+  return res.json({
+    success: true,
+    admin: {
+      username: adminDoc.username,
+      role: adminDoc.role,
+    },
+  });
+});
 
 // Sign up with email and password
 router.post("/signup", async (req, res) => {
@@ -37,7 +114,6 @@ router.post("/signup", async (req, res) => {
       displayName: displayName || email.split("@")[0],
     });
 
-    const db = admin.firestore();
     await db.collection("users").doc(userRecord.uid).set({
       uid: userRecord.uid,
       email: userRecord.email,
@@ -77,95 +153,58 @@ router.post("/signup", async (req, res) => {
 router.post("/signin", async (req, res) => {
   try {
     const { identifier, password } = req.body;
-
     if (!identifier || !password) {
       return res.status(400).json({
         success: false,
         message: "Identifier and password are required",
       });
     }
-
+    let userDoc = null;
+    let userData = null;
     let email = identifier;
-    let snapshot = null;
-
-    if (!identifier.includes("@")) {
-      const db = admin.firestore();
-      const usersRef = db.collection("users");
-      snapshot = await usersRef
+    const usersRef = db.collection("users");
+    if (identifier.includes("@")) {
+      const snapshot = await usersRef
+        .where("email", "==", identifier)
+        .limit(1)
+        .get();
+      if (!snapshot.empty) {
+        userDoc = snapshot.docs[0];
+        userData = userDoc.data();
+      }
+    } else {
+      const snapshot = await usersRef
         .where("displayName", "==", identifier)
         .limit(1)
         .get();
-
-      if (snapshot.empty) {
-        snapshot = await usersRef.where("isAdmin", "==", true).limit(1).get();
-      }
-
-      if (snapshot.empty) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid credentials",
-        });
-      }
-
-      const userDoc = snapshot.docs[0];
-      const userData = userDoc.data();
-      email = userData.email;
-
-      if (userData.isAdmin && !email) {
-        email = "admin@admin.com";
+      if (!snapshot.empty) {
+        userDoc = snapshot.docs[0];
+        userData = userDoc.data();
+        email = userData.email;
       }
     }
-
+    if (!userDoc || userData?.isAdmin || userData?.role === "admin") {
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid credentials" });
+    }
     let userRecord;
-    let foundUserDoc = null;
-    if (!identifier.includes("@")) {
-      foundUserDoc = snapshot.docs[0];
-    }
-
-    if (email === "admin@admin.com" && !foundUserDoc) {
-      const db = admin.firestore();
-      const usersRef = db.collection("users");
-      const adminSnapshot = await usersRef
-        .where("isAdmin", "==", true)
-        .limit(1)
-        .get();
-      if (!adminSnapshot.empty) {
-        foundUserDoc = adminSnapshot.docs[0];
-      }
-    }
-
     try {
       userRecord = await admin.auth().getUserByEmail(email);
     } catch (error) {
-      if (error.code === "auth/user-not-found" && foundUserDoc) {
-        userRecord = await admin.auth().createUser({
-          uid: foundUserDoc.id,
-          email,
-          password,
-        });
-      } else {
-        throw error;
-      }
+      return res
+        .status(401)
+        .json({ success: false, message: "Invalid credentials" });
     }
-
     const customToken = await admin.auth().createCustomToken(userRecord.uid);
-
-    const db = admin.firestore();
-    const userDoc = await db.collection("users").doc(userRecord.uid).get();
-    const userData = userDoc.data();
-
-    // Fetch seller data if user is a seller
     let sellerData = null;
     if (userData?.role === "seller") {
       const sellerDoc = await db
         .collection("sellers")
         .doc(userRecord.uid)
         .get();
-      if (sellerDoc.exists) {
-        sellerData = sellerDoc.data();
-      }
+      if (sellerDoc.exists) sellerData = sellerDoc.data();
     }
-
     res.json({
       success: true,
       message: "Sign in successful",
@@ -177,68 +216,13 @@ router.post("/signin", async (req, res) => {
         role: userData?.role || "buyer",
         isSeller: userData?.role === "seller",
         sellerApplication: userData?.sellerApplication,
-        seller: sellerData, // Include seller profile data from sellers collection
-        sellerAvatarUrl: sellerData?.avatarUrl, // Quick access for frontend
+        seller: sellerData,
+        sellerAvatarUrl: sellerData?.avatarUrl,
       },
       customToken,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-});
-
-// Admin sign in
-router.post("/signin-admin", async (req, res) => {
-  try {
-    const { identifier, password } = req.body;
-
-    if (!identifier || !password) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Username and password required" });
-    }
-
-    const db = admin.firestore();
-
-    const adminSnapshot = await db
-      .collection("users")
-      .where("isAdmin", "==", true)
-      .where("username", "==", identifier)
-      .limit(1)
-      .get();
-
-    if (adminSnapshot.empty) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Admin account not found" });
-    }
-
-    const adminDoc = adminSnapshot.docs[0];
-    const adminData = adminDoc.data();
-
-    if (adminData.password !== password) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Invalid credentials" });
-    }
-
-    const customToken = await admin.auth().createCustomToken(adminDoc.id);
-
-    res.json({
-      success: true,
-      user: {
-        uid: adminDoc.id,
-        displayName: adminData.username,
-        role: "admin",
-        isAdmin: true,
-      },
-      customToken,
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 
@@ -257,8 +241,8 @@ router.post("/google-signin", async (req, res) => {
     const decodedToken = await admin.auth().verifyIdToken(idToken);
     const { uid, email, name, picture } = decodedToken;
 
-    const db = admin.firestore();
-    const userDoc = await db.collection("users").doc(uid).get();
+    const userDocRef = db.collection("users").doc(uid);
+    const userDoc = await userDocRef.get();
 
     let userData;
     if (!userDoc.exists) {
@@ -267,40 +251,33 @@ router.post("/google-signin", async (req, res) => {
         email,
         displayName: name || email.split("@")[0],
         photoURL: picture || null,
-        googlePhotoURL: picture || null, // Store Google photo separately
+        googlePhotoURL: picture || null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         role: "buyer",
         provider: "google",
       };
-      await db.collection("users").doc(uid).set(userData);
+      await userDocRef.set(userData);
     } else {
       userData = userDoc.data();
-      // Always update the Google photo URL
       if (picture !== userData.googlePhotoURL) {
-        await db.collection("users").doc(uid).update({
+        await userDocRef.update({
           googlePhotoURL: picture,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         userData.googlePhotoURL = picture;
       }
 
-      // Set photoURL: custom avatar takes precedence, then Google photo as fallback
       let finalPhotoURL = userData.photoURL;
-
       if (userData.photoPublicId) {
-        // User has custom avatar - keep it
         finalPhotoURL = userData.photoURL;
       } else if (picture) {
-        // No custom avatar - use Google photo
         finalPhotoURL = picture;
       } else if (userData.googlePhotoURL) {
-        // Fallback to stored Google photo
         finalPhotoURL = userData.googlePhotoURL;
       }
 
-      // Update photoURL if it changed
       if (finalPhotoURL !== userData.photoURL) {
-        await db.collection("users").doc(uid).update({
+        await userDocRef.update({
           photoURL: finalPhotoURL,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -344,7 +321,6 @@ router.post("/token-verify", async (req, res) => {
     const decoded = await admin.auth().verifyIdToken(idToken);
     const { uid, email, name, picture } = decoded;
 
-    const db = admin.firestore();
     const userDocRef = db.collection("users").doc(uid);
     const userDoc = await userDocRef.get();
 
@@ -355,7 +331,7 @@ router.post("/token-verify", async (req, res) => {
         email,
         displayName: name || email.split("@")[0],
         photoURL: picture || null,
-        googlePhotoURL: picture || null, // Store Google photo separately
+        googlePhotoURL: picture || null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         role: "buyer",
         provider: decoded.firebase?.sign_in_provider || "unknown",
@@ -363,7 +339,6 @@ router.post("/token-verify", async (req, res) => {
       await userDocRef.set(userData);
     } else {
       userData = userDoc.data();
-      // Always update the Google photo URL
       if (picture !== userData.googlePhotoURL) {
         await userDocRef.update({
           googlePhotoURL: picture,
@@ -372,21 +347,15 @@ router.post("/token-verify", async (req, res) => {
         userData.googlePhotoURL = picture;
       }
 
-      // Set photoURL: custom avatar takes precedence, then Google photo as fallback
       let finalPhotoURL = userData.photoURL;
-
       if (userData.photoPublicId) {
-        // User has custom avatar - keep it
         finalPhotoURL = userData.photoURL;
       } else if (picture) {
-        // No custom avatar - use current Google photo
         finalPhotoURL = picture;
       } else if (userData.googlePhotoURL) {
-        // Fallback to stored Google photo
         finalPhotoURL = userData.googlePhotoURL;
       }
 
-      // Update photoURL if it changed
       if (finalPhotoURL !== userData.photoURL) {
         await userDocRef.update({
           photoURL: finalPhotoURL,
@@ -396,7 +365,6 @@ router.post("/token-verify", async (req, res) => {
       }
     }
 
-    // Fetch seller data if user is a seller
     let sellerData = null;
     if (userData.role === "seller") {
       const sellerDoc = await db.collection("sellers").doc(userData.uid).get();
@@ -417,8 +385,8 @@ router.post("/token-verify", async (req, res) => {
         isAdmin: userData.isAdmin === true || userData.role === "admin",
         isSeller: userData.role === "seller",
         sellerApplication: userData.sellerApplication,
-        seller: sellerData, // Include seller profile from sellers collection
-        sellerAvatarUrl: sellerData?.avatarUrl, // Quick access for frontend
+        seller: sellerData,
+        sellerAvatarUrl: sellerData?.avatarUrl,
       },
     });
   } catch (err) {
@@ -429,7 +397,6 @@ router.post("/token-verify", async (req, res) => {
 // Get current user profile
 router.get("/profile", verifyAuth, async (req, res) => {
   try {
-    const db = admin.firestore();
     const userDoc = await db.collection("users").doc(req.user.uid).get();
 
     if (!userDoc.exists) {
@@ -440,8 +407,6 @@ router.get("/profile", verifyAuth, async (req, res) => {
     }
 
     const userData = userDoc.data();
-
-    // Fetch seller data if user is a seller
     let sellerData = null;
     if (userData.role === "seller") {
       const sellerDoc = await db.collection("sellers").doc(req.user.uid).get();
@@ -470,9 +435,9 @@ router.get("/profile", verifyAuth, async (req, res) => {
         zipCode: userData.zipCode,
         avatarUrl: userData.photoURL || userData.googlePhotoURL || null,
         sellerApplication: userData.sellerApplication,
-        seller: sellerData, // Seller profile data from sellers collection
-        storeName: sellerData?.storeName, // Quick access
-        sellerAvatarUrl: sellerData?.avatarUrl, // Quick access for frontend
+        seller: sellerData,
+        storeName: sellerData?.storeName,
+        sellerAvatarUrl: sellerData?.avatarUrl,
       },
     });
   } catch (error) {
@@ -496,7 +461,6 @@ router.put("/profile", verifyAuth, async (req, res) => {
       province,
       zipCode,
     } = req.body;
-    const db = admin.firestore();
 
     await db.collection("users").doc(req.user.uid).update({
       username,
@@ -535,11 +499,9 @@ router.post(
           .json({ success: false, message: "No file uploaded" });
       }
 
-      const db = admin.firestore();
       const userDoc = await db.collection("users").doc(req.user.uid).get();
       const userData = userDoc.data();
 
-      // Delete old avatar if exists
       if (userData.photoPublicId) {
         try {
           await deleteImage(userData.photoPublicId);
@@ -581,13 +543,12 @@ router.post("/signout", verifyAuth, async (req, res) => {
 });
 
 // ============================================
-// GET SELLER PAYMENT DETAILS (For checkout)
+// SELLER ROUTES
 // ============================================
+
 router.get("/seller/:sellerId/payment-details", async (req, res) => {
   try {
     const { sellerId } = req.params;
-    const db = admin.firestore();
-
     const sellerDoc = await db.collection("sellers").doc(sellerId).get();
     if (!sellerDoc.exists) {
       return res.status(404).json({
@@ -615,8 +576,9 @@ router.get("/seller/:sellerId/payment-details", async (req, res) => {
 });
 
 // ============================================
-// ADMIN: BLOCK/UNBLOCK SELLER
+// ADMIN ROUTES
 // ============================================
+
 router.put("/admin/block-seller/:sellerId", verifyAuth, async (req, res) => {
   try {
     if (!req.user.isAdmin) {
@@ -625,7 +587,6 @@ router.put("/admin/block-seller/:sellerId", verifyAuth, async (req, res) => {
 
     const { sellerId } = req.params;
     const { blocked } = req.body;
-    const db = admin.firestore();
 
     const sellerDoc = await db.collection("sellers").doc(sellerId).get();
     if (!sellerDoc.exists) {
@@ -635,7 +596,6 @@ router.put("/admin/block-seller/:sellerId", verifyAuth, async (req, res) => {
       });
     }
 
-    // Update seller status
     await db
       .collection("sellers")
       .doc(sellerId)
@@ -647,7 +607,6 @@ router.put("/admin/block-seller/:sellerId", verifyAuth, async (req, res) => {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-    // Also update user document
     await db.collection("users").doc(sellerId).update({
       blocked: !!blocked,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -667,9 +626,6 @@ router.put("/admin/block-seller/:sellerId", verifyAuth, async (req, res) => {
   }
 });
 
-// ============================================
-// ADMIN: RECOVER ACCOUNT
-// ============================================
 router.put("/admin/recover-account/:userId", verifyAuth, async (req, res) => {
   try {
     if (!req.user.isAdmin) {
@@ -678,7 +634,6 @@ router.put("/admin/recover-account/:userId", verifyAuth, async (req, res) => {
 
     const { userId } = req.params;
     const { reason } = req.body;
-    const db = admin.firestore();
 
     const userDoc = await db.collection("users").doc(userId).get();
     if (!userDoc.exists) {
@@ -688,10 +643,8 @@ router.put("/admin/recover-account/:userId", verifyAuth, async (req, res) => {
       });
     }
 
-    // Re-enable the user in Firebase Auth
     await admin.auth().updateUser(userId, { disabled: false });
 
-    // Update user document
     await db
       .collection("users")
       .doc(userId)

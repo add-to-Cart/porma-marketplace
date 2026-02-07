@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { auth } from "@/config/firebase";
+import { sendPasswordResetEmail } from "firebase/auth";
 
 import { toast } from "react-hot-toast";
 import { authAPI } from "@/api/auth";
@@ -21,6 +23,7 @@ export default function ProfilePage() {
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(null);
+  const [resetLoading, setResetLoading] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -96,6 +99,22 @@ export default function ProfilePage() {
       toast.error("Update failed.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!user || !user.email) {
+      toast.error("No user email found. Please log in again.");
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, user.email);
+      toast.success("Password reset email sent!");
+    } catch (err) {
+      toast.error(err.message || "Failed to send reset email");
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -279,6 +298,17 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="mt-8">
+        <h3 className="text-lg font-semibold mb-2">Reset Password</h3>
+        <button
+          onClick={handleResetPassword}
+          disabled={resetLoading || !user || !user.email}
+          className="bg-blue-600 text-white py-2 px-4 rounded disabled:bg-blue-300"
+        >
+          {resetLoading ? "Sending..." : "Send Reset Email"}
+        </button>
       </div>
     </div>
   );

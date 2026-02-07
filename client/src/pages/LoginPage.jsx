@@ -33,10 +33,17 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      await signIn(identifier, password);
-      toast.success("Login successful!");
+      const result = await signIn(identifier, password);
+      if (result && result.success) {
+        toast.success("Login successful!");
+        // Redirect based on profile completeness
+        if (!result.user?.username) {
+          navigate("/complete-profile");
+        } else {
+          navigate("/");
+        }
+      }
     } catch (error) {
       toast.error(error.message);
     } finally {
