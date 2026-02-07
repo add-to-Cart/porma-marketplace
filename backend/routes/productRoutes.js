@@ -6,9 +6,7 @@ import {
   getTrendingProducts,
   getTrendingProductsBySeller,
   getDealsProducts,
-  updateProduct,
   getProductById,
-  createProduct,
   searchProducts,
   getRelatedProducts,
   getProductsByTag,
@@ -17,12 +15,16 @@ import {
   addRating,
   addReview,
   getProductReviews,
-  replyToReview,
   checkProductStock,
   checkMultipleStock,
   getProductStockStatus,
+} from "../controllers/buyerProductController.js";
+import {
+  createProduct,
+  updateProduct,
+  replyToReview,
   getSellerInventoryStatus,
-} from "../controllers/productController.js";
+} from "../controllers/sellerProductController.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 const router = express.Router();

@@ -116,7 +116,7 @@ export default function Navbar() {
                 <Package size={20} />
                 <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
               </button>
-              {user?.isSeller && (
+              {user?.isSeller && !user?.isAdmin && user?.role !== "admin" && (
                 <NavLink
                   to="/seller/dashboard"
                   className="p-2.5 hover:bg-purple-50 rounded-full text-purple-600 transition-colors group relative"

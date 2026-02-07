@@ -73,7 +73,8 @@ export const authAPI = {
   },
 
   updateSellerProfile: async (token, formData) => {
-    const response = await fetch(`${API_BASE}/seller/profile`, {
+    const ROOT = API_BASE.replace("/auth", "");
+    const response = await fetch(`${ROOT}/seller/profile`, {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -140,7 +141,8 @@ export const authAPI = {
 
   // Seller application
   applyAsSeller: async (token, formData) => {
-    const response = await fetch(`${API_BASE}/apply-seller`, {
+    const ROOT = API_BASE.replace("/auth", "");
+    const response = await fetch(`${ROOT}/seller/apply`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -155,7 +157,8 @@ export const authAPI = {
 
   // Update seller application (for pending applications)
   updateSellerApplication: async (token, formData) => {
-    const response = await fetch(`${API_BASE}/update-seller-application`, {
+    const ROOT = API_BASE.replace("/auth", "");
+    const response = await fetch(`${ROOT}/seller/update-application`, {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -170,7 +173,8 @@ export const authAPI = {
 
   // Get seller applications (admin only)
   getSellerApplications: async (token) => {
-    const response = await fetch(`${API_BASE}/seller-applications`, {
+    const ROOT = API_BASE.replace("/auth", "");
+    const response = await fetch(`${ROOT}/seller/applications`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -182,7 +186,8 @@ export const authAPI = {
 
   // Approve seller application (admin only)
   approveSeller: async (token, uid) => {
-    const response = await fetch(`${API_BASE}/approve-seller/${uid}`, {
+    const ROOT = API_BASE.replace("/auth", "");
+    const response = await fetch(`${ROOT}/seller/approve/${uid}`, {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -195,7 +200,8 @@ export const authAPI = {
 
   // Reject seller application (admin only)
   rejectSeller: async (token, uid, reason) => {
-    const response = await fetch(`${API_BASE}/reject-seller/${uid}`, {
+    const ROOT = API_BASE.replace("/auth", "");
+    const response = await fetch(`${ROOT}/seller/reject/${uid}`, {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -211,7 +217,8 @@ export const authAPI = {
   uploadSellerAvatar: async (token, file) => {
     const formData = new FormData();
     formData.append("avatar", file);
-    const response = await fetch(`${API_BASE}/seller/avatar`, {
+    const ROOT = API_BASE.replace("/auth", "");
+    const response = await fetch(`${ROOT}/seller/avatar`, {
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       body: formData,

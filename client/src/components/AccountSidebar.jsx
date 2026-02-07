@@ -39,13 +39,15 @@ export default function AccountSidebar() {
         </div>
         <h3 className="font-semibold text-gray-900">{displayName}</h3>
         <p className="text-sm text-gray-500 mb-4">{storeName}</p>
-        <Link
-          to="/seller/account"
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-        >
-          <Settings size={16} />
-          Manage Store
-        </Link>
+        {!(user?.isAdmin || user?.role === "admin") && (
+          <Link
+            to="/seller/account"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            <Settings size={16} />
+            Manage Store
+          </Link>
+        )}
       </div>
     </aside>
   );

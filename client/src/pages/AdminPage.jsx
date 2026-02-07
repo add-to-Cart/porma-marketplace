@@ -1,7 +1,15 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNavigate } from "react-router-dom";
 import { authAPI } from "@/api/auth";
+import {
+  getSalesAnalytics,
+  getSellersWithProducts,
+  getAllUsers,
+  updateUserStatus,
+  verifyDataConsistency,
+} from "@/api/admin";
 import {
   CheckCircle,
   Store,
@@ -15,6 +23,8 @@ import {
   Settings,
   MoreVertical,
   ChevronRight,
+  TrendingUp,
+  RefreshCw,
 } from "lucide-react";
 
 export default function AdminPage() {
@@ -25,14 +35,22 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState("all");
-  const { user } = useAuth();
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [consistencyReport, setConsistencyReport] = useState(null);
+  const [expandedSellerId, setExpandedSellerId] = useState(null);
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
 
   const [analytics, setAnalytics] = useState({
     totalSellers: 0,
     totalUsers: 0,
     totalOrders: 0,
+    totalOrderValue: 0,
+    completedOrders: 0,
+    totalItemsSold: 0,
     totalRevenue: 0,
     topSellers: [],
+    topProducts: [],
   });
 
   // run once when user info becomes available
@@ -61,47 +79,56 @@ export default function AdminPage() {
 
   const fetchAllData = async () => {
     try {
+      setLoading(true);
       const token = localStorage.getItem("authToken");
+
+      // Fetch applications
       const appResponse = await authAPI.getSellerApplications(token);
       if (appResponse.success) setApplications(appResponse.applications || []);
 
-      const rawBase = import.meta.env.VITE_API_URL || "http://localhost:3000";
-      const base = rawBase.replace(/\/+$/, "");
-      const headers = {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      };
-
-      const sellersResponse = await fetch(`${base}/admin/sellers`, { headers });
-      const sellersData = await sellersResponse.json();
-      if (Array.isArray(sellersData)) {
-        setSellers(sellersData);
-        calculateAnalytics(sellersData);
+      // Fetch new sales analytics
+      try {
+        const analyticsData = await getSalesAnalytics();
+        setAnalytics((prev) => ({
+          ...prev,
+          totalOrders: analyticsData.totals?.totalOrders || 0,
+          completedOrders: analyticsData.totals?.completedOrders || 0,
+          totalOrderValue: analyticsData.totals?.totalOrderValue || 0,
+          totalItemsSold: analyticsData.totals?.totalItemsSold || 0,
+          totalRevenue: analyticsData.totals?.completedOrderValue || 0,
+          topSellers: analyticsData.topEarningSellers || [],
+          topProducts: analyticsData.topProducts || [],
+          totalSellers: analyticsData.totals?.totalSellers || 0,
+          totalUsers: analyticsData.totals?.totalUsers || 0,
+        }));
+      } catch (err) {
+        console.error("Error fetching analytics:", err);
       }
 
-      const usersResponse = await fetch(`${base}/admin/users`, { headers });
-      const usersData = await usersResponse.json();
-      if (Array.isArray(usersData)) setUsers(usersData);
+      // Fetch sellers with products
+      try {
+        const sellersData = await getSellersWithProducts();
+        if (Array.isArray(sellersData)) {
+          setSellers(sellersData);
+        }
+      } catch (err) {
+        console.error("Error fetching sellers:", err);
+      }
+
+      // Fetch users
+      try {
+        const usersData = await getAllUsers();
+        if (Array.isArray(usersData)) {
+          setUsers(usersData);
+        }
+      } catch (err) {
+        console.error("Error fetching users:", err);
+      }
     } catch (error) {
       toast.error("System error: Unable to sync dashboard data");
     } finally {
       setLoading(false);
     }
-  };
-
-  const calculateAnalytics = (sellersData) => {
-    const topSellers = [...sellersData]
-      .sort((a, b) => (b.totalSales || 0) - (a.totalSales || 0))
-      .slice(0, 5);
-    setAnalytics((prev) => ({
-      ...prev,
-      totalSellers: sellersData.length,
-      topSellers,
-      totalRevenue: sellersData.reduce(
-        (sum, s) => sum + (s.totalSales || 0),
-        0,
-      ),
-    }));
   };
 
   // Re-used handlers logic remains the same (handleApprove, handleReject, etc.)
@@ -119,6 +146,60 @@ export default function AdminPage() {
   };
   const handleRecoverAccount = async (id) => {
     /* logic */
+  };
+
+  // New user management handlers
+  const handleDeactivateUser = async (userId, reason = "Account violation") => {
+    try {
+      await updateUserStatus(userId, "deactivate", reason);
+      toast.success("User account deactivated");
+      fetchAllData();
+    } catch (error) {
+      toast.error("Failed to deactivate user: " + error.message);
+    }
+  };
+
+  const handleRestrictUser = async (
+    userId,
+    reason = "Account under review",
+  ) => {
+    try {
+      await updateUserStatus(userId, "restrict", reason);
+      toast.success("User account restricted");
+      fetchAllData();
+    } catch (error) {
+      toast.error("Failed to restrict user: " + error.message);
+    }
+  };
+
+  const handleActivateUser = async (userId) => {
+    try {
+      await updateUserStatus(userId, "activate", "");
+      toast.success("User account activated");
+      fetchAllData();
+    } catch (error) {
+      toast.error("Failed to activate user: " + error.message);
+    }
+  };
+
+  // Data consistency check
+  const handleVerifyConsistency = async () => {
+    try {
+      setSyncLoading(true);
+      const report = await verifyDataConsistency();
+      setConsistencyReport(report);
+      if (report.isConsistent) {
+        toast.success("✅ All data is consistent!");
+      } else {
+        toast.error(
+          `⚠️ Found ${report.inconsistencies?.length || 0} inconsistencies`,
+        );
+      }
+    } catch (error) {
+      toast.error("Failed to verify data: " + error.message);
+    } finally {
+      setSyncLoading(false);
+    }
   };
 
   const filteredUsers = users.filter((u) => {
@@ -187,9 +268,19 @@ export default function AdminPage() {
                 {user.role}
               </p>
             </div>
-            <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-xs text-slate-600">
-              {user.displayName?.charAt(0)}
-            </div>
+
+            <button
+              onClick={async () => {
+                if (window.confirm("Are you sure you want to sign out?")) {
+                  await signOut();
+                  navigate("/admin-login", { replace: true });
+                }
+              }}
+              className="ml-2 px-3 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-xs font-bold text-slate-600 border border-slate-200 transition-colors"
+              title="Sign Out"
+            >
+              Sign Out
+            </button>
           </div>
         </div>
       </nav>
@@ -198,32 +289,65 @@ export default function AdminPage() {
         {/* OVERVIEW SECTION */}
         {activeTab === "analytics" && (
           <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {/* Data Consistency Check */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-700">
+                  Data Consistency Status
+                </p>
+                <p className="text-xs text-slate-500">
+                  {consistencyReport
+                    ? consistencyReport.isConsistent
+                      ? "✅ All data is synchronized"
+                      : `⚠️ ${consistencyReport.inconsistencies?.length || 0} inconsistencies detected`
+                    : "Click to verify data integrity"}
+                </p>
+              </div>
+              <button
+                onClick={handleVerifyConsistency}
+                disabled={syncLoading}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${syncLoading ? "animate-spin" : ""}`}
+                />
+                {syncLoading ? "Checking..." : "Verify Data"}
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
               {[
                 {
                   label: "Total Revenue",
-                  val: `$${analytics.totalRevenue.toLocaleString()}`,
+                  val: `₱${analytics.totalRevenue.toLocaleString()}`,
                   icon: PhilippinePesoIcon,
                   color: "text-emerald-600",
                   bg: "bg-emerald-50",
                 },
                 {
-                  label: "Active Sellers",
-                  val: analytics.totalSellers,
-                  icon: Store,
+                  label: "Total Orders",
+                  val: analytics.totalOrders,
+                  icon: TrendingUp,
                   color: "text-blue-600",
                   bg: "bg-blue-50",
                 },
                 {
-                  label: "Total Platform Users",
-                  val: users.length,
+                  label: "Active Sellers",
+                  val: analytics.totalSellers,
+                  icon: Store,
+                  color: "text-purple-600",
+                  bg: "bg-purple-50",
+                },
+                {
+                  label: "Total Users",
+                  val: analytics.totalUsers || users.length,
                   icon: Users,
                   color: "text-indigo-600",
                   bg: "bg-indigo-50",
                 },
                 {
-                  label: "Pending Reviews",
-                  val: applications.length,
+                  label: "Items Sold",
+                  val: analytics.totalItemsSold,
                   icon: AlertCircle,
                   color: "text-amber-600",
                   bg: "bg-amber-50",
@@ -249,44 +373,49 @@ export default function AdminPage() {
             <div className="grid grid-cols-3 gap-8">
               <div className="col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-                  <h3 className="font-bold text-slate-800">
-                    Performance Leaders
-                  </h3>
-                  <button className="text-blue-600 text-xs font-semibold hover:underline">
-                    View Report
+                  <h3 className="font-bold text-slate-800">Top Products</h3>
+                  <button
+                    onClick={() => {
+                      const allProducts = analytics.topProducts || [];
+                      if (allProducts.length > 5) {
+                        toast.info(
+                          `Showing ${allProducts.length} total products sorted by revenue`,
+                        );
+                      }
+                    }}
+                    className="text-blue-600 text-xs font-semibold hover:underline"
+                  >
+                    View All ({(analytics.topProducts || []).length})
                   </button>
                 </div>
                 <div className="p-0">
                   <table className="w-full text-left">
                     <thead className="bg-slate-50 text-[11px] uppercase text-slate-500 font-bold">
                       <tr>
-                        <th className="px-6 py-3">Store</th>
-                        <th className="px-6 py-3">Status</th>
+                        <th className="px-6 py-3">Product</th>
+                        <th className="px-6 py-3">Sold</th>
                         <th className="px-6 py-3 text-right">Revenue</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {analytics.topSellers.map((s, i) => (
+                      {analytics.topProducts?.slice(0, 5).map((p, i) => (
                         <tr
                           key={i}
                           className="hover:bg-slate-50 transition-colors"
                         >
                           <td className="px-6 py-4">
                             <p className="font-semibold text-sm text-slate-900">
-                              {s.storeName}
+                              {p.name}
                             </p>
                             <p className="text-xs text-slate-500">
-                              {s.ownerName}
+                              Price: ₱{p.price?.toLocaleString()}
                             </p>
                           </td>
-                          <td className="px-6 py-4">
-                            <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-700 uppercase">
-                              Top Performer
-                            </span>
+                          <td className="px-6 py-4 font-semibold text-slate-700">
+                            {p.soldCount} units
                           </td>
                           <td className="px-6 py-4 text-right font-mono font-bold text-slate-700">
-                            <PhilippinePesoIcon className="inline w-4 h-4 mr-1" />
-                            {s.totalSales?.toFixed(2)}
+                            ₱{p.revenue?.toLocaleString()}
                           </td>
                         </tr>
                       ))}
@@ -296,21 +425,24 @@ export default function AdminPage() {
               </div>
 
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                <h3 className="font-bold text-slate-800 mb-6">System Health</h3>
-                <div className="space-y-6">
-                  {[
-                    "Database Connection",
-                    "API Gateway",
-                    "Storage Service",
-                  ].map((service, i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <span className="text-sm text-slate-600">{service}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-emerald-600">
-                          OPERATIONAL
-                        </span>
-                        <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                      </div>
+                <h3 className="font-bold text-slate-800 mb-6">
+                  Top Earning Sellers
+                </h3>
+                <div className="space-y-4">
+                  {analytics.topSellers?.slice(0, 5).map((seller, i) => (
+                    <div
+                      key={i}
+                      className="pb-4 border-b border-slate-100 last:border-b-0"
+                    >
+                      <p className="text-sm font-semibold text-slate-900">
+                        {seller.storeName}
+                      </p>
+                      <p className="text-xs text-slate-500 mb-1">
+                        {seller.soldCount} items sold
+                      </p>
+                      <p className="text-sm font-bold text-emerald-600">
+                        ₱{seller.revenue?.toLocaleString()}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -360,55 +492,233 @@ export default function AdminPage() {
                     ? filteredSellers
                     : filteredUsers
                   ).map((item) => (
-                    <tr
-                      key={item.uid || item.id}
-                      className="hover:bg-slate-50 transition-colors group"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-slate-500 border border-slate-200">
-                            {(item.storeName || item.displayName)?.charAt(0)}
+                    <React.Fragment key={item.uid || item.id}>
+                      <tr className="hover:bg-slate-50 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-slate-500 border border-slate-200">
+                              {(item.storeName || item.displayName)?.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-900">
+                                {item.storeName || item.displayName}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {item.email}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">
-                              {item.storeName || item.displayName}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {item.email}
-                            </p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-xs font-medium text-slate-600 px-2 py-1 bg-slate-100 rounded border border-slate-200 capitalize">
-                          {item.role || "Vendor"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm font-semibold text-slate-700">
-                          ${(item.totalSales || 0).toLocaleString()}
-                        </p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`w-1.5 h-1.5 rounded-full ${item.blocked || item.disabled ? "bg-red-500" : "bg-emerald-500"}`}
-                          />
-                          <span
-                            className={`text-xs font-bold ${item.blocked || item.disabled ? "text-red-600" : "text-emerald-600"}`}
-                          >
-                            {item.blocked || item.disabled
-                              ? "RESTRICTED"
-                              : "ACTIVE"}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-xs font-medium text-slate-600 px-2 py-1 bg-slate-100 rounded border border-slate-200 capitalize">
+                            {item.role || "Vendor"}
                           </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button className="p-2 hover:bg-white border border-transparent hover:border-slate-200 rounded-lg transition-all">
-                          <MoreVertical className="w-4 h-4 text-slate-400" />
-                        </button>
-                      </td>
-                    </tr>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-700">
+                              $
+                              {(
+                                (activeTab === "sellers"
+                                  ? item.totalRevenue
+                                  : item.totalSales) || 0
+                              ).toLocaleString()}
+                            </p>
+                            {activeTab === "sellers" && (
+                              <p className="text-xs text-slate-500 mt-1">
+                                {item.totalSoldCount || 0} items •{" "}
+                                {item.totalProducts || 0} products
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                activeTab === "users"
+                                  ? item.status === "active"
+                                    ? "bg-emerald-500"
+                                    : "bg-red-500"
+                                  : item.status === "active"
+                                    ? "bg-emerald-500"
+                                    : "bg-red-500"
+                              }`}
+                            />
+                            <span
+                              className={`text-xs font-bold ${
+                                activeTab === "users"
+                                  ? item.status === "active"
+                                    ? "text-emerald-600"
+                                    : "text-red-600"
+                                  : item.status === "active"
+                                    ? "text-emerald-600"
+                                    : "text-red-600"
+                              }`}
+                            >
+                              {(
+                                activeTab === "users"
+                                  ? item.status === "active"
+                                  : item.status === "active"
+                              )
+                                ? "ACTIVE"
+                                : "INACTIVE"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {activeTab === "users" && (
+                              <>
+                                {item.status === "active" ? (
+                                  <>
+                                    <button
+                                      onClick={() =>
+                                        handleRestrictUser(
+                                          item.uid,
+                                          "Account restricted by admin",
+                                        )
+                                      }
+                                      className="p-2 hover:bg-yellow-50 border border-transparent hover:border-yellow-200 rounded-lg transition-all"
+                                      title="Restrict Account"
+                                    >
+                                      <AlertCircle className="w-4 h-4 text-yellow-600" />
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        handleDeactivateUser(
+                                          item.uid,
+                                          "Account deactivated by admin",
+                                        )
+                                      }
+                                      className="p-2 hover:bg-red-50 border border-transparent hover:border-red-200 rounded-lg transition-all"
+                                      title="Deactivate Account"
+                                    >
+                                      <Lock className="w-4 h-4 text-red-600" />
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    onClick={() => handleActivateUser(item.uid)}
+                                    className="p-2 hover:bg-green-50 border border-transparent hover:border-green-200 rounded-lg transition-all"
+                                    title="Activate Account"
+                                  >
+                                    <Unlock className="w-4 h-4 text-green-600" />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            {activeTab === "sellers" && (
+                              <button
+                                onClick={() =>
+                                  setExpandedSellerId(
+                                    expandedSellerId === item.id
+                                      ? null
+                                      : item.id,
+                                  )
+                                }
+                                className="p-2 hover:bg-white border border-transparent hover:border-slate-200 rounded-lg transition-all"
+                              >
+                                <MoreVertical className="w-4 h-4 text-slate-400" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {activeTab === "sellers" &&
+                        expandedSellerId === item.id && (
+                          <tr className="bg-slate-50 border-b-2 border-blue-200">
+                            <td colSpan="5" className="px-6 py-6">
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <h4 className="font-bold text-slate-800 text-sm">
+                                    Products ({item.totalProducts || 0})
+                                  </h4>
+                                  <span className="text-xs text-slate-500">
+                                    Total Revenue: ₱
+                                    {(item.totalRevenue || 0).toLocaleString()}
+                                  </span>
+                                </div>
+                                {item.products && item.products.length > 0 ? (
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm">
+                                      <thead className="bg-white border-b border-slate-200">
+                                        <tr>
+                                          <th className="px-4 py-2 text-xs font-semibold text-slate-600">
+                                            Product Name
+                                          </th>
+                                          <th className="px-4 py-2 text-xs font-semibold text-slate-600">
+                                            Price
+                                          </th>
+                                          <th className="px-4 py-2 text-xs font-semibold text-slate-600">
+                                            Stock
+                                          </th>
+                                          <th className="px-4 py-2 text-xs font-semibold text-slate-600">
+                                            Sold
+                                          </th>
+                                          <th className="px-4 py-2 text-xs font-semibold text-slate-600">
+                                            Revenue
+                                          </th>
+                                          <th className="px-4 py-2 text-xs font-semibold text-slate-600">
+                                            Rating
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-100">
+                                        {item.products.map((product, idx) => (
+                                          <tr
+                                            key={idx}
+                                            className="hover:bg-white"
+                                          >
+                                            <td className="px-4 py-2">
+                                              <div className="flex items-center gap-2">
+                                                {product.imageUrl && (
+                                                  <img
+                                                    src={product.imageUrl}
+                                                    alt={product.name}
+                                                    className="w-6 h-6 rounded object-cover"
+                                                  />
+                                                )}
+                                                <span className="text-slate-700">
+                                                  {product.name}
+                                                </span>
+                                              </div>
+                                            </td>
+                                            <td className="px-4 py-2 text-slate-700">
+                                              ₱{product.price?.toLocaleString()}
+                                            </td>
+                                            <td className="px-4 py-2 text-slate-700">
+                                              {product.stock}
+                                            </td>
+                                            <td className="px-4 py-2 font-semibold text-emerald-600">
+                                              {product.soldCount}
+                                            </td>
+                                            <td className="px-4 py-2 font-semibold text-slate-700">
+                                              ₱
+                                              {(
+                                                product.totalRevenue || 0
+                                              ).toLocaleString()}
+                                            </td>
+                                            <td className="px-4 py-2 text-slate-600">
+                                              {product.ratingAverage
+                                                ? `${product.ratingAverage.toFixed(1)}⭐`
+                                                : "No ratings"}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-slate-500 text-center py-4">
+                                    No products found
+                                  </p>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

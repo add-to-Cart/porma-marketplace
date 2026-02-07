@@ -1,92 +1,13 @@
 import admin from "../config/firebaseAdmin.js";
 const db = admin.firestore();
+import { getTrendingProducts as calculateTrendingProducts } from "../utils/trendingAlgorithm.js";
+import {
+  checkStockAvailability,
+  checkMultipleProductsStock,
+  getStockStatus,
+} from "../utils/stockManagement.js";
+import { populateSellerInfo } from "./productController.js";
 
-// Helper function to populate seller information for products
-export const populateSellerInfo = async (products) => {
-  const sellerIds = [
-    ...new Set(products.map((p) => p.sellerId).filter((id) => id)),
-  ];
-
-  if (sellerIds.length === 0) return products;
-
-  const sellerPromises = sellerIds.map((id) =>
-    db.collection("sellers").doc(id).get(),
-  );
-  const sellerDocs = await Promise.all(sellerPromises);
-
-  const sellerMap = {};
-  sellerDocs.forEach((doc, index) => {
-    if (doc.exists) {
-      const sellerData = doc.data();
-      const sellerId = sellerIds[index];
-
-      sellerMap[sellerId] = {
-        storeName: sellerData.storeName,
-        owner: sellerData.ownerName || sellerData.storeName,
-        sellerAvatarUrl: sellerData.avatarUrl || null,
-      };
-    }
-  });
-
-  return products.map((product) => ({
-    ...product,
-    ...(sellerMap[product.sellerId] || {
-      storeName: "Unknown Seller",
-      owner: "Unknown Seller",
-    }),
-  }));
-};
-
-// Helper to generate comprehensive search tags
-export const generateSearchTags = (data) => {
-  const tags = new Set();
-
-  const addPrefixes = (word) => {
-    if (word.length > 2) {
-      for (let i = 3; i <= word.length; i++) {
-        tags.add(word.substring(0, i));
-      }
-    } else {
-      tags.add(word);
-    }
-  };
-
-  if (data.name) {
-    data.name
-      .toLowerCase()
-      .split(/\s+/)
-      .forEach((word) => {
-        if (word.length > 1) addPrefixes(word);
-      });
-  }
-
-  if (data.categories && Array.isArray(data.categories)) {
-    data.categories.forEach((cat) => tags.add(cat.toLowerCase()));
-  }
-
-  const comp = data.vehicleCompatibility;
-  if (comp) {
-    if (comp.isUniversalFit) {
-      tags.add("universal");
-    } else {
-      comp.makes?.forEach((make) => tags.add(make.toLowerCase()));
-      comp.models?.forEach((model) => tags.add(model.toLowerCase()));
-    }
-    if (comp.type && comp.type !== "Universal") {
-      tags.add(comp.type.toLowerCase());
-    }
-  }
-
-  if (data.isBundle) tags.add("bundle");
-  if (data.isSeasonal) tags.add("seasonal");
-  if (data.seasonalCategory) {
-    tags.add(data.seasonalCategory.toLowerCase());
-  }
-
-  return Array.from(tags).filter((tag) => tag && tag.length > 1);
-};
-
-export default { populateSellerInfo, generateSearchTags };
 // 1. MARKETPLACE: Latest to Oldest with PAGINATION
 export const getAllProducts = async (req, res) => {
   try {
@@ -102,24 +23,19 @@ export const getAllProducts = async (req, res) => {
       sortBy = "newest",
     } = req.query;
 
-    // Start with a simple query - only filter bundles
     let query = db.collection("products");
 
-    // Filter out bundles for marketplace (unless explicitly requested)
     if (isBundle !== "true") {
       query = query.where("isBundle", "==", false);
     }
 
-    // Sort by newest first
     query = query.orderBy("createdAt", "desc");
 
-    // Get more documents to account for in-memory filtering
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const offset = pageNum * limitNum;
 
-    // Get a larger batch to filter from
-    const batchSize = 100; // Get more products to filter
+    const batchSize = 100;
     const snapshot = await query.offset(offset).limit(batchSize).get();
 
     let products = snapshot.docs.map((doc) => ({
@@ -127,7 +43,6 @@ export const getAllProducts = async (req, res) => {
       ...doc.data(),
     }));
 
-    // Apply all filters in memory
     if (category) {
       products = products.filter(
         (p) => p.categories && p.categories.includes(category),
@@ -140,7 +55,6 @@ export const getAllProducts = async (req, res) => {
       );
     }
 
-    // In-memory filters for complex queries
     if (make) {
       products = products.filter((p) =>
         p.vehicleCompatibility?.makes?.includes(make),
@@ -157,12 +71,10 @@ export const getAllProducts = async (req, res) => {
       products = products.filter((p) => p.isSeasonal === true);
     }
 
-    // Apply pagination after filtering
     const totalFiltered = products.length;
     products = products.slice(0, limitNum);
     const hasMore = totalFiltered > limitNum;
 
-    // Populate seller information
     products = await populateSellerInfo(products);
 
     res.json({
@@ -172,7 +84,11 @@ export const getAllProducts = async (req, res) => {
       hasMore,
       total: products.length,
     });
-  } catch (err) {}
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch products", error: err.message });
+  }
 };
 
 // 2. TRENDING: Refined algorithm using normalized metrics
@@ -180,7 +96,6 @@ export const getTrendingProducts = async (req, res) => {
   try {
     const { limit = 20 } = req.query;
 
-    // Get all available products (including bundles)
     const snapshot = await db.collection("products").limit(200).get();
 
     let products = snapshot.docs.map((doc) => ({
@@ -188,7 +103,6 @@ export const getTrendingProducts = async (req, res) => {
       ...doc.data(),
     }));
 
-    // Normalize data before scoring
     products = products.map((p) => {
       let avgRating = p.ratingAverage || 0;
       if (!avgRating && p.ratings && p.ratings.length > 0) {
@@ -204,17 +118,22 @@ export const getTrendingProducts = async (req, res) => {
       };
     });
 
-    // Use the trending algorithm to rank products
     const trendingProducts = calculateTrendingProducts(
       products,
       parseInt(limit),
     );
 
-    // Populate seller information
     const productsWithSellerInfo = await populateSellerInfo(trendingProducts);
 
     res.json(productsWithSellerInfo);
-  } catch (err) {}
+  } catch (err) {
+    res
+      .status(500)
+      .json({
+        message: "Failed to fetch trending products",
+        error: err.message,
+      });
+  }
 };
 
 // Trending products filtered by seller
@@ -289,7 +208,6 @@ export const getDealsProducts = async (req, res) => {
       ...doc.data(),
     }));
 
-    // Populate seller information
     const bundlesWithSeller = await populateSellerInfo(bundles);
     const seasonalWithSeller = await populateSellerInfo(seasonal);
 
@@ -297,7 +215,11 @@ export const getDealsProducts = async (req, res) => {
       bundles: bundlesWithSeller,
       seasonal: seasonalWithSeller,
     });
-  } catch (err) {}
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch deals", error: err.message });
+  }
 };
 
 // Get products by seller with pagination
@@ -331,7 +253,6 @@ export const getProductsBySeller = async (req, res) => {
 
     const hasMore = snapshot.docs.length > limitNum;
 
-    // Populate seller information
     const productsWithSeller = await populateSellerInfo(products);
 
     return res.json({
@@ -340,7 +261,11 @@ export const getProductsBySeller = async (req, res) => {
       limit: limitNum,
       hasMore,
     });
-  } catch (err) {}
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch seller products", error: err.message });
+  }
 };
 
 // Get related products
@@ -357,14 +282,12 @@ export const getRelatedProducts = async (req, res) => {
       .map((doc) => ({ id: doc.id, ...doc.data() }))
       .filter((p) => p.id !== id);
 
-    // Filter by category in memory
     if (category) {
       related = related.filter(
         (p) => p.categories && p.categories.includes(category),
       );
     }
 
-    // Prioritize products from the same store first
     related.sort((a, b) => {
       const aSameStore = a.sellerId === sellerId ? 1 : 0;
       const bSameStore = b.sellerId === sellerId ? 1 : 0;
@@ -379,7 +302,6 @@ export const getRelatedProducts = async (req, res) => {
       return (b.soldCount || 0) - (a.soldCount || 0);
     });
 
-    // Populate seller information
     const relatedWithSeller = await populateSellerInfo(related.slice(0, 8));
 
     res.json(relatedWithSeller);
@@ -410,7 +332,9 @@ export const getProductById = async (req, res) => {
 
     res.json(populated[0]);
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch product" });
+    res
+      .status(500)
+      .json({ message: "Failed to fetch product", error: err.message });
   }
 };
 
@@ -439,7 +363,6 @@ export const searchProducts = async (req, res) => {
       );
     }
 
-    // Search using searchTags
     firestoreQuery = firestoreQuery.where(
       "searchTags",
       "array-contains-any",
@@ -449,7 +372,6 @@ export const searchProducts = async (req, res) => {
     const snapshot = await firestoreQuery.get();
     let products = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-    // In-memory filters
     if (category) {
       products = products.filter(
         (p) => p.categories && p.categories.includes(category),
@@ -474,208 +396,11 @@ export const searchProducts = async (req, res) => {
       products = products.filter((p) => p.isSeasonal === true);
     }
 
-    // Populate seller information
     products = await populateSellerInfo(products);
 
     res.json(products);
   } catch (err) {
     res.status(500).json({ message: "Search failed", error: err.message });
-  }
-};
-
-export const createProduct = async (req, res) => {
-  try {
-    // 1. IMAGE VALIDATION: Prevent creation if no file is uploaded
-    if (!req.file) {
-      return res.status(400).json({
-        message: "Product creation failed: An image is required.",
-      });
-    }
-
-    const {
-      name,
-      categories,
-      description,
-      price,
-      stock,
-      compareAtPrice,
-      isSeasonal,
-      isBundle,
-      seasonalCategory,
-      vehicleCompatibility,
-      isUniversalFit,
-      sellerId,
-      storeName,
-    } = req.body;
-    const parsedCategories = JSON.parse(categories || "[]");
-
-    const productData = {
-      name: name.trim(),
-      categories: parsedCategories,
-      description: description.trim(),
-      price: Number(price) || 0,
-      stock: Number(stock) || 1,
-      compareAtPrice: compareAtPrice ? Number(compareAtPrice) : null,
-      isSeasonal: isSeasonal === "true",
-      seasonalCategory: seasonalCategory ? seasonalCategory.trim() : null,
-      isBundle: isBundle === "true",
-      vehicleCompatibility: vehicleCompatibility
-        ? JSON.parse(vehicleCompatibility)
-        : {},
-      isUniversalFit: isUniversalFit === "true",
-      sellerId: sellerId || null,
-      storeName: storeName || null,
-    };
-
-    // 2. DATA TYPE CORRECTION
-    if (typeof productData.vehicleCompatibility === "string") {
-      productData.vehicleCompatibility = JSON.parse(
-        productData.vehicleCompatibility,
-      );
-    }
-
-    productData.price = Number(productData.price);
-
-    if (productData.compareAtPrice) {
-      productData.compareAtPrice = Number(productData.compareAtPrice);
-    }
-
-    // 3. BUNDLE METADATA: Handle contents
-    if (
-      productData.bundleContents &&
-      typeof productData.bundleContents === "string"
-    ) {
-      try {
-        productData.bundleContents = JSON.parse(productData.bundleContents);
-      } catch (e) {
-        // Fallback for comma-separated text
-        productData.bundleContents = productData.bundleContents
-          .split(",")
-          .map((item) => item.trim());
-      }
-    }
-
-    // 4. METRICS INITIALIZATION
-    productData.ratingAverage = 0;
-    productData.ratingsCount = 0;
-    productData.viewCount = 0;
-    productData.soldCount = 0;
-    productData.isAvailable = true;
-
-    // 5. FUZZY SEARCH PREPARATION
-    // This function generates the prefixes and keywords used by your search logic
-    productData.searchTags = generateSearchTags(productData);
-
-    // 6. IMAGE UPLOAD
-    const userId = productData.sellerId || "anonymous";
-    const sanitizedName = productData.name
-      .replace(/[&]/g, "and") // Replace & with "and"
-      .replace(/[^\w\s-]/g, "") // Remove special characters except alphanumeric, spaces, hyphens
-      .replace(/\s+/g, "-") // Replace spaces with hyphens
-      .toLowerCase();
-
-    const publicId = `products/${userId}-${sanitizedName}`;
-
-    const uploadResult = await uploadProductImage(req.file, publicId);
-    productData.imageUrl = uploadResult.url;
-    productData.cloudinaryId = uploadResult.publicId;
-
-    // 7. FIRESTORE PERSISTENCE
-    const docRef = await db.collection("products").add({
-      ...productData,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    res.status(201).json({ id: docRef.id, ...productData });
-  } catch (err) {
-    res.status(500).json({ message: "Server Error", error: err.message });
-  }
-};
-
-// Update product
-export const updateProduct = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = { ...req.body };
-
-    // Parse categories if it's a JSON string
-    if (updateData.categories && typeof updateData.categories === "string") {
-      updateData.categories = JSON.parse(updateData.categories);
-    }
-
-    if (typeof updateData.vehicleCompatibility === "string") {
-      updateData.vehicleCompatibility = JSON.parse(
-        updateData.vehicleCompatibility,
-      );
-    }
-
-    if (updateData.isBundle !== undefined) {
-      updateData.isBundle = updateData.isBundle === "true";
-    }
-    if (updateData.isSeasonal !== undefined) {
-      updateData.isSeasonal = updateData.isSeasonal === "true";
-    }
-    if (updateData.compareAtPrice) {
-      updateData.compareAtPrice = Number(updateData.compareAtPrice);
-    }
-    if (
-      updateData.bundleContents &&
-      typeof updateData.bundleContents === "string"
-    ) {
-      try {
-        updateData.bundleContents = JSON.parse(updateData.bundleContents);
-      } catch (e) {
-        // If it's not JSON, treat as comma-separated string and split
-        updateData.bundleContents = updateData.bundleContents
-          .split(",")
-          .map((item) => item.trim());
-      }
-    }
-
-    const docRef = db.collection("products").doc(id);
-    const snapshot = await docRef.get();
-
-    if (!snapshot.exists) {
-      return res.status(404).json({ message: "Product not found" });
-    }
-
-    const currentData = snapshot.data();
-
-    const fullData = {
-      ...currentData,
-      ...updateData,
-      vehicleCompatibility: {
-        ...(currentData.vehicleCompatibility || {}),
-        ...(updateData.vehicleCompatibility || {}),
-      },
-    };
-
-    const updatedSearchTags = generateSearchTags(fullData);
-
-    if (req.file) {
-      const userId = updateData.sellerId || currentData.sellerId || "anonymous";
-      const sanitizedName = (updateData.name || currentData.name)
-        .replace(/[&]/g, "and") // Replace & with "and"
-        .replace(/[^\w\s-]/g, "") // Remove special characters except alphanumeric, spaces, hyphens
-        .replace(/\s+/g, "-") // Replace spaces with hyphens
-        .toLowerCase();
-      const publicId = `products/${userId}-${sanitizedName}`;
-      const uploadResult = await uploadProductImage(req.file, publicId);
-      updateData.imageUrl = uploadResult.url;
-      updateData.cloudinaryId = uploadResult.publicId;
-    }
-
-    const finalUpdate = {
-      ...updateData,
-      searchTags: updatedSearchTags,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    await docRef.update(finalUpdate);
-
-    res.json({ id, ...finalUpdate });
-  } catch (err) {
-    res.status(500).json({ message: "Failed to update product" });
   }
 };
 
@@ -694,7 +419,9 @@ export const getProductsByTag = async (req, res) => {
     }));
     res.json(products);
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch products by tag" });
+    res
+      .status(500)
+      .json({ message: "Failed to fetch products by tag", error: err.message });
   }
 };
 
@@ -720,9 +447,12 @@ export const incrementViewCount = async (req, res) => {
       viewCount: currentViewCount + 1,
     });
   } catch (err) {
-    res.status(500).json({ message: "Failed to update view count" });
+    res
+      .status(500)
+      .json({ message: "Failed to update view count", error: err.message });
   }
 };
+
 /**
  * Check stock availability for a single product
  */
@@ -742,7 +472,9 @@ export const checkProductStock = async (req, res) => {
       ...result,
     });
   } catch (err) {
-    res.status(500).json({ message: "Failed to check stock" });
+    res
+      .status(500)
+      .json({ message: "Failed to check stock", error: err.message });
   }
 };
 
@@ -761,7 +493,9 @@ export const checkMultipleStock = async (req, res) => {
 
     res.json(result);
   } catch (err) {
-    res.status(500).json({ message: "Failed to check stock" });
+    res
+      .status(500)
+      .json({ message: "Failed to check stock", error: err.message });
   }
 };
 
@@ -780,32 +514,9 @@ export const getProductStockStatus = async (req, res) => {
 
     res.json(status);
   } catch (err) {
-    res.status(500).json({ message: "Failed to get stock status" });
-  }
-};
-
-/**
- * Get stock status for all seller's products
- */
-export const getSellerInventoryStatus = async (req, res) => {
-  try {
-    const { sellerId } = req.params;
-
-    if (!sellerId) {
-      return res.status(400).json({ message: "Seller ID is required" });
-    }
-
-    const inventory = await getSellerStockStatus(sellerId);
-
-    res.json({
-      sellerId,
-      totalProducts: inventory.length,
-      outOfStockCount: inventory.filter((p) => p.isOutOfStock).length,
-      lowStockCount: inventory.filter((p) => p.isLowStock).length,
-      products: inventory,
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Failed to get inventory status" });
+    res
+      .status(500)
+      .json({ message: "Failed to get stock status", error: err.message });
   }
 };
 
@@ -854,7 +565,9 @@ export const addRating = async (req, res) => {
       ...updatedDoc.data(),
     });
   } catch (err) {
-    res.status(500).json({ message: "Failed to add rating" });
+    res
+      .status(500)
+      .json({ message: "Failed to add rating", error: err.message });
   }
 };
 
@@ -894,7 +607,6 @@ export const getProductReviews = async (req, res) => {
       });
     });
 
-    // Populate buyer avatars
     const buyerIds = [
       ...new Set(reviews.map((r) => r.buyerId).filter((id) => id)),
     ];
@@ -919,7 +631,6 @@ export const getProductReviews = async (req, res) => {
       });
     }
 
-    // Populate seller avatars for replies
     const sellerIds = [
       ...new Set(
         reviews.map((r) => r.sellerReply?.sellerId).filter((id) => id),
@@ -989,8 +700,6 @@ export const addReview = async (req, res) => {
       });
     }
 
-    // ✅ VERIFY buyer has completed an order for this product
-    // This prevents review spam and fake reviews
     const orderSnapshot = await db
       .collection("orders")
       .where("buyerId", "==", buyerId)
@@ -1015,7 +724,6 @@ export const addReview = async (req, res) => {
       });
     }
 
-    // Create review document
     const review = {
       productId: id,
       buyerId: buyerId,
@@ -1058,90 +766,6 @@ export const addReview = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to add review",
-      error: err.message,
-    });
-  }
-};
-
-export const replyToReview = async (req, res) => {
-  try {
-    const { reviewId } = req.params;
-    const { replyText } = req.body;
-    const sellerId = req.user.uid; // Get from authenticated user
-
-    if (!reviewId) {
-      return res.status(400).json({
-        success: false,
-        message: "Review ID is required",
-      });
-    }
-
-    if (!replyText || replyText.trim() === "") {
-      return res.status(400).json({
-        success: false,
-        message: "Reply text is required",
-      });
-    }
-
-    // Get the review document
-    const reviewDoc = await db.collection("reviews").doc(reviewId).get();
-
-    if (!reviewDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Review not found",
-      });
-    }
-
-    const review = reviewDoc.data();
-
-    // Verify the seller owns the product
-    const productDoc = await db
-      .collection("products")
-      .doc(review.productId)
-      .get();
-
-    if (!productDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
-    }
-
-    const product = productDoc.data();
-
-    if (product.sellerId !== sellerId) {
-      return res.status(403).json({
-        success: false,
-        message: "You can only reply to reviews on your own products",
-      });
-    }
-
-    // Update the review with seller reply
-    const updateData = {
-      sellerReply: {
-        text: replyText.trim(),
-        repliedAt: admin.firestore.FieldValue.serverTimestamp(),
-        sellerId: sellerId,
-      },
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    await db.collection("reviews").doc(reviewId).update(updateData);
-
-    res.json({
-      success: true,
-      message: "Reply added successfully",
-      sellerReply: {
-        text: replyText.trim(),
-        repliedAt: new Date(),
-        sellerId: sellerId,
-      },
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to add reply",
       error: err.message,
     });
   }

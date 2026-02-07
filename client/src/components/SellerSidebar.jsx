@@ -19,6 +19,21 @@ export default function SellerSidebar() {
   const { user, signOut } = useAuth();
   const [leadingStores, setLeadingStores] = useState([]);
 
+  // Hide sidebar for admin users
+  if (user?.isAdmin || user?.role === "admin") {
+    return null;
+  }
+
+  // Hide sidebar for deactivated/restricted/non-seller users
+  const isSeller = user?.isSeller === true || user?.role === "seller";
+  const isDeactivated =
+    user?.status === "deactivated" || user?.isActive === false;
+  const isRestricted =
+    user?.status === "restricted" || user?.isRestricted === true;
+  if (!isSeller || isDeactivated || isRestricted) {
+    return null;
+  }
+
   const handleSignOut = async () => {
     await signOut();
     navigate("/");
@@ -26,16 +41,18 @@ export default function SellerSidebar() {
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
-      try {
-        const data = await getTopSellers(6);
-        if (mounted) setLeadingStores(Array.isArray(data) ? data : []);
-      } catch (err) {
-        // ignore
-      }
-    })();
+    if (isSeller && !isDeactivated && !isRestricted) {
+      (async () => {
+        try {
+          const data = await getTopSellers(6);
+          if (mounted) setLeadingStores(Array.isArray(data) ? data : []);
+        } catch (err) {
+          // ignore
+        }
+      })();
+    }
     return () => (mounted = false);
-  }, []);
+  }, [isSeller, isDeactivated, isRestricted]);
 
   const menuItems = [
     {

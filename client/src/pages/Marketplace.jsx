@@ -16,15 +16,18 @@ export default function Marketplace() {
   const navigate = useNavigate();
   const observer = useRef();
 
-  // Redirect sellers to their dashboard — they should not see marketplace
+  // Redirect sellers and admins away from marketplace
   useEffect(() => {
     if (!user) return;
     const isSeller =
       (user.role || "").toLowerCase() === "seller" ||
       user.isSeller ||
       user.is_seller;
+    const isAdmin = (user.role || "").toLowerCase() === "admin" || user.isAdmin;
     if (isSeller) {
       navigate("/seller/dashboard");
+    } else if (isAdmin) {
+      navigate("/admin");
     }
   }, [user, navigate]);
 

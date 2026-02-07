@@ -85,7 +85,7 @@ export const createOrder = async (req, res) => {
 
     await batch.commit();
 
-    // Notify sellers about new order
+    // Notify sellers about new order and sync their metrics
     const sellers = [...new Set(items.map((i) => i.sellerId))];
     for (const sellerId of sellers) {
       const sellerItems = items.filter((i) => i.sellerId === sellerId);
@@ -93,6 +93,20 @@ export const createOrder = async (req, res) => {
         (sum, i) => sum + i.price * i.quantity,
         0,
       );
+
+      // ✅ SYNC: Update seller metrics when order is created (for pending orders)
+      const sellerRef = db.collection("sellers").doc(sellerId);
+      const sellerDoc = await sellerRef.get();
+
+      if (sellerDoc.exists) {
+        // Update seller's total sales metrics
+        const sellerData = sellerDoc.data();
+        await sellerRef.update({
+          totalSales: (sellerData.totalSales || 0) + sellerItems.length,
+          totalRevenue: (sellerData.totalRevenue || 0) + sellerTotal,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
 
       await createNotification(
         sellerId,
@@ -212,7 +226,7 @@ export const verifyPayment = async (req, res) => {
   }
 };
 
-// ✅ CRITICAL FIX: Complete order and finalize stock + update soldCount
+// ✅ CRITICAL FIX: Complete order and finalize stock + update soldCount + sync seller metrics
 export const completeOrder = async (req, res) => {
   const batch = db.batch();
 
@@ -227,6 +241,9 @@ export const completeOrder = async (req, res) => {
     const order = orderDoc.data();
     const orderRef = db.collection("orders").doc(orderId);
 
+    // Track seller metrics for batch update
+    const sellerMetrics = {};
+
     // ✅ Update product metrics: Move reserved stock → soldCount
     for (const item of order.items) {
       const productRef = db.collection("products").doc(item.productId);
@@ -236,11 +253,42 @@ export const completeOrder = async (req, res) => {
         const product = productDoc.data();
         const reservedStock = product.reservedStock || 0;
         const currentSoldCount = product.soldCount || 0;
+        const sellerId = item.sellerId;
 
         // ✅ KEY UPDATE: Increment soldCount, decrement reservedStock
         batch.update(productRef, {
           soldCount: currentSoldCount + item.quantity,
           reservedStock: Math.max(0, reservedStock - item.quantity),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // Track seller metrics for synchronous update
+        if (!sellerMetrics[sellerId]) {
+          sellerMetrics[sellerId] = {
+            totalSalesIncrease: 0,
+            revenueIncrease: 0,
+          };
+        }
+        sellerMetrics[sellerId].totalSalesIncrease += item.quantity;
+        sellerMetrics[sellerId].revenueIncrease += item.price * item.quantity;
+      }
+    }
+
+    // ✅ Update seller metrics synchronously
+    for (const [sellerId, metrics] of Object.entries(sellerMetrics)) {
+      const sellerRef = db.collection("sellers").doc(sellerId);
+      const sellerDoc = await sellerRef.get();
+
+      if (sellerDoc.exists) {
+        const seller = sellerDoc.data();
+        const currentTotalSales = seller.totalSales || 0;
+        const currentRevenue = seller.totalRevenue || 0;
+        const currentProducts = seller.totalProducts || 0;
+
+        batch.update(sellerRef, {
+          totalSales: currentTotalSales + metrics.totalSalesIncrease,
+          totalRevenue: currentRevenue + metrics.revenueIncrease,
+          totalProducts: currentProducts,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }

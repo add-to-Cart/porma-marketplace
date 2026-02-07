@@ -25,6 +25,21 @@ async function authMiddleware(req, res, next) {
     const userDoc = await db.collection("users").doc(decoded.uid).get();
     const userData = userDoc.exists ? userDoc.data() : {};
 
+    // Block deactivated or inactive users
+    if (
+      userData.status === "deactivated" ||
+      userData.isActive === false ||
+      userData.status === "restricted" ||
+      userData.isRestricted === true
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "Account is deactivated or restricted. Please contact support.",
+        });
+    }
+
     // Attach user info to request
     req.user = {
       uid: decoded.uid,

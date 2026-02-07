@@ -7,6 +7,8 @@ import testRoutes from "./routes/testRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import notificationRoutes from "./routes/notificationRoutes.js";
+import sellerRoutes from "./routes/sellerRoutes.js";
+import syncRoutes from "./routes/syncRoutes.js";
 
 import cors from "cors";
 
@@ -35,6 +37,8 @@ app.use("/notifications", notificationRoutes);
 app.use("/test", testRoutes);
 app.use("/admin", adminRoutes);
 app.use("/analytics", analyticsRoutes);
+app.use("/seller", sellerRoutes);
+app.use("/sync", syncRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
