@@ -9,7 +9,7 @@ import cloudinary from "../config/cloudinary.js";
 export const uploadAvatar = (file, publicId = null) => {
   return new Promise((resolve, reject) => {
     const uploadOptions = {
-      folder: "porma_avatars",
+      folder: "avatars",
       resource_type: "image",
       upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET_AVATAR,
     };
@@ -35,7 +35,7 @@ export const uploadAvatar = (file, publicId = null) => {
 export const uploadProductImage = (file, publicId = null) => {
   return new Promise((resolve, reject) => {
     const uploadOptions = {
-      folder: "porma_products",
+      folder: "products",
       resource_type: "auto",
       upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET_PRODUCT,
     };
@@ -50,6 +50,28 @@ export const uploadProductImage = (file, publicId = null) => {
           url: result.secure_url,
           publicId: result.public_id,
         });
+      },
+    );
+
+    stream.end(file.buffer);
+  });
+};
+
+export const uploadQr = (file, publicId = null) => {
+  return new Promise((resolve, reject) => {
+    const uploadOptions = {
+      folder: "qr",
+      resource_type: "image",
+      upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET_QR,
+    };
+
+    if (publicId) uploadOptions.public_id = publicId;
+
+    const stream = cloudinary.uploader.upload_stream(
+      uploadOptions,
+      (err, result) => {
+        if (err) return reject(err);
+        resolve({ url: result.secure_url, publicId: result.public_id });
       },
     );
 
@@ -72,8 +94,11 @@ export const getTransformedImageUrl = ({
 /**
  * ⚠️ Image deletion must be handled server-side for security
  */
-export const deleteImage = async () => {
-  throw new Error(
-    "Image deletion requires a secure backend (not safe on client)",
-  );
+export const deleteImage = async (publicId) => {
+  try {
+    const result = await cloudinary.uploader.destroy(publicId);
+    return result;
+  } catch (error) {
+    throw error;
+  }
 };

@@ -27,14 +27,13 @@ export default function SearchEngine() {
       try {
         const data = await searchProducts({
           query: searchQuery,
-          category: filters.category,
+          categories: filters.categories,
           vehicleType: filters.vehicleType,
           make: filters.vehicle.make,
           model: filters.vehicle.model,
         });
         setSearchResults(data);
       } catch (error) {
-        console.error("Search failed:", error);
       } finally {
         setIsSearching(false);
       }

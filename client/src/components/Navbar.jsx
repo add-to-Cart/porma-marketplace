@@ -3,11 +3,12 @@ import SearchEngine from "./SearchEngine";
 import {
   ShoppingCart,
   User,
-  Bell,
   LayoutGrid,
   TrendingUp,
   Tag,
   LogOut,
+  LayoutDashboard,
+  Package,
 } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useCart } from "@/contexts/CartContext";
@@ -80,20 +81,6 @@ export default function Navbar() {
             <Tag size={18} />
             Deals
           </NavLink>
-
-          <NavLink
-            to="/cart"
-            className={({ isActive }) =>
-              `flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                isActive
-                  ? "bg-white text-blue-600 shadow-sm"
-                  : "text-gray-500 hover:text-gray-900"
-              }`
-            }
-          >
-            <ShoppingCart size={18} />
-            Cart
-          </NavLink>
         </div>
 
         {/* 3. Search - Takes up remaining space */}
@@ -104,10 +91,6 @@ export default function Navbar() {
         {/* 4. Action Buttons */}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
-            <button className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors relative">
-              <Bell size={20} />
-              <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
             <NavLink
               to="/cart"
               className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors relative"
@@ -126,13 +109,31 @@ export default function Navbar() {
           {isAuthenticated ? (
             <div className="flex items-center gap-2">
               <button
+                onClick={() => navigate("/orders")}
+                className="p-2.5 hover:bg-blue-50 rounded-full text-blue-600 transition-colors group relative"
+                title="My Orders"
+              >
+                <Package size={20} />
+                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+              {user?.isSeller && !user?.isAdmin && user?.role !== "admin" && (
+                <NavLink
+                  to="/seller/dashboard"
+                  className="p-2.5 hover:bg-purple-50 rounded-full text-purple-600 transition-colors group relative"
+                  title="Seller Dashboard"
+                >
+                  <LayoutDashboard size={20} />
+                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-purple-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
+                </NavLink>
+              )}
+              <button
                 onClick={() => navigate("/profile")}
                 className="flex items-center gap-2 pl-2 pr-4 py-1.5 hover:bg-gray-50 rounded-full transition-colors border border-transparent hover:border-gray-200"
               >
                 <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
-                  {user?.photoURL ? (
+                  {user?.avatarUrl ? (
                     <img
-                      src={user.photoURL}
+                      src={user.avatarUrl}
                       alt="avatar"
                       className="w-full h-full object-cover"
                     />
@@ -142,11 +143,20 @@ export default function Navbar() {
                 </div>
                 <div className="hidden sm:block text-left">
                   <p className="text-xs font-bold text-gray-900 leading-none">
-                    {user?.displayName || "User"}
+                    {user?.username || user?.displayName || "User"}
                   </p>
                   <p className="text-[10px] text-gray-500">{user?.email}</p>
                 </div>
               </button>
+              {user?.isAdmin && (
+                <button
+                  onClick={() => navigate("/admin")}
+                  className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"
+                  title="Admin Panel"
+                >
+                  <LayoutGrid size={20} />
+                </button>
+              )}
               <button
                 onClick={handleSignOut}
                 className="p-2.5 hover:bg-gray-100 rounded-full text-gray-600 transition-colors"

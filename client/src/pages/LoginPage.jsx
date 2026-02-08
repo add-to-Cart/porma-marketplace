@@ -6,7 +6,7 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -16,12 +16,16 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      // Check if profile is complete
-      const profileComplete = user.username;
-      if (!profileComplete) {
-        navigate("/complete-profile");
+      if (user.isAdmin) {
+        navigate("/admin");
       } else {
-        navigate("/");
+        // Check if profile is complete
+        const profileComplete = user.username;
+        if (!profileComplete) {
+          navigate("/complete-profile");
+        } else {
+          navigate("/");
+        }
       }
     }
   }, [user, navigate]);
@@ -29,10 +33,17 @@ export default function LoginPage() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
-      await signIn(email, password);
-      toast.success("Login successful!");
+      const result = await signIn(identifier, password);
+      if (result && result.success) {
+        toast.success("Login successful!");
+        // Redirect based on profile completeness
+        if (!result.user?.username) {
+          navigate("/complete-profile");
+        } else {
+          navigate("/");
+        }
+      }
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -69,11 +80,11 @@ export default function LoginPage() {
 
         <form onSubmit={handleLogin} className="space-y-3">
           <input
-            type="email"
-            placeholder="Email"
+            type="text"
+            placeholder="Email or Username"
             className="w-full p-2 border rounded border-gray-300 text-sm focus:outline-none focus:border-blue-500"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
             required
           />
           <input

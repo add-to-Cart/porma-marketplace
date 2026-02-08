@@ -1,6 +1,7 @@
 // Firebase client configuration
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { initializeFirestore, persistentLocalCache } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD2Ew5_pJqxqVDyMMxoQznLc-20-zQoKGA",
@@ -13,6 +14,11 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+// Initialize Firestore with offline persistence
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache(),
+});
 
 // Initialize Firebase Authentication and get a reference to the service
 export const auth = getAuth(app);

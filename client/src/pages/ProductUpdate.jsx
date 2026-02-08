@@ -53,7 +53,6 @@ export default function ProductUpdate() {
           yearTo: vc.yearRange?.to || "",
         });
       } catch (err) {
-        console.error(err);
         setError("Failed to fetch product");
       } finally {
         setLoading(false);

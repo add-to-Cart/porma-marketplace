@@ -1,34 +1,20 @@
-import { ShoppingCart } from "lucide-react";
-import { useCart } from "@/contexts/CartContext";
-import { useState } from "react";
-
 export default function ProductCard({ product, onClick }) {
-  const { addToCart } = useCart();
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [quantity, setQuantity] = useState(1);
-  const [showQuantity, setShowQuantity] = useState(false);
-
   // Extract compatibility data for cleaner code
   const vc = product.vehicleCompatibility;
 
   // Helper to format the display string for compatibility
   const getCompatibilityText = () => {
-    if (!vc) return "Universal Fit";
-    if (vc.isUniversalFit) return "Universal Accessories";
+    if (!vc || vc.isUniversalFit) return "Universal Fit";
 
     const makes = vc.makes?.join(", ") || "";
     const models = vc.models?.join(", ") || "";
     const years = vc.yearRange ? `${vc.yearRange.from}-${vc.yearRange.to}` : "";
 
-    return `${makes} ${models} (${years})`.trim();
-  };
-  const handleAddToCart = (e) => {
-    e.stopPropagation(); // Prevent triggering the onClick
-    addToCart({ ...product, quantity: quantity });
-    setShowSuccess(true);
-    setShowQuantity(false);
-    setQuantity(1); // Reset quantity after adding
-    setTimeout(() => setShowSuccess(false), 2000); // Hide after 2 seconds
+    const makeModel = `${makes} ${models}`.trim();
+    const yearText = years ? ` (${years})` : "";
+    const fullText = makeModel ? `${makeModel}${yearText}` : "";
+
+    return fullText || "Universal Fit";
   };
   return (
     <div
@@ -38,13 +24,25 @@ export default function ProductCard({ product, onClick }) {
       {/* Image Container */}
       <div className="relative aspect-square w-full overflow-hidden rounded-t-2xl bg-gray-100">
         <img
-          src={product.imageUrl}
+          src={product.imageUrl || null}
           alt={product.name}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
         />
 
         {/* Fitment Badge (The "Essential" Info) */}
-        <div className="absolute top-2 right-2 flex flex-col gap-1">
+        <div className="absolute top-2 right-2 flex flex-col gap-1 items-end">
+          {/* Discount Percentage Badge */}
+          {product.isBundle && product.compareAtPrice && product.price && (
+            <span className="px-2 py-1 rounded-md text-[10px] font-black shadow-sm uppercase bg-red-600 text-white animate-pulse">
+              {Math.round(
+                ((product.compareAtPrice - product.price) /
+                  product.compareAtPrice) *
+                  100,
+              )}
+              % OFF
+            </span>
+          )}
+
           <span
             className={`px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md ${
               vc?.type === "Motorcycle"
@@ -54,62 +52,26 @@ export default function ProductCard({ product, onClick }) {
           >
             {vc?.type || "Universal"}
           </span>
-          {product.isBundle && (
-            <span className="px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md bg-green-500/90 text-white">
-              Bundle
+
+          {product.viewCount && (
+            <span className="px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md bg-gray-800/90 text-white flex items-center gap-1">
+              👁 {product.viewCount}
             </span>
           )}
+
           {product.isSeasonal && (
-            <span className="px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md bg-purple-500/90 text-white">
-              Seasonal
-            </span>
+            <div className="flex flex-col gap-0.5 items-end">
+              <span className="px-2 py-1 rounded-md text-[9px] font-bold shadow-sm uppercase backdrop-blur-md bg-purple-500/90 text-white">
+                Seasonal
+              </span>
+              {product.seasonalCategory && (
+                <span className="px-1.5 py-0.5 rounded-sm text-[7px] font-black shadow-sm uppercase bg-white/90 text-purple-700 border border-purple-200">
+                  {product.seasonalCategory}
+                </span>
+              )}
+            </div>
           )}
         </div>
-
-        {/* Add to Cart Button */}
-        {/* Quantity Selector */}
-        {showQuantity ? (
-          <div className="absolute bottom-2 right-2 bg-white border border-gray-200 rounded-lg shadow-lg z-20 p-2 flex items-center gap-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setQuantity(Math.max(1, quantity - 1));
-              }}
-              className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
-            >
-              -
-            </button>
-            <span className="w-8 text-center text-sm font-semibold">
-              {quantity}
-            </span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setQuantity(quantity + 1);
-              }}
-              className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
-            >
-              +
-            </button>
-            <button
-              onClick={handleAddToCart}
-              className="ml-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-semibold"
-            >
-              Add
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowQuantity(true);
-            }}
-            className="absolute bottom-2 right-2 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg z-10 transition-all duration-300 border-2 border-white"
-            title="Add to Cart"
-          >
-            <ShoppingCart size={18} />
-          </button>
-        )}
       </div>
 
       {/* Content */}
@@ -165,24 +127,25 @@ export default function ProductCard({ product, onClick }) {
 
           {/* Store Info */}
           <div className="flex items-center gap-2 pt-3 mt-3 border-t border-gray-50">
-            <div className="w-5 h-5 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
-              <span className="text-[8px] font-bold text-blue-600 uppercase">
-                {product.storeName?.charAt(0)}
-              </span>
-            </div>
+            {product.sellerAvatarUrl ? (
+              <img
+                src={product.sellerAvatarUrl}
+                alt="Seller Avatar"
+                className="w-5 h-5 rounded-full object-cover border border-blue-100"
+              />
+            ) : (
+              <div className="w-5 h-5 rounded-full bg-blue-50 flex items-center justify-center border border-blue-100">
+                <span className="text-[8px] font-bold text-blue-600 uppercase">
+                  {product.storeName?.charAt(0)}
+                </span>
+              </div>
+            )}
             <p className="text-[10px] text-gray-500 font-semibold truncate">
               {product.storeName}
             </p>
           </div>
         </div>
       </div>
-
-      {/* Success Message */}
-      {showSuccess && (
-        <div className="absolute top-2 left-2 right-2 bg-green-500 text-white text-xs font-semibold py-1 px-2 rounded-md shadow-lg z-20 animate-fade-in">
-          ✓ Added to cart!
-        </div>
-      )}
     </div>
   );
 }

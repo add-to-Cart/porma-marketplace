@@ -2,16 +2,54 @@ import {
   LayoutDashboard,
   Package,
   ShoppingCart,
-  BarChart3,
   Settings,
   LogOut,
-  ShieldCheck,
-  Activity,
+  User,
+  MessageSquare,
 } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { useEffect, useState } from "react";
 
 export default function SellerSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+
+  // Hide sidebar for admin users
+  if (user?.isAdmin || user?.role === "admin") {
+    return null;
+  }
+
+  // Hide sidebar for deactivated/restricted/non-seller users
+  const isSeller = user?.isSeller === true || user?.role === "seller";
+  const isDeactivated =
+    user?.status === "deactivated" || user?.isActive === false;
+  const isRestricted =
+    user?.status === "restricted" || user?.isRestricted === true;
+  if (!isSeller || isDeactivated || isRestricted) {
+    return null;
+  }
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    if (isSeller && !isDeactivated && !isRestricted) {
+      (async () => {
+        try {
+          const data = await getTopSellers(6);
+          if (mounted) setLeadingStores(Array.isArray(data) ? data : []);
+        } catch (err) {
+          // ignore
+        }
+      })();
+    }
+    return () => (mounted = false);
+  }, [isSeller, isDeactivated, isRestricted]);
 
   const menuItems = [
     {
@@ -30,9 +68,9 @@ export default function SellerSidebar() {
       path: "/seller/orders",
     },
     {
-      label: "PERFORMANCE",
-      icon: <BarChart3 size={18} />,
-      path: "/seller/analytics",
+      label: "REVIEWS",
+      icon: <MessageSquare size={18} />,
+      path: "/seller/reviews",
     },
   ];
 
@@ -44,9 +82,6 @@ export default function SellerSidebar() {
           {/* Logo Badge */}
           <div className="flex items-center gap-3">
             <div className="p-2 shadow-[0_0_20px_rgba(245,158,11,0.15)] border border-amber-400/20">
-              {/* If you have a physical logo.png, swap the ShieldCheck for: 
-                  <img src="/logo.png" className="w-6 h-6 object-contain" alt="Logo" /> 
-              */}
               <img
                 src="/logo.png"
                 className="w-16 h-16 object-contain"
@@ -100,37 +135,50 @@ export default function SellerSidebar() {
       {/* FOOTER SECTION */}
       <div className="mt-auto p-6 border-t border-zinc-800 bg-black/20">
         <div className="space-y-4">
+          {/* Account Info */}
+          <div className="flex items-center gap-3 px-3 py-2">
+            <div className="w-8 h-8 bg-zinc-700 border border-zinc-600 flex items-center justify-center rounded-sm">
+              {user?.sellerAvatarUrl ? (
+                <img
+                  src={user.sellerAvatarUrl}
+                  alt="Avatar"
+                  className="w-full h-full object-cover rounded-sm"
+                />
+              ) : (
+                <User size={16} className="text-zinc-400" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-black text-white leading-none uppercase truncate">
+                {user?.displayName || "Seller"}
+              </p>
+              <p className="text-[9px] font-bold text-amber-500 uppercase truncate">
+                {user?.sellerApplication?.storeName ||
+                  user?.seller?.storeName ||
+                  user?.email}
+              </p>
+            </div>
+          </div>
+
           {/* Action Links */}
           <div className="space-y-1">
-            <button className="w-full flex items-center gap-3 px-3 py-2 text-[9px] font-black text-zinc-600 hover:text-white transition-colors tracking-widest uppercase group">
+            <button
+              onClick={() => navigate("/seller/account")}
+              className="w-full flex items-center gap-3 px-3 py-2 text-[9px] font-black text-zinc-600 hover:text-white transition-colors tracking-widest uppercase group"
+            >
               <Settings
                 size={14}
                 className="group-hover:rotate-45 transition-transform"
               />
-              Terminal Config
+              Account
             </button>
-            <button className="w-full flex items-center gap-3 px-3 py-2 text-[9px] font-black text-zinc-600 hover:text-red-500 transition-colors tracking-widest uppercase">
-              <LogOut size={14} /> Kill Process
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-3 px-3 py-2 text-[9px] font-black text-zinc-600 hover:text-red-500 transition-colors tracking-widest uppercase"
+            >
+              <LogOut size={14} />
+              Sign Out
             </button>
-          </div>
-
-          {/* Diagnostic Display */}
-          <div className="border border-zinc-800 p-3 bg-zinc-900/40">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[7px] font-bold text-zinc-600 uppercase tracking-[0.2em]">
-                Core Link
-              </span>
-              <div className="flex gap-1">
-                <div className="w-1 h-1 bg-amber-500 animate-pulse"></div>
-                <div className="w-1 h-1 bg-amber-500 animate-pulse [animation-delay:200ms]"></div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Activity size={10} className="text-emerald-500" />
-              <span className="text-[9px] font-mono text-emerald-600 font-bold uppercase tracking-tighter">
-                System: Authenticated
-              </span>
-            </div>
           </div>
         </div>
       </div>

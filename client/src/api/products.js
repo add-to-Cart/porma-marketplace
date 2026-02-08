@@ -1,23 +1,36 @@
 import api from "./api";
 
-export const getAllProducts = async (filters) => {
-  // Flatten the filters to handle nested vehicle object
-  const flattened = {
+/**
+ * Get all products with pagination and filtering
+ * @param {Object} filters - Filter parameters
+ * @param {number} page - Page number (0-indexed)
+ * @param {number} limit - Items per page
+ */
+export const getAllProducts = async (filters = {}, page = 0, limit = 20) => {
+  const params = new URLSearchParams({
     category: filters.category || "",
     vehicleType: filters.vehicleType || "",
     isBundle: filters.isBundle || false,
     isSeasonal: filters.isSeasonal || false,
     make: filters.vehicle?.make || "",
     model: filters.vehicle?.model || "",
-  };
-  const params = new URLSearchParams(flattened).toString();
-  const res = await api.get(`/products?${params}`);
+    page: page.toString(),
+    limit: limit.toString(),
+    sortBy: filters.sortBy || "newest",
+  });
+
+  const res = await api.get(`/products?${params.toString()}`);
   return res.data;
 };
 
-export const searchProducts = async (filters) => {
-  // Flatten the filters
-  const flattened = {
+/**
+ * Search products with fuzzy matching
+ * @param {Object} filters - Search and filter parameters
+ * @param {number} page - Page number
+ * @param {number} limit - Items per page
+ */
+export const searchProducts = async (filters, page = 0, limit = 20) => {
+  const params = new URLSearchParams({
     query: filters.query || "",
     category: filters.category || "",
     vehicleType: filters.vehicleType || "",
@@ -25,35 +38,285 @@ export const searchProducts = async (filters) => {
     isSeasonal: filters.isSeasonal || false,
     make: filters.vehicle?.make || "",
     model: filters.vehicle?.model || "",
-  };
-  const params = new URLSearchParams(flattened).toString();
-  const res = await api.get(`/products/search?${params}`);
+    page: page.toString(),
+    limit: limit.toString(),
+    sortBy: filters.sortBy || "relevance",
+  });
+
+  const res = await api.get(`/products/search?${params.toString()}`);
   return res.data;
 };
 
-export const getTrendingProducts = async () => {
-  const res = await api.get("/products/trending");
+/**
+ * Get trending products using enhanced algorithm
+ * @param {number} limit - Number of trending items to return
+ */
+export const getTrendingProducts = async (limit = 20) => {
+  const res = await api.get(`/products/trending?limit=${limit}`);
   return res.data;
 };
 
+// Add this to your products API file (e.g., src/api/products.js)
+
+/**
+ * Get trending products for a specific seller
+ * @param {string} sellerId - The seller's user ID
+ * @param {number} limit - Number of products to return (default: 10)
+ * @returns {Promise<Array>} Array of trending products
+ */
+export const getTrendingProductsBySeller = async (sellerId, limit = 10) => {
+  try {
+    const token = localStorage.getItem("authToken");
+
+    if (!token) {
+      console.warn("No auth token found");
+      return [];
+    }
+
+    const response = await fetch(
+      `http://localhost:3000/analytics/trending-products?sellerId=${sellerId}&limit=${limit}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success && Array.isArray(data.products)) {
+      return data.products;
+    }
+
+    return [];
+  } catch (error) {
+    console.error("Error fetching trending products:", error);
+    return [];
+  }
+};
+
+/**
+ * Get all trending products (across all sellers)
+ * @param {number} limit - Number of products to return (default: 20)
+ * @param {number} timeframe - Days to consider for trending (default: 30)
+ * @returns {Promise<Array>} Array of trending products
+ */
+export const getAllTrendingProducts = async (limit = 20, timeframe = 30) => {
+  try {
+    const token = localStorage.getItem("authToken");
+
+    if (!token) {
+      console.warn("No auth token found");
+      return [];
+    }
+
+    const response = await fetch(
+      `http://localhost:3000/analytics/trending-products?limit=${limit}&timeframe=${timeframe}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success && Array.isArray(data.products)) {
+      return data.products;
+    }
+
+    return [];
+  } catch (error) {
+    console.error("Error fetching trending products:", error);
+    return [];
+  }
+};
+
+/**
+ * Get seller analytics summary
+ * @param {string} sellerId - The seller's user ID
+ * @returns {Promise<Object|null>} Seller analytics summary or null
+ */
+export const getSellerAnalytics = async (sellerId) => {
+  try {
+    const token = localStorage.getItem("authToken");
+
+    if (!token) {
+      console.warn("No auth token found");
+      return null;
+    }
+
+    const response = await fetch(
+      `http://localhost:3000/analytics/seller-summary/${sellerId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success && data.summary) {
+      return data.summary;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error fetching seller analytics:", error);
+    return null;
+  }
+};
+
+/**
+ * Get related products for a specific product
+ */
 export const getRelatedProducts = async (id, params) => {
   const query = new URLSearchParams(params).toString();
   const res = await api.get(`/products/${id}/related?${query}`);
   return res.data;
 };
 
+/**
+ * Get single product by ID
+ */
 export const getProductById = async (id) => {
   const res = await api.get(`/products/${id}`);
   return res.data;
 };
 
+/**
+ * Get products by seller
+ */
+export const getProductsBySeller = async (sellerId, page = 0, limit = 20) => {
+  const res = await api.get(
+    `/products/seller/${sellerId}?page=${page}&limit=${limit}`,
+  );
+  return res.data.products || res.data || [];
+};
+
+/**
+ * Create a new product
+ */
 export const createProduct = async (productData) => {
-  // Sending the structured object to the POST /products route
   const res = await api.post("/products", productData);
   return res.data;
 };
 
+/**
+ * Update existing product
+ */
 export const updateProduct = async (id, productData) => {
   const res = await api.patch(`/products/${id}`, productData);
   return res.data;
+};
+
+/**
+ * Increment view count
+ */
+export const incrementViewCount = async (id) => {
+  try {
+    const res = await api.patch(`/products/${id}/view`);
+    return res.data;
+  } catch (err) {}
+};
+
+/**
+ * Add rating to product
+ */
+export const addRating = async (productId, rating, buyerId) => {
+  const res = await api.post(`/products/${productId}/rating`, {
+    rating,
+    buyerId,
+  });
+  return res.data;
+};
+
+/**
+ * Add review to product - FIXED VERSION
+ */
+export const addReview = async (
+  productId,
+  rating,
+  reviewText,
+  buyerId,
+  buyerName,
+) => {
+  try {
+    const res = await api.post(`/products/${productId}/review`, {
+      rating: Number(rating),
+      reviewText: reviewText || "",
+      buyerId,
+      buyerName: buyerName || "Anonymous",
+    });
+
+    return res.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Get reviews for a product - FIXED VERSION
+ */
+export const getProductReviews = async (productId) => {
+  try {
+    if (!productId) {
+      throw new Error("Product ID is required");
+    }
+
+    const res = await api.get(`/products/${productId}/reviews`);
+
+    return res.data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Reply to a review as a seller
+ */
+export const replyToReview = async (reviewId, replyText) => {
+  try {
+    if (!reviewId) {
+      throw new Error("Review ID is required");
+    }
+
+    if (!replyText || replyText.trim() === "") {
+      throw new Error("Reply text is required");
+    }
+
+    const token = localStorage.getItem("authToken");
+    if (!token) {
+      throw new Error("Authentication required");
+    }
+
+    const res = await api.put(
+      `/products/reviews/${reviewId}/reply`,
+      {
+        replyText,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    return res.data;
+  } catch (error) {
+    throw error;
+  }
 };

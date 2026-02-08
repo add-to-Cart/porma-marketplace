@@ -1,18 +1,136 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState, useEffect, useRef } from "react";
+import { useAuth } from "./AuthContext";
 
 const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
+  const { user } = useAuth();
   const [cart, setCart] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const saved = localStorage.getItem("cart");
-    if (saved) setCart(JSON.parse(saved));
-  }, []);
+  // Use ref to prevent infinite loop
+  const isSavingRef = useRef(false);
+  const prevCartLengthRef = useRef(0); // Track previous cart length for immediate saves on removals
 
+  // Load cart from Firestore when user logs in
   useEffect(() => {
-    localStorage.setItem("cart", JSON.stringify(cart));
-  }, [cart]);
+    if (user?.uid) {
+      loadCartFromFirestore();
+    } else {
+      // Load from localStorage for guests
+      loadCartFromLocalStorage();
+    }
+  }, [user?.uid]);
+
+  // Save to Firestore whenever cart changes (for logged-in users)
+  // FIXED: Added debouncing and prevented infinite loop
+  // MODIFIED: Save immediately on removals, debounce on additions
+  useEffect(() => {
+    // Don't save if we're already saving or if cart hasn't been initialized
+    if (isSavingRef.current || loading) {
+      return;
+    }
+
+    const isRemoval = cart.length < prevCartLengthRef.current;
+
+    if (isRemoval) {
+      // Save immediately for removals
+      if (user?.uid) {
+        saveCartToFirestore();
+      } else {
+        // Save to localStorage for guests
+        try {
+          localStorage.setItem("cart", JSON.stringify(cart));
+        } catch (error) {}
+      }
+    } else {
+      // Debounce the save operation for additions
+      const timeoutId = setTimeout(() => {
+        if (user?.uid && cart.length >= 0) {
+          saveCartToFirestore();
+        } else if (!user) {
+          // Save to localStorage for guests
+          try {
+            localStorage.setItem("cart", JSON.stringify(cart));
+          } catch (error) {}
+        }
+      }, 500); // Wait 500ms before saving
+
+      return () => clearTimeout(timeoutId);
+    }
+
+    // Update previous cart length
+    prevCartLengthRef.current = cart.length;
+  }, [cart, user?.uid]);
+
+  const loadCartFromFirestore = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("authToken");
+      if (!token) return;
+
+      const response = await fetch(`http://localhost:3000/cart/${user.uid}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.cart) {
+          const loadedCart = data.cart.items || [];
+          setCart(loadedCart);
+          prevCartLengthRef.current = loadedCart.length; // Update previous length
+        }
+      }
+    } catch (error) {
+      loadCartFromLocalStorage(); // Fallback to localStorage
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCartFromLocalStorage = () => {
+    try {
+      const saved = localStorage.getItem("cart");
+      if (saved) {
+        const parsedCart = JSON.parse(saved);
+        setCart(parsedCart);
+        prevCartLengthRef.current = parsedCart.length; // Update previous length
+      }
+    } catch (error) {
+      setCart([]);
+    }
+  };
+
+  const saveCartToFirestore = async () => {
+    // Prevent concurrent saves
+    if (isSavingRef.current) {
+      return;
+    }
+
+    isSavingRef.current = true;
+
+    try {
+      const token = localStorage.getItem("authToken");
+      if (!token || !user?.uid) {
+        isSavingRef.current = false;
+        return;
+      }
+
+      await fetch(`http://localhost:3000/cart/${user.uid}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ items: cart }),
+      });
+    } catch (error) {
+    } finally {
+      isSavingRef.current = false;
+    }
+  };
 
   const addToCart = (product) => {
     const productWithNumericPrice = {
@@ -47,14 +165,22 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = () => setCart([]);
 
-  // More realistic cart calculations
-  const subtotal = cart.reduce(
-    (sum, item) => sum + item.price * item.quantity,
+  const subtotal = cart.reduce((sum, item) => {
+    const price = Number(item.price) || 0;
+    const quantity = Number(item.quantity) || 0;
+    return sum + price * quantity;
+  }, 0);
+
+  // LOGIC: If subtotal > 1000, fee is 0.
+  // Otherwise, fee is 2% of the subtotal.
+  const deliveryFee = subtotal > 1000 ? 0 : subtotal * 0.02;
+
+  const total = subtotal + deliveryFee;
+
+  const itemCount = cart.reduce(
+    (count, item) => count + (Number(item.quantity) || 0),
     0,
   );
-  const deliveryFee = subtotal > 1000 ? 0 : 150; // Free delivery over ₱1000
-  const total = subtotal + deliveryFee;
-  const itemCount = cart.reduce((count, item) => count + item.quantity, 0);
 
   return (
     <CartContext.Provider
@@ -68,6 +194,7 @@ export const CartProvider = ({ children }) => {
         deliveryFee,
         total,
         itemCount,
+        loading,
       }}
     >
       {children}

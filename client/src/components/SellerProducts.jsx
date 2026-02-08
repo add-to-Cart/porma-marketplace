@@ -1,24 +1,45 @@
 import { useEffect, useState } from "react";
-import { getAllProducts } from "@/api/products";
+import { getProductsBySeller } from "@/api/products";
 import { Package, ArrowUpRight, MoreHorizontal } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
-export default function SellerProducts() {
+export default function SellerProducts({
+  onSelect,
+  searchQuery = "",
+  refreshTrigger = 0,
+}) {
+  const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchMyProducts = async () => {
+      if (!user?.uid) {
+        return;
+      }
+
       try {
-        const data = await getAllProducts(); // Adjust filters if needed for "my products"
-        setProducts(data);
+        const data = await getProductsBySeller(user.uid);
+
+        setProducts(Array.isArray(data) ? data : []);
       } catch (err) {
-        console.error(err);
       } finally {
         setLoading(false);
       }
     };
     fetchMyProducts();
-  }, []);
+  }, [user?.uid, refreshTrigger]);
+
+  // Filter products based on search query
+  const filteredProducts = products.filter((product) => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      product.name?.toLowerCase().includes(query) ||
+      product.categories?.join(", ").toLowerCase().includes(query) ||
+      product.description?.toLowerCase().includes(query)
+    );
+  });
 
   return (
     <div className="border-2 border-zinc-900 bg-zinc-50 min-h-[600px] overflow-hidden">
@@ -26,11 +47,11 @@ export default function SellerProducts() {
         <div className="flex items-center gap-2">
           <Package size={16} className="text-amber-500" />
           <h2 className="text-[10px] font-black uppercase tracking-widest">
-            Active Inventory
+            Your Products
           </h2>
         </div>
         <span className="bg-amber-500 text-zinc-900 px-2 py-0.5 text-[10px] font-black rounded-full">
-          {products.length}
+          {filteredProducts.length}
         </span>
       </div>
 
@@ -39,15 +60,16 @@ export default function SellerProducts() {
           <div className="p-10 text-center animate-pulse text-[10px] font-black uppercase text-zinc-400">
             Querying DB...
           </div>
-        ) : products.length === 0 ? (
+        ) : filteredProducts.length === 0 ? (
           <div className="p-10 text-center text-[10px] font-black uppercase text-zinc-400">
-            Inventory Empty
+            {searchQuery ? "No products match your search" : "Inventory Empty"}
           </div>
         ) : (
-          products.map((p) => (
+          filteredProducts.map((p) => (
             <div
               key={p.id}
               className="p-4 bg-white hover:bg-zinc-100 transition-colors group cursor-pointer relative"
+              onClick={() => onSelect && onSelect(p)}
             >
               <div className="flex gap-4 items-start">
                 <div className="w-12 h-12 bg-zinc-100 border border-zinc-200 shrink-0">
@@ -62,10 +84,10 @@ export default function SellerProducts() {
                   </h3>
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-[10px] font-mono font-bold text-amber-600">
-                      ₱{p.price.toLocaleString()}
+                      ₱{p.price?.toLocaleString() || "0"}
                     </span>
                     <span className="text-[9px] font-black uppercase text-zinc-400">
-                      QTY: {p.stock}
+                      QTY: {p.stock || 0}
                     </span>
                   </div>
                 </div>
