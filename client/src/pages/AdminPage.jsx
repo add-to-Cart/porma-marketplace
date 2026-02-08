@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { toast } from "react-hot-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { authAPI } from "@/api/auth";
 import {
   getSalesAnalytics,
   getSellersWithProducts,
@@ -418,7 +417,9 @@ export default function AdminPage() {
                   <tr>
                     <th className="px-6 py-4">Identity</th>
                     <th className="px-6 py-4">Role / Type</th>
-                    <th className="px-6 py-4">Performance</th>
+                    {activeTab === "sellers" && (
+                      <th className="px-6 py-4">Sales</th>
+                    )}
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
@@ -450,24 +451,20 @@ export default function AdminPage() {
                             {item.role || "Vendor"}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-700">
-                              $
-                              {(
-                                (activeTab === "sellers"
-                                  ? item.totalRevenue
-                                  : item.totalSales) || 0
-                              ).toLocaleString()}
-                            </p>
-                            {activeTab === "sellers" && (
+                        {activeTab === "sellers" && (
+                          <td className="px-6 py-4">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-700">
+                                <PhilippinePesoIcon className="w-4 h-4 inline mb-0.5" />
+                                {(item.totalRevenue || 0).toLocaleString()}
+                              </p>
                               <p className="text-xs text-slate-500 mt-1">
                                 {item.totalSoldCount || 0} items •{" "}
                                 {item.totalProducts || 0} products
                               </p>
-                            )}
-                          </div>
-                        </td>
+                            </div>
+                          </td>
+                        )}
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <div
