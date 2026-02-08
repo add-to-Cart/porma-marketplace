@@ -80,12 +80,16 @@ router.post("/admin-login", async (req, res) => {
       .status(401)
       .json({ success: false, message: "Invalid credentials" });
 
+  // Generate a simple session token (optional, or just return admin info)
+  // For now, just return admin info
   return res.json({
     success: true,
     admin: {
       username: adminDoc.username,
       role: adminDoc.role,
+      email: adminDoc.email,
     },
+    // Optionally, you can add a simple token here if you want
   });
 });
 

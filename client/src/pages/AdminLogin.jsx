@@ -38,9 +38,6 @@ const AdminLogin = () => {
       const data = await res.json();
       if (data.success) {
         localStorage.setItem("admin", JSON.stringify(data.admin));
-        if (data.token) {
-          localStorage.setItem("authToken", data.token);
-        }
         setAdminUser(data.admin);
         toast.success("Login successful!");
         navigate("/admin");

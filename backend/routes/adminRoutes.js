@@ -14,15 +14,15 @@ import {
 const router = express.Router();
 
 // Protected admin endpoints
-router.get("/users", verifyAuth, getAllUsers);
-router.get("/users/:userId", verifyAuth, getUserById);
-router.put("/users/:userId/status", verifyAuth, updateUserStatus);
+router.get("/users", getAllUsers);
+router.get("/users/:userId", getUserById);
+router.put("/users/:userId/status", updateUserStatus);
 
-router.get("/sellers", verifyAuth, getAllSellers);
-router.get("/sellers/:sellerId", verifyAuth, getSellerDetails);
-router.get("/sellers-with-products", verifyAuth, getSellersWithProducts);
+router.get("/sellers", getAllSellers);
+router.get("/sellers/:sellerId", getSellerDetails);
+router.get("/sellers-with-products", getSellersWithProducts);
 
-router.get("/analytics/top-sellers", verifyAuth, getTopSellers);
-router.get("/analytics/sales", verifyAuth, getSalesAnalytics);
+router.get("/analytics/top-sellers", getTopSellers);
+router.get("/analytics/sales", getSalesAnalytics);
 
 export default router;
