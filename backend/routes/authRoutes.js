@@ -265,7 +265,7 @@ router.post("/google-signin", async (req, res) => {
       userData = userDoc.data();
       if (picture !== userData.googlePhotoURL) {
         await userDocRef.update({
-          googlePhotoURL: picture,
+          googlePhotoURL: picture || null,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         userData.googlePhotoURL = picture;
@@ -345,7 +345,7 @@ router.post("/token-verify", async (req, res) => {
       userData = userDoc.data();
       if (picture !== userData.googlePhotoURL) {
         await userDocRef.update({
-          googlePhotoURL: picture,
+          googlePhotoURL: picture || null,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         userData.googlePhotoURL = picture;
@@ -394,7 +394,12 @@ router.post("/token-verify", async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(401).json({ success: false, message: "Invalid token" });
+    const errMsg = err && err.message ? err.message : "Invalid token";
+    console.error("/token-verify error:", errMsg, err);
+    if (process.env.NODE_ENV !== "production") {
+      return res.status(401).json({ success: false, message: errMsg });
+    }
+    return res.status(401).json({ success: false, message: "Invalid token" });
   }
 });
 

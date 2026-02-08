@@ -31,11 +31,20 @@ export const resolveEmail = async (req, res) => {
   try {
     if (identifier.includes("@")) return res.json({ email: identifier });
     const db = admin.firestore();
-    const snap = await db
+    // First try matching explicit `username` field
+    let snap = await db
       .collection("users")
       .where("username", "==", identifier)
       .limit(1)
       .get();
+    // If not found, fallback to `displayName` which some users may have
+    if (snap.empty) {
+      snap = await db
+        .collection("users")
+        .where("displayName", "==", identifier)
+        .limit(1)
+        .get();
+    }
     if (snap.empty) return res.status(404).json({ error: "Not found" });
     const data = snap.docs[0].data();
     res.json({ email: data.email });
