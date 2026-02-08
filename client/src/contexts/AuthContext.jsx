@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { auth, googleProvider } from "@/config/firebase";
 import {
   createUserWithEmailAndPassword,
@@ -16,28 +16,55 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Helper to check seller restriction
+  // Use ref to prevent infinite loops
+  const isRefreshingRef = useRef(false);
+
+  // Helper to check if seller can login (isActive check)
+  const canSellerLogin = (userObj) => {
+    if (!userObj) return true;
+    const isSeller = userObj.isSeller === true || userObj.role === "seller";
+
+    // If not a seller, they can always login
+    if (!isSeller) return true;
+
+    // Sellers can't login if isActive is false
+    const isActive = userObj.isActive !== false; // default to true if undefined
+    return isActive;
+  };
+
+  // Helper to check if seller has restrictions (for UI warnings)
   const isSellerRestricted = (userObj) => {
     if (!userObj) return false;
     const isSeller = userObj.isSeller === true || userObj.role === "seller";
-    const isDeactivated =
-      userObj.status === "deactivated" || userObj.isActive === false;
-    const isRestricted =
-      userObj.status === "restricted" || userObj.isRestricted === true;
-    return isSeller && (isDeactivated || isRestricted);
+
+    // Check if seller is restricted (they can still login, but with limitations)
+    const isRestricted = userObj.isRestricted === true;
+    return isSeller && isRestricted;
   };
 
-  // Centralized user setter
+  // Centralized user setter with restriction checks
   const setUserWithRestriction = (userObj) => {
-    if (isSellerRestricted(userObj)) {
+    // First check if seller can login at all
+    if (!canSellerLogin(userObj)) {
       localStorage.removeItem("authToken");
       setUser(null);
-      setError("Seller account is inactive or restricted.");
+      setError(
+        "Your seller account has been deactivated. Please contact support.",
+      );
       setLoading(false);
       return false;
     }
+
+    // Set user even if restricted (they can still login)
     setUser(userObj);
-    setError(null);
+
+    // Show warning if restricted but still allow login
+    if (isSellerRestricted(userObj)) {
+      setError("Your account has limited access due to restrictions.");
+    } else {
+      setError(null);
+    }
+
     setLoading(false);
     return true;
   };
@@ -60,8 +87,8 @@ export const AuthProvider = ({ children }) => {
         } else {
           localStorage.removeItem("authToken");
           setUser(null);
+          setLoading(false);
         }
-        setLoading(false);
       } else {
         setLoading(false);
       }
@@ -85,7 +112,7 @@ export const AuthProvider = ({ children }) => {
         if (!setUserWithRestriction(response.user)) {
           return {
             success: false,
-            message: "Seller account is inactive or restricted.",
+            message: "Your seller account has been deactivated.",
           };
         }
         return { success: true };
@@ -93,7 +120,6 @@ export const AuthProvider = ({ children }) => {
       setError(response.message);
       return { success: false, message: response.message };
     } catch (err) {
-      // Parse Firebase error code for better messaging
       let errorMessage = "Sign up failed";
 
       if (err.code === "auth/email-already-in-use") {
@@ -119,9 +145,9 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       let email = identifier;
+
       // If identifier is not an email, resolve email from backend
       if (!identifier.includes("@")) {
-        // Call backend to resolve email from username
         const res = await authAPI.resolveEmail(identifier);
         if (!res || !res.email) {
           setError(
@@ -136,20 +162,22 @@ export const AuthProvider = ({ children }) => {
         }
         email = res.email;
       }
+
       const userCredential = await signInWithEmailAndPassword(
         auth,
         email,
         password,
       );
       const idToken = await userCredential.user.getIdToken();
-      // Now verify idToken with backend to get user data
+
+      // Verify token with backend to get user data
       const verifyResponse = await authAPI.verifyToken(idToken);
       if (verifyResponse.success) {
         localStorage.setItem("authToken", idToken);
         if (!setUserWithRestriction(verifyResponse.user)) {
           return {
             success: false,
-            message: "Seller account is inactive or restricted.",
+            message: "Your seller account has been deactivated.",
           };
         }
         return { success: true, user: verifyResponse.user };
@@ -157,7 +185,6 @@ export const AuthProvider = ({ children }) => {
       setError(verifyResponse.message);
       return { success: false, message: verifyResponse.message };
     } catch (err) {
-      // Parse Firebase error code for better messaging
       let errorMessage = "Sign in failed";
 
       if (err.code === "auth/user-not-found") {
@@ -197,7 +224,7 @@ export const AuthProvider = ({ children }) => {
           if (!setUserWithRestriction(verifyResponse.user)) {
             return {
               success: false,
-              message: "Seller account is inactive or restricted.",
+              message: "Your account has been deactivated.",
             };
           }
           return { success: true, user: verifyResponse.user };
@@ -227,7 +254,7 @@ export const AuthProvider = ({ children }) => {
         if (!setUserWithRestriction(response.user)) {
           return {
             success: false,
-            message: "Seller account is inactive or restricted.",
+            message: "Your seller account has been deactivated.",
           };
         }
         return { success: true, user: response.user };
@@ -247,9 +274,11 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       await firebaseSignOut(auth);
     } catch (err) {
+      console.error("Sign out error:", err);
     } finally {
       localStorage.removeItem("authToken");
       setUser(null);
+      setError(null);
       setLoading(false);
     }
   };
@@ -260,8 +289,8 @@ export const AuthProvider = ({ children }) => {
       const token = localStorage.getItem("authToken");
       const res = await authAPI.updateProfile(token, updates);
       if (res.success && res.user) {
-        // Use the backend's response data to ensure proper field mapping
-        setUser(res.user);
+        // Use setUserWithRestriction to apply restriction checks
+        setUserWithRestriction(res.user);
         return { success: true, user: res.user };
       }
       return { success: false, message: res.message };
@@ -274,15 +303,26 @@ export const AuthProvider = ({ children }) => {
   };
 
   const refreshProfile = async () => {
+    // Prevent infinite loops
+    if (isRefreshingRef.current) {
+      console.warn("Profile refresh already in progress, skipping...");
+      return { success: false, message: "Refresh already in progress" };
+    }
+
     try {
+      isRefreshingRef.current = true;
       const token = localStorage.getItem("authToken");
+
       if (!token) {
         console.warn("No auth token found for profile refresh");
-        return null;
+        return { success: false, message: "No auth token" };
       }
+
       const res = await authAPI.getProfile(token);
+
       if (res.success && res.user) {
-        setUser(res.user);
+        // Use setUserWithRestriction to apply restriction checks
+        setUserWithRestriction(res.user);
         return res;
       } else {
         console.error("Profile fetch failed:", res?.message || "Unknown error");
@@ -294,6 +334,8 @@ export const AuthProvider = ({ children }) => {
         success: false,
         message: err?.message || "Failed to refresh profile",
       };
+    } finally {
+      isRefreshingRef.current = false;
     }
   };
 
@@ -313,16 +355,17 @@ export const AuthProvider = ({ children }) => {
         setError,
         setLoading,
         signOut,
-        updateProfile, // Added this since you defined it but didn't export it
-        refreshProfile, // Added this since you defined it but didn't export it
+        updateProfile,
+        refreshProfile,
+        isSellerRestricted,
+        canSellerLogin,
       }}
     >
       {children}
     </AuthContext.Provider>
   );
-}; // <--- THIS WAS LIKELY MISSING
+};
 
-// You also need these to actually use the context in other files
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {

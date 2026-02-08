@@ -21,6 +21,7 @@ import Cart from "@/pages/Cart";
 import Checkout from "@/pages/Checkout";
 import SellerDashboard from "@/pages/SellerDashboard";
 import SellerOrdersPage from "@/pages/SellerOrdersPage";
+import RestrictedSeller from "@/pages/RestrictedSeller";
 
 import OrdersPage from "@/pages/OrdersPage";
 import SellerAccount from "@/pages/SellerAccount";
@@ -65,6 +66,7 @@ export default function AppRoutes() {
       <Route path="/complete-profile" element={<ProfilePage />} />
 
       {/* Seller Layout - Protected Routes */}
+      <Route path="/seller/restricted" element={<RestrictedSeller />} />
       <Route
         element={
           <ProtectedSellerRoute>

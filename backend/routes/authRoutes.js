@@ -231,6 +231,16 @@ router.post("/signin", async (req, res) => {
         .status(401)
         .json({ success: false, message: "Invalid credentials" });
     }
+    // Block sign-in for deactivated or restricted accounts
+    const isDeactivated =
+      userData?.status === "deactivated" || userData?.isActive === false;
+    const isRestricted =
+      userData?.status === "restricted" || userData?.isRestricted === true;
+    if (isDeactivated || isRestricted) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Account is inactive or restricted" });
+    }
     let userRecord;
     try {
       userRecord = await admin.auth().getUserByEmail(email);
@@ -328,6 +338,17 @@ router.post("/google-signin", async (req, res) => {
       }
     }
 
+    // Prevent Google sign-in for deactivated/restricted accounts
+    const isDeactivatedG =
+      userData?.status === "deactivated" || userData?.isActive === false;
+    const isRestrictedG =
+      userData?.status === "restricted" || userData?.isRestricted === true;
+    if (isDeactivatedG || isRestrictedG) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Account is inactive or restricted" });
+    }
+
     const customToken = await admin.auth().createCustomToken(uid);
 
     res.json({
@@ -406,6 +427,17 @@ router.post("/token-verify", async (req, res) => {
         });
         userData.photoURL = finalPhotoURL;
       }
+    }
+
+    // Block token verification for deactivated/restricted accounts
+    const isDeactivatedT =
+      userData?.status === "deactivated" || userData?.isActive === false;
+    const isRestrictedT =
+      userData?.status === "restricted" || userData?.isRestricted === true;
+    if (isDeactivatedT || isRestrictedT) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Account is inactive or restricted" });
     }
 
     let sellerData = null;

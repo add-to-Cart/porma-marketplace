@@ -5,13 +5,20 @@ export const createOrUpdateUser = async (req, res) => {
   try {
     const db = admin.firestore();
     const uid = req.user.uid;
-    const payload = req.body || {};
+    // Strip any sales-related fields from incoming payload to avoid storing
+    // marketplace sales metrics on user documents (sales belong to `sellers`).
+    const incoming = { ...(req.body || {}) };
+    delete incoming.totalSales;
+    delete incoming.sales;
+    delete incoming.totalRevenue;
+    const payload = incoming;
     const userRef = db.collection("users").doc(uid);
     await userRef.set(
       {
         uid,
         email: payload.email || req.user.email || null,
         username: payload.username || payload.email?.split("@")[0] || null,
+        // merge sanitized payload only
         ...payload,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },

@@ -56,15 +56,128 @@ export const getTrendingProducts = async (limit = 20) => {
   return res.data;
 };
 
+// Add this to your products API file (e.g., src/api/products.js)
+
 /**
  * Get trending products for a specific seller
+ * @param {string} sellerId - The seller's user ID
+ * @param {number} limit - Number of products to return (default: 10)
+ * @returns {Promise<Array>} Array of trending products
  */
-export const getTrendingProductsBySeller = async (sellerId, limit = 20) => {
-  if (!sellerId) return [];
-  const res = await api.get(
-    `/products/seller/${sellerId}/trending?limit=${limit}`,
-  );
-  return res.data || [];
+export const getTrendingProductsBySeller = async (sellerId, limit = 10) => {
+  try {
+    const token = localStorage.getItem("authToken");
+
+    if (!token) {
+      console.warn("No auth token found");
+      return [];
+    }
+
+    const response = await fetch(
+      `http://localhost:3000/analytics/trending-products?sellerId=${sellerId}&limit=${limit}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success && Array.isArray(data.products)) {
+      return data.products;
+    }
+
+    return [];
+  } catch (error) {
+    console.error("Error fetching trending products:", error);
+    return [];
+  }
+};
+
+/**
+ * Get all trending products (across all sellers)
+ * @param {number} limit - Number of products to return (default: 20)
+ * @param {number} timeframe - Days to consider for trending (default: 30)
+ * @returns {Promise<Array>} Array of trending products
+ */
+export const getAllTrendingProducts = async (limit = 20, timeframe = 30) => {
+  try {
+    const token = localStorage.getItem("authToken");
+
+    if (!token) {
+      console.warn("No auth token found");
+      return [];
+    }
+
+    const response = await fetch(
+      `http://localhost:3000/analytics/trending-products?limit=${limit}&timeframe=${timeframe}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success && Array.isArray(data.products)) {
+      return data.products;
+    }
+
+    return [];
+  } catch (error) {
+    console.error("Error fetching trending products:", error);
+    return [];
+  }
+};
+
+/**
+ * Get seller analytics summary
+ * @param {string} sellerId - The seller's user ID
+ * @returns {Promise<Object|null>} Seller analytics summary or null
+ */
+export const getSellerAnalytics = async (sellerId) => {
+  try {
+    const token = localStorage.getItem("authToken");
+
+    if (!token) {
+      console.warn("No auth token found");
+      return null;
+    }
+
+    const response = await fetch(
+      `http://localhost:3000/analytics/seller-summary/${sellerId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.success && data.summary) {
+      return data.summary;
+    }
+
+    return null;
+  } catch (error) {
+    console.error("Error fetching seller analytics:", error);
+    return null;
+  }
 };
 
 /**

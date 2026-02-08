@@ -1,68 +1,27 @@
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect, useState } from "react";
 
 export default function ProtectedSellerRoute({ children }) {
-  const { user, loading, signOut, refreshProfile } = useAuth();
-  const [shouldSignOut, setShouldSignOut] = useState(false);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const isSeller = user?.isSeller === true || user?.role === "seller";
-    const isDeactivated =
-      user?.status === "deactivated" || user?.isActive === false;
-    const isRestricted =
-      user?.status === "restricted" || user?.isRestricted === true;
-    if (isSeller && (isDeactivated || isRestricted)) {
-      setShouldSignOut(true);
-    } else if (
-      isSeller &&
-      (user?.status === undefined || user?.isActive === undefined)
-    ) {
-      if (typeof refreshProfile === "function") {
-        refreshProfile();
-      }
-    }
-  }, [user, refreshProfile]);
-
-  useEffect(() => {
-    if (shouldSignOut) {
-      (async () => {
-        await signOut();
-        navigate("/login", { replace: true });
-      })();
-    }
-  }, [shouldSignOut, signOut, navigate]);
+  const { user, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-gray-500">Loading...</p>
-      </div>
-    );
+    return null;
   }
 
-  // Check if user is authenticated
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!user) return <Navigate to="/login" replace />;
 
   const isAdmin = user?.isAdmin === true || user?.role === "admin";
   const isSeller = user?.isSeller === true || user?.role === "seller";
 
-  // Debug logging
-  console.log("ProtectedSellerRoute:", {
-    user,
-    isAdmin,
-    isSeller,
-  });
+  const isRestricted =
+    user?.status === "restricted" || user?.isRestricted === true;
+  const isDeactivated =
+    user?.status === "deactivated" || user?.isActive === false;
 
-  if (isAdmin) {
-    return <Navigate to="/admin" replace />;
-  }
-  if (!isSeller) {
-    return <Navigate to="/" replace />;
-  }
+  if (isAdmin) return <Navigate to="/admin" replace />;
+  if (isRestricted) return <Navigate to="/seller/restricted" replace />;
+  // Allow deactivated sellers to enter but render inactive UI in SellerLayout
+  if (!isSeller) return <Navigate to="/" replace />;
 
   return children;
 }

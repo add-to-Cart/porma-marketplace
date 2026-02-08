@@ -53,15 +53,20 @@ export const getTopSellers = async (req, res) => {
         let totalProducts = data.totalProducts || 0;
         let averageRating = data.ratingAverage || data.averageRating || 0;
 
-        // If totalSales or totalProducts missing, compute from products
+        // prepare product list and compute sales/ratings if missing
+        let prods = [];
         if (!data.totalSales || !data.totalProducts) {
           const prodSnap = await db
             .collection("products")
             .where("sellerId", "==", sellerId)
             .get();
-          const prods = prodSnap.docs.map((p) => ({ id: p.id, ...p.data() }));
+          prods = prodSnap.docs.map((p) => ({ id: p.id, ...p.data() }));
           totalProducts = prods.length;
-          totalSales = prods.reduce((s, p) => s + (p.soldCount || 0), 0);
+          // compute total sales as revenue (price * soldCount)
+          totalSales = prods.reduce(
+            (s, p) => s + (p.soldCount || 0) * (p.price || 0),
+            0,
+          );
           if (!averageRating) {
             const ratings = prods
               .map((p) => p.ratingAverage || 0)
@@ -70,11 +75,19 @@ export const getTopSellers = async (req, res) => {
               ? ratings.reduce((a, b) => a + b, 0) / ratings.length
               : 0;
           }
+        } else {
+          // if seller document already contains totals, still try to sample a product
+          const prodSnap = await db
+            .collection("products")
+            .where("sellerId", "==", sellerId)
+            .limit(1)
+            .get();
+          prods = prodSnap.docs.map((p) => ({ id: p.id, ...p.data() }));
         }
 
         // choose a representative product (top sold or latest)
         let sampleProduct = null;
-        if (prods && prods.length > 0) {
+        if (prods.length > 0) {
           // prefer highest soldCount, fallback to first
           const sortedProds = [...prods].sort(
             (a, b) => (b.soldCount || 0) - (a.soldCount || 0),
@@ -322,52 +335,55 @@ export const updateUserStatus = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    const updates = {
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
+    // Build a small, consistent set of fields to update.
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const updates = { updatedAt: now };
 
+    // Normalize state: status string + boolean flags for easier querying.
     if (action === "deactivate") {
       updates.status = "deactivated";
       updates.isActive = false;
+      updates.isRestricted = false;
       updates.deactivationReason = reason || "Admin deactivation";
-      updates.deactivatedAt = admin.firestore.FieldValue.serverTimestamp();
+      updates.deactivatedAt = now;
     } else if (action === "restrict") {
       updates.status = "restricted";
+      updates.isActive = false;
       updates.isRestricted = true;
       updates.restrictionReason = reason || "Account restricted";
-      updates.restrictedAt = admin.firestore.FieldValue.serverTimestamp();
+      updates.restrictedAt = now;
     } else if (action === "activate") {
       updates.status = "active";
       updates.isActive = true;
       updates.isRestricted = false;
-      updates.activatedAt = admin.firestore.FieldValue.serverTimestamp();
+      updates.activatedAt = now;
     }
 
+    // Apply to the user document (single, consistent write)
     await userRef.update(updates);
 
-    // Sync seller account if user is a seller
+    // If this user has an associated seller document, mirror the minimal state there too.
     const userData = userDoc.data();
     if (userData.role === "seller") {
       const sellerRef = db.collection("sellers").doc(userId);
       const sellerDoc = await sellerRef.get();
       if (sellerDoc.exists) {
-        const sellerUpdates = {};
-        if (action === "deactivate") {
-          sellerUpdates.status = "deactivated";
-          sellerUpdates.isActive = false;
+        const sellerUpdates = { updatedAt: now };
+        // Mirror only the canonical fields to avoid duplicate/conflicting keys.
+        sellerUpdates.status = updates.status;
+        sellerUpdates.isActive = updates.isActive;
+        sellerUpdates.isRestricted = updates.isRestricted;
+        if (updates.deactivationReason)
           sellerUpdates.deactivationReason = updates.deactivationReason;
-          sellerUpdates.deactivatedAt = updates.deactivatedAt;
-        } else if (action === "restrict") {
-          sellerUpdates.status = "restricted";
-          sellerUpdates.isRestricted = true;
+        if (updates.restrictionReason)
           sellerUpdates.restrictionReason = updates.restrictionReason;
+        if (updates.deactivatedAt)
+          sellerUpdates.deactivatedAt = updates.deactivatedAt;
+        if (updates.restrictedAt)
           sellerUpdates.restrictedAt = updates.restrictedAt;
-        } else if (action === "activate") {
-          sellerUpdates.status = "active";
-          sellerUpdates.isActive = true;
-          sellerUpdates.isRestricted = false;
+        if (updates.activatedAt)
           sellerUpdates.activatedAt = updates.activatedAt;
-        }
+
         await sellerRef.update(sellerUpdates);
       }
     }
