@@ -1,14 +1,23 @@
 // Authentication API functions
-const API_BASE = "http://localhost:3002/auth";
+const API_BASE = "http://localhost:3000/auth";
 
 export const authAPI = {
   // Resolve email from username
   resolveEmail: async (identifier) => {
     const response = await fetch(
-      `http://localhost:3002/users/resolve-email?identifier=${encodeURIComponent(identifier)}`,
+      `${API_BASE}/users/resolve-email?identifier=${encodeURIComponent(identifier)}`,
     );
     return await response.json();
   },
+
+  // Check if username is available
+  checkUsername: async (username) => {
+    const response = await fetch(
+      `${API_BASE}/users/check-username?username=${encodeURIComponent(username)}`,
+    );
+    return await response.json();
+  },
+
   forgotPassword: async (email) => {
     const response = await fetch(`${API_BASE}/forgot-password`, {
       method: "POST",
@@ -54,6 +63,10 @@ export const authAPI = {
   signOut: async (token) => {
     const response = await fetch(`${API_BASE}/signout`, {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
     });
 
     const data = await response.json();
@@ -62,8 +75,10 @@ export const authAPI = {
 
   getProfile: async (token) => {
     const response = await fetch(`${API_BASE}/profile`, {
+      method: "GET",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
     });
 
@@ -76,6 +91,7 @@ export const authAPI = {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(updates),
     });
@@ -88,6 +104,9 @@ export const authAPI = {
     const ROOT = API_BASE.replace("/auth", "");
     const response = await fetch(`${ROOT}/seller/profile`, {
       method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
       body: formData,
     });
 
@@ -101,6 +120,9 @@ export const authAPI = {
 
     const response = await fetch(`${API_BASE}/profile/avatar`, {
       method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
       body: formData,
     });
 
@@ -150,6 +172,9 @@ export const authAPI = {
     const ROOT = API_BASE.replace("/auth", "");
     const response = await fetch(`${ROOT}/seller/apply`, {
       method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
       body: formData,
     });
 
@@ -162,6 +187,9 @@ export const authAPI = {
     const ROOT = API_BASE.replace("/auth", "");
     const response = await fetch(`${ROOT}/seller/update-application`, {
       method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
       body: formData,
     });
 

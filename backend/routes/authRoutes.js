@@ -24,6 +24,45 @@ const db = admin.firestore();
 // Resolve email from username (for login)
 router.get("/users/resolve-email", resolveEmail);
 
+// Check if username is available
+router.get("/users/check-username", async (req, res) => {
+  try {
+    const { username } = req.query;
+
+    if (!username || !username.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Username is required",
+      });
+    }
+
+    const snapshot = await db
+      .collection("users")
+      .where("username", "==", username.trim())
+      .get();
+
+    if (snapshot.empty) {
+      return res.json({
+        success: true,
+        available: true,
+        message: "Username is available",
+      });
+    } else {
+      return res.json({
+        success: true,
+        available: false,
+        message: "Username is already taken",
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to check username availability",
+      error: error.message,
+    });
+  }
+});
+
 // Password reset
 router.post("/forgot-password", async (req, res) => {
   try {
@@ -409,6 +448,7 @@ router.get("/profile", verifyAuth, async (req, res) => {
     const userDoc = await db.collection("users").doc(req.user.uid).get();
 
     if (!userDoc.exists) {
+      console.warn(`User document not found for uid: ${req.user.uid}`);
       return res.status(404).json({
         success: false,
         message: "User profile not found",
@@ -417,6 +457,7 @@ router.get("/profile", verifyAuth, async (req, res) => {
 
     const userData = userDoc.data();
     let sellerData = null;
+
     if (userData.role === "seller") {
       const sellerDoc = await db.collection("sellers").doc(req.user.uid).get();
       if (sellerDoc.exists) {
@@ -424,35 +465,47 @@ router.get("/profile", verifyAuth, async (req, res) => {
       }
     }
 
+    // Ensure all required fields are present with consistent naming
+    const user = {
+      uid: userDoc.id,
+      email: userData.email || req.user.email,
+      displayName: userData.displayName,
+      username: userData.username || null,
+      role: userData.role || "buyer",
+      isSeller: userData.role === "seller",
+      isAdmin: userData.isAdmin === true,
+      createdAt: userData.createdAt,
+      updatedAt: userData.updatedAt,
+      // Profile fields
+      birthday: userData.birthday || null,
+      contact: userData.contact || null,
+      addressLine: userData.addressLine || null,
+      barangay: userData.barangay || null,
+      city: userData.city || null,
+      province: userData.province || null,
+      zipCode: userData.zipCode || null,
+      // Avatar fields - return photoURL as avatarUrl for frontend
+      photoURL: userData.photoURL || null,
+      photoPublicId: userData.photoPublicId || null,
+      avatarUrl: userData.photoURL || userData.googlePhotoURL || null,
+      googlePhotoURL: userData.googlePhotoURL || null,
+      // Seller fields
+      sellerApplication: userData.sellerApplication || null,
+      seller: sellerData,
+      storeName: sellerData?.storeName,
+      sellerAvatarUrl: sellerData?.avatarUrl,
+    };
+
     res.json({
       success: true,
-      user: {
-        uid: req.user.uid,
-        email: req.user.email,
-        displayName: userData.displayName,
-        username: userData.username,
-        role: userData.role,
-        isSeller: userData.role === "seller",
-        isAdmin: userData.isAdmin === true,
-        createdAt: userData.createdAt,
-        birthday: userData.birthday,
-        contact: userData.contact,
-        addressLine: userData.addressLine,
-        barangay: userData.barangay,
-        city: userData.city,
-        province: userData.province,
-        zipCode: userData.zipCode,
-        avatarUrl: userData.photoURL || userData.googlePhotoURL || null,
-        sellerApplication: userData.sellerApplication,
-        seller: sellerData,
-        storeName: sellerData?.storeName,
-        sellerAvatarUrl: sellerData?.avatarUrl,
-      },
+      user,
     });
   } catch (error) {
+    console.error("Get profile error:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
+      error: error.message,
     });
   }
 });
@@ -469,28 +522,100 @@ router.put("/profile", verifyAuth, async (req, res) => {
       city,
       province,
       zipCode,
+      avatarUrl,
+      photoURL,
     } = req.body;
 
-    await db.collection("users").doc(req.user.uid).update({
-      username,
-      birthday,
-      contact,
-      addressLine,
-      barangay,
-      city,
-      province,
-      zipCode,
+    // Validate username if provided
+    if (username && username.trim()) {
+      // Check if username is already taken by another user
+      const existingUser = await db
+        .collection("users")
+        .where("username", "==", username.trim())
+        .get();
+
+      if (!existingUser.empty) {
+        // Check if it's the current user's username
+        const existingUserDoc = existingUser.docs[0];
+        if (existingUserDoc.id !== req.user.uid) {
+          return res.status(400).json({
+            success: false,
+            message: "Username is already taken",
+          });
+        }
+      }
+    }
+
+    const userRef = db.collection("users").doc(req.user.uid);
+    const userDoc = await userRef.get();
+
+    // Prepare update data
+    const updates = {
+      username: username ? username.trim() : undefined,
+      birthday: birthday || undefined,
+      contact: contact || undefined,
+      addressLine: addressLine || undefined,
+      barangay: barangay || undefined,
+      city: city || undefined,
+      province: province || undefined,
+      zipCode: zipCode || undefined,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    };
+
+    // Handle avatar URL - normalize both avatarUrl and photoURL to photoURL in DB
+    const photo = avatarUrl || photoURL;
+    if (photo) {
+      updates.photoURL = photo;
+    }
+
+    // Remove undefined fields
+    Object.keys(updates).forEach(
+      (key) => updates[key] === undefined && delete updates[key],
+    );
+
+    // If user document doesn't exist, create it with these fields
+    if (!userDoc.exists) {
+      updates.uid = req.user.uid;
+      updates.email = req.user.email;
+      updates.role = "buyer";
+      updates.createdAt = admin.firestore.FieldValue.serverTimestamp();
+      await userRef.set(updates);
+    } else {
+      // Otherwise just update the fields
+      await userRef.update(updates);
+    }
+
+    // Fetch and return updated user data with all fields
+    const updatedDoc = await userRef.get();
+    const userData = updatedDoc.data();
 
     res.json({
       success: true,
       message: "Profile updated successfully",
+      user: {
+        uid: updatedDoc.id,
+        email: userData.email,
+        displayName: userData.displayName,
+        username: userData.username,
+        role: userData.role,
+        birthday: userData.birthday || null,
+        contact: userData.contact || null,
+        addressLine: userData.addressLine || null,
+        barangay: userData.barangay || null,
+        city: userData.city || null,
+        province: userData.province || null,
+        zipCode: userData.zipCode || null,
+        avatarUrl: userData.photoURL || userData.googlePhotoURL || null,
+        photoURL: userData.photoURL || null,
+        sellerApplication: userData.sellerApplication || null,
+      },
     });
   } catch (error) {
+    console.error("Profile update error:", error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
+      error: error.message,
     });
   }
 });
@@ -511,10 +636,13 @@ router.post(
       const userDoc = await db.collection("users").doc(req.user.uid).get();
       const userData = userDoc.data();
 
-      if (userData.photoPublicId) {
+      // Delete old avatar if it exists
+      if (userData && userData.photoPublicId) {
         try {
           await deleteImage(userData.photoPublicId);
-        } catch (error) {}
+        } catch (error) {
+          console.warn("Could not delete old avatar:", error.message);
+        }
       }
 
       const uploadResult = await uploadAvatar(req.file);
@@ -531,7 +659,12 @@ router.post(
         publicId: uploadResult.publicId,
       });
     } catch (error) {
-      res.status(500).json({ success: false, message: "Avatar upload failed" });
+      console.error("Avatar upload error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Avatar upload failed",
+        error: error.message,
+      });
     }
   },
 );

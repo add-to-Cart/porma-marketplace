@@ -22,7 +22,7 @@ const getAdminHeaders = () => {
 
 // Sales Analytics
 export const getSalesAnalytics = async () => {
-  const res = await fetch("http://localhost:3002/admin/analytics/sales", {
+  const res = await fetch("http://localhost:3000/admin/analytics/sales", {
     method: "GET",
     headers: getAdminHeaders(),
   });
@@ -31,7 +31,7 @@ export const getSalesAnalytics = async () => {
 
 // Sellers with Products
 export const getSellersWithProducts = async () => {
-  const res = await fetch("http://localhost:3002/admin/sellers-with-products", {
+  const res = await fetch("http://localhost:3000/admin/sellers-with-products", {
     method: "GET",
     headers: getAdminHeaders(),
   });
@@ -40,7 +40,7 @@ export const getSellersWithProducts = async () => {
 
 // Seller Details
 export const getSellerDetails = async (sellerId) => {
-  const res = await fetch(`http://localhost:3002/admin/sellers/${sellerId}`, {
+  const res = await fetch(`http://localhost:3000/admin/sellers/${sellerId}`, {
     method: "GET",
     headers: getAdminHeaders(),
   });
@@ -49,7 +49,7 @@ export const getSellerDetails = async (sellerId) => {
 
 // User Management
 export const getAllUsers = async () => {
-  const res = await fetch("http://localhost:3002/admin/users", {
+  const res = await fetch("http://localhost:3000/admin/users", {
     method: "GET",
     headers: getAdminHeaders(),
   });
@@ -57,7 +57,7 @@ export const getAllUsers = async () => {
 };
 
 export const getUserById = async (userId) => {
-  const res = await fetch(`http://localhost:3002/admin/users/${userId}`, {
+  const res = await fetch(`http://localhost:3000/admin/users/${userId}`, {
     method: "GET",
     headers: getAdminHeaders(),
   });
@@ -66,7 +66,7 @@ export const getUserById = async (userId) => {
 
 export const updateUserStatus = async (userId, action, reason = "") => {
   const res = await fetch(
-    `http://localhost:3002/admin/users/${userId}/status`,
+    `http://localhost:3000/admin/users/${userId}/status`,
     {
       method: "PUT",
       headers: getAdminHeaders(),
@@ -91,7 +91,7 @@ export const activateUser = async (userId) => {
 // Top Sellers
 export const getTopSellers = async (limit = 10) => {
   const res = await fetch(
-    `http://localhost:3002/admin/analytics/top-sellers?limit=${limit}`,
+    `http://localhost:3000/admin/analytics/top-sellers?limit=${limit}`,
     {
       method: "GET",
       headers: getAdminHeaders(),
@@ -102,7 +102,7 @@ export const getTopSellers = async (limit = 10) => {
 
 // Seller Applications
 export const getSellerApplications = async () => {
-  const res = await fetch("http://localhost:3002/admin/applications", {
+  const res = await fetch("http://localhost:3000/admin/applications", {
     method: "GET",
     headers: getAdminHeaders(),
   });
@@ -111,7 +111,7 @@ export const getSellerApplications = async () => {
 
 export const approveSellerApplication = async (userId) => {
   const res = await fetch(
-    `http://localhost:3002/admin/applications/${userId}/approve`,
+    `http://localhost:3000/admin/applications/${userId}/approve`,
     {
       method: "POST",
       headers: getAdminHeaders(),
@@ -122,7 +122,7 @@ export const approveSellerApplication = async (userId) => {
 
 export const rejectSellerApplication = async (userId, reason = "") => {
   const res = await fetch(
-    `http://localhost:3002/admin/applications/${userId}/reject`,
+    `http://localhost:3000/admin/applications/${userId}/reject`,
     {
       method: "POST",
       headers: getAdminHeaders(),

@@ -81,7 +81,7 @@ export default function SignupPage() {
         city: city.trim(),
         province: province.trim(),
         zipCode: zipCode.trim(),
-        avatarUrl,
+        photoURL: avatarUrl,
       };
 
       const up = await updateProfile(updates);

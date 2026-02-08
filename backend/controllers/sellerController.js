@@ -5,6 +5,10 @@ const db = admin.firestore();
 export const applySeller = async (req, res) => {
   try {
     const uid = req.user.uid;
+
+    // Log the incoming data for debugging
+    console.log("applySeller - uid:", uid, "body:", req.body);
+
     const {
       storeName,
       storeDescription,

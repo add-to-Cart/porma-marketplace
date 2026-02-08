@@ -93,8 +93,22 @@ export const AuthProvider = ({ children }) => {
       setError(response.message);
       return { success: false, message: response.message };
     } catch (err) {
-      setError(err.message || "Sign up failed");
-      return { success: false, message: err.message };
+      // Parse Firebase error code for better messaging
+      let errorMessage = "Sign up failed";
+
+      if (err.code === "auth/email-already-in-use") {
+        errorMessage = "This email is already registered";
+      } else if (err.code === "auth/weak-password") {
+        errorMessage = "Password is too weak (minimum 6 characters required)";
+      } else if (err.code === "auth/invalid-email") {
+        errorMessage = "Invalid email format";
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setError(errorMessage);
+      console.error("SignUp Error:", err.code, err.message);
+      return { success: false, message: errorMessage };
     } finally {
       setLoading(false);
     }
@@ -143,8 +157,24 @@ export const AuthProvider = ({ children }) => {
       setError(verifyResponse.message);
       return { success: false, message: verifyResponse.message };
     } catch (err) {
-      setError(err.message || "Sign in failed");
-      return { success: false, message: err.message };
+      // Parse Firebase error code for better messaging
+      let errorMessage = "Sign in failed";
+
+      if (err.code === "auth/user-not-found") {
+        errorMessage = "Email or username not found";
+      } else if (err.code === "auth/wrong-password") {
+        errorMessage = "Incorrect password";
+      } else if (err.code === "auth/invalid-email") {
+        errorMessage = "Invalid email format";
+      } else if (err.code === "auth/user-disabled") {
+        errorMessage = "This account has been disabled";
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setError(errorMessage);
+      console.error("SignIn Error:", err.code, err.message);
+      return { success: false, message: errorMessage };
     } finally {
       setLoading(false);
     }
@@ -229,12 +259,14 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       const token = localStorage.getItem("authToken");
       const res = await authAPI.updateProfile(token, updates);
-      if (res.success) {
-        setUser((prev) => ({ ...prev, ...updates }));
-        return { success: true };
+      if (res.success && res.user) {
+        // Use the backend's response data to ensure proper field mapping
+        setUser(res.user);
+        return { success: true, user: res.user };
       }
       return { success: false, message: res.message };
     } catch (err) {
+      console.error("updateProfile error:", err);
       return { success: false, message: err.message };
     } finally {
       setLoading(false);
@@ -244,14 +276,24 @@ export const AuthProvider = ({ children }) => {
   const refreshProfile = async () => {
     try {
       const token = localStorage.getItem("authToken");
-      if (!token) return null;
-      const res = await authAPI.getProfile(token);
-      if (res.success) {
-        setUser(res.user);
+      if (!token) {
+        console.warn("No auth token found for profile refresh");
+        return null;
       }
-      return res;
+      const res = await authAPI.getProfile(token);
+      if (res.success && res.user) {
+        setUser(res.user);
+        return res;
+      } else {
+        console.error("Profile fetch failed:", res?.message || "Unknown error");
+        return res;
+      }
     } catch (err) {
-      return null;
+      console.error("Profile refresh error:", err.message || err);
+      return {
+        success: false,
+        message: err?.message || "Failed to refresh profile",
+      };
     }
   };
 

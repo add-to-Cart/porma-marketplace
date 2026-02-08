@@ -71,8 +71,12 @@ export default function ProfilePage() {
         const response = await authAPI.uploadAvatar(token, avatarFile);
         if (response.success) {
           uploadedAvatarUrl = response.url;
+          setAvatarUrl(response.url);
+          setAvatarPreview(null);
+          setAvatarFile(null);
         } else {
           toast.error("Failed to upload avatar");
+          setLoading(false);
           return;
         }
       }
@@ -85,17 +89,32 @@ export default function ProfilePage() {
         barangay: barangay.trim(),
         city: city.trim(),
         province: province.trim(),
-        avatarUrl: uploadedAvatarUrl,
         zipCode: zipCode.trim(),
+        photoURL: uploadedAvatarUrl,
       };
+
       const res = await updateProfile(data);
       if (res.success) {
         toast.success("Profile updated!");
-        await refreshProfile(); // Ensure latest data
+        // Ensure latest data is fetched
+        const profileRes = await refreshProfile();
+        if (profileRes && profileRes.user) {
+          // Update local state with returned data
+          setUsername(profileRes.user.username ?? "");
+          setAvatarUrl(profileRes.user.avatarUrl ?? null);
+          setBirthday(profileRes.user.birthday ?? "");
+          setContact(profileRes.user.contact ?? "");
+          setAddressLine(profileRes.user.addressLine ?? "");
+          setBarangay(profileRes.user.barangay ?? "");
+          setCity(profileRes.user.city ?? "");
+          setProvince(profileRes.user.province ?? "");
+          setZipCode(profileRes.user.zipCode ?? "");
+        }
       } else {
         toast.error(res.message || "Update failed.");
       }
     } catch (err) {
+      console.error("Save error:", err);
       toast.error("Update failed.");
     } finally {
       setLoading(false);
