@@ -120,13 +120,21 @@ router.put("/profile", verifyAuth, upload.any(), async (req, res) => {
       }
 
       // Merge with existing data to preserve URLs if not re-uploading
-      if (existingPaymentDetails.gcash?.qrCodeUrl && !paymentDetails.gcash.qrCodeUrl) {
+      if (
+        existingPaymentDetails.gcash?.qrCodeUrl &&
+        !paymentDetails.gcash.qrCodeUrl
+      ) {
         paymentDetails.gcash.qrCodeUrl = existingPaymentDetails.gcash.qrCodeUrl;
-        paymentDetails.gcash.qrCodePublicId = existingPaymentDetails.gcash.qrCodePublicId;
+        paymentDetails.gcash.qrCodePublicId =
+          existingPaymentDetails.gcash.qrCodePublicId;
       }
-      if (existingPaymentDetails.bank?.qrCodeUrl && !paymentDetails.bank.qrCodeUrl) {
+      if (
+        existingPaymentDetails.bank?.qrCodeUrl &&
+        !paymentDetails.bank.qrCodeUrl
+      ) {
         paymentDetails.bank.qrCodeUrl = existingPaymentDetails.bank.qrCodeUrl;
-        paymentDetails.bank.qrCodePublicId = existingPaymentDetails.bank.qrCodePublicId;
+        paymentDetails.bank.qrCodePublicId =
+          existingPaymentDetails.bank.qrCodePublicId;
       }
 
       if (userData.role === "seller") {

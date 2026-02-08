@@ -94,20 +94,11 @@ export const createOrder = async (req, res) => {
         0,
       );
 
-      // ✅ SYNC: Update seller metrics when order is created (for pending orders)
-      const sellerRef = db.collection("sellers").doc(sellerId);
-      const sellerDoc = await sellerRef.get();
-
-      if (sellerDoc.exists) {
-        // Update seller's total sales metrics
-        const sellerData = sellerDoc.data();
-        await sellerRef.update({
-          totalSales: (sellerData.totalSales || 0) + sellerItems.length,
-          totalRevenue: (sellerData.totalRevenue || 0) + sellerTotal,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-
+      // NOTE: Do NOT update `totalSales`/`totalRevenue` here. These fields
+      // represent finalized sales and are updated when an order is completed.
+      // Updating them at creation leads to double-counting (pending vs completed)
+      // and causes discrepancies between products.soldCount and sellers.totalSales.
+      // Keep only the notification for new orders.
       await createNotification(
         sellerId,
         "order_confirmed",
