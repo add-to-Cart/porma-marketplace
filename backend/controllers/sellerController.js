@@ -1,4 +1,5 @@
 import admin from "../config/firebaseAdmin.js";
+import { uploadQr } from "../services/cloudinary_service.js";
 
 const db = admin.firestore();
 
@@ -45,22 +46,38 @@ export const applySeller = async (req, res) => {
     // Build payment details from form data
     const paymentDetails = {
       method: paymentMethod || "gcash",
+      gcash: {},
+      bank: {},
     };
 
-    if (paymentMethod === "gcash") {
-      paymentDetails.gcashNumber = gcashNumber || null;
-      paymentDetails.gcashName = gcashName || null;
-    } else if (paymentMethod === "bank") {
-      paymentDetails.bankName = bankName || null;
-      paymentDetails.accountNumber = accountNumber || null;
-      paymentDetails.accountName = accountName || null;
+    if (paymentMethod === "gcash" || paymentMethod === "both") {
+      paymentDetails.gcash.number = gcashNumber || null;
+      paymentDetails.gcash.name = gcashName || null;
     }
 
-    // Handle QR code file upload if provided
-    if (req.files && req.files.qrCode) {
-      // TODO: Upload QR code to Cloudinary if needed
-      // For now, just store placeholder
-      paymentDetails.qrCodeUrl = null;
+    if (paymentMethod === "bank" || paymentMethod === "both") {
+      paymentDetails.bank.bankName = bankName || null;
+      paymentDetails.bank.accountNumber = accountNumber || null;
+      paymentDetails.bank.accountName = accountName || null;
+    }
+
+    // Handle QR code file uploads if provided
+    if (req.files) {
+      // Upload GCash QR if provided
+      const gcashQrFile = req.files.find((f) => f.fieldname === "gcashQr");
+      if (gcashQrFile) {
+        const gcashQrResult = await uploadQr(gcashQrFile);
+        paymentDetails.gcash.qrCodeUrl = gcashQrResult.url;
+        paymentDetails.gcash.qrCodePublicId = gcashQrResult.publicId;
+      }
+
+      // Upload Bank QR if provided
+      const bankQrFile = req.files.find((f) => f.fieldname === "bankQr");
+      if (bankQrFile) {
+        const bankQrResult = await uploadQr(bankQrFile);
+        paymentDetails.bank.qrCodeUrl = bankQrResult.url;
+        paymentDetails.bank.qrCodePublicId = bankQrResult.publicId;
+      }
     }
 
     await db
@@ -93,7 +110,16 @@ export const applySeller = async (req, res) => {
 export const updateSellerApplication = async (req, res) => {
   try {
     const uid = req.user.uid;
-    const { storeName, storeDescription, paymentDetails } = req.body;
+    const {
+      storeName,
+      storeDescription,
+      paymentMethod,
+      gcashNumber,
+      gcashName,
+      bankName,
+      accountNumber,
+      accountName,
+    } = req.body;
 
     const userDoc = await db.collection("users").doc(uid).get();
     const userData = userDoc.data();
@@ -119,7 +145,57 @@ export const updateSellerApplication = async (req, res) => {
       updates["sellerApplication.storeDescription"] = storeDescription.trim();
     }
 
-    if (paymentDetails) {
+    // Handle payment details update
+    if (paymentMethod) {
+      const paymentDetails = {
+        method: paymentMethod,
+        gcash: {},
+        bank: {},
+      };
+
+      // Build GCash details
+      if (paymentMethod === "gcash" || paymentMethod === "both") {
+        paymentDetails.gcash.number = gcashNumber || null;
+        paymentDetails.gcash.name = gcashName || null;
+      }
+
+      // Build Bank details
+      if (paymentMethod === "bank" || paymentMethod === "both") {
+        paymentDetails.bank.bankName = bankName || null;
+        paymentDetails.bank.accountNumber = accountNumber || null;
+        paymentDetails.bank.accountName = accountName || null;
+      }
+
+      // Handle QR code uploads
+      if (req.files && req.files.length > 0) {
+        // Upload GCash QR if provided
+        const gcashQrFile = req.files.find((f) => f.fieldname === "gcashQr");
+        if (gcashQrFile) {
+          const gcashQrResult = await uploadQr(gcashQrFile);
+          paymentDetails.gcash.qrCodeUrl = gcashQrResult.url;
+          paymentDetails.gcash.qrCodePublicId = gcashQrResult.publicId;
+        }
+
+        // Upload Bank QR if provided
+        const bankQrFile = req.files.find((f) => f.fieldname === "bankQr");
+        if (bankQrFile) {
+          const bankQrResult = await uploadQr(bankQrFile);
+          paymentDetails.bank.qrCodeUrl = bankQrResult.url;
+          paymentDetails.bank.qrCodePublicId = bankQrResult.publicId;
+        }
+      }
+
+      // Preserve existing QR URLs if not re-uploading
+      const existingPaymentDetails = userData.sellerApplication?.paymentDetails || {};
+      if (existingPaymentDetails.gcash?.qrCodeUrl && !paymentDetails.gcash.qrCodeUrl) {
+        paymentDetails.gcash.qrCodeUrl = existingPaymentDetails.gcash.qrCodeUrl;
+        paymentDetails.gcash.qrCodePublicId = existingPaymentDetails.gcash.qrCodePublicId;
+      }
+      if (existingPaymentDetails.bank?.qrCodeUrl && !paymentDetails.bank.qrCodeUrl) {
+        paymentDetails.bank.qrCodeUrl = existingPaymentDetails.bank.qrCodeUrl;
+        paymentDetails.bank.qrCodePublicId = existingPaymentDetails.bank.qrCodePublicId;
+      }
+
       updates["sellerApplication.paymentDetails"] = paymentDetails;
     }
 
@@ -132,6 +208,7 @@ export const updateSellerApplication = async (req, res) => {
       message: "Seller application updated successfully",
     });
   } catch (error) {
+    console.error("Update seller application error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update seller application",
@@ -221,6 +298,13 @@ export const approveSeller = async (req, res) => {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    // Get all QR code URLs from payment details
+    const paymentDetails = application.paymentDetails || {};
+    const qrCodeUrls = {
+      gcash: paymentDetails.gcash?.qrCodeUrl || null,
+      bank: paymentDetails.bank?.qrCodeUrl || null,
+    };
+
     await db
       .collection("sellers")
       .doc(uid)
@@ -229,8 +313,8 @@ export const approveSeller = async (req, res) => {
         storeName: application.storeName,
         ownerName: application.storeName,
         avatarUrl: application.avatarUrl || null,
-        qrCodeUrl: application.paymentDetails?.qrCodeUrl || null,
-        paymentDetails: application.paymentDetails,
+        qrCodeUrls: qrCodeUrls,
+        paymentDetails: paymentDetails,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -240,6 +324,7 @@ export const approveSeller = async (req, res) => {
       message: "Seller application approved successfully",
     });
   } catch (error) {
+    console.error("Approve seller error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to approve seller application",

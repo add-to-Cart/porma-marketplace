@@ -79,7 +79,7 @@ export default function SellerAccount() {
         accountNumber: paymentDetails.bank?.accountNumber || "",
         accountName: paymentDetails.bank?.accountName || "",
         qrCodeFile: null,
-        qrCodePreview: paymentDetails.qrCodeUrl || null,
+        qrCodePreview: paymentDetails.gcash?.qrCodeUrl || null,
         bankQrCodeFile: null,
         bankQrCodePreview: paymentDetails.bank?.qrCodeUrl || null,
       });
@@ -217,6 +217,11 @@ export default function SellerAccount() {
       if (!formData.gcashName.trim()) {
         newErrors.gcashName = "GCash account name is required";
       }
+
+      // Only require QR on initial registration, not on updates
+      if (!formData.qrCodeFile && !formData.qrCodePreview) {
+        newErrors.qrCode = "GCash QR code is required";
+      }
     } else if (formData.paymentMethod === "bank") {
       if (!formData.bankName.trim()) {
         newErrors.bankName = "Bank name is required";
@@ -229,10 +234,11 @@ export default function SellerAccount() {
       if (!formData.accountName.trim()) {
         newErrors.accountName = "Account name is required";
       }
-    }
 
-    if (!formData.qrCodeFile) {
-      newErrors.qrCode = "Payment QR code is required";
+      // Only require QR on initial registration, not on updates
+      if (!formData.bankQrCodeFile && !formData.bankQrCodePreview) {
+        newErrors.bankQrCode = "Bank QR code is required";
+      }
     }
 
     setErrors(newErrors);

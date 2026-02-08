@@ -134,8 +134,6 @@ export default function SellerSidebar() {
           );
         })}
       </nav>
-
-      {/* FOOTER SECTION */}
       <div className="mt-auto p-6 border-t border-zinc-800 bg-black/20">
         <div className="space-y-4">
           {/* Leading stores */}
@@ -172,6 +170,12 @@ export default function SellerSidebar() {
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* FOOTER SECTION */}
+      <div className="mt-auto p-6 border-t border-zinc-800 bg-black/20">
+        <div className="space-y-4">
           {/* Account Info */}
           <div className="flex items-center gap-3 px-3 py-2">
             <div className="w-8 h-8 bg-zinc-700 border border-zinc-600 flex items-center justify-center rounded-sm">

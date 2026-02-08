@@ -240,9 +240,15 @@ export const authAPI = {
     const ROOT = API_BASE.replace("/auth", "");
     const response = await fetch(`${ROOT}/seller/avatar`, {
       method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
       body: formData,
     });
     const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || "Avatar upload failed");
+    }
     return data;
   },
 };

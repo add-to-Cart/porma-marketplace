@@ -9,7 +9,7 @@ import {
   rejectSeller,
 } from "../controllers/sellerController.js";
 import multer from "multer";
-import { uploadAvatar } from "../services/cloudinary_service.js";
+import { uploadAvatar, uploadQr } from "../services/cloudinary_service.js";
 
 const upload = multer({ storage: multer.memoryStorage() });
 const router = express.Router();
@@ -21,7 +21,8 @@ router.post("/apply", verifyAuth, upload.any(), applySeller);
 // Update seller profile
 router.put("/profile", verifyAuth, upload.any(), async (req, res) => {
   try {
-    const userDoc = await db.collection("users").doc(req.user.uid).get();
+    const uid = req.user.uid;
+    const userDoc = await db.collection("users").doc(uid).get();
     const userData = userDoc.data();
 
     if (
@@ -35,12 +36,22 @@ router.put("/profile", verifyAuth, upload.any(), async (req, res) => {
       });
     }
 
-    const { storeName, storeDescription } = req.body;
+    const {
+      storeName,
+      storeDescription,
+      paymentMethod,
+      gcashNumber,
+      gcashName,
+      bankName,
+      accountNumber,
+      accountName,
+    } = req.body;
+
     const updates = {};
 
     if (storeName && storeName.trim()) {
       if (userData.role === "seller") {
-        await db.collection("sellers").doc(req.user.uid).update({
+        await db.collection("sellers").doc(uid).update({
           storeName: storeName.trim(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -49,9 +60,9 @@ router.put("/profile", verifyAuth, upload.any(), async (req, res) => {
       }
     }
 
-    if (storeDescription !== undefined) {
+    if (storeDescription !== undefined && storeDescription.trim()) {
       if (userData.role === "seller") {
-        await db.collection("sellers").doc(req.user.uid).update({
+        await db.collection("sellers").doc(uid).update({
           storeDescription: storeDescription.trim(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -60,8 +71,76 @@ router.put("/profile", verifyAuth, upload.any(), async (req, res) => {
       }
     }
 
+    // Handle payment details update
+    if (paymentMethod) {
+      const paymentDetails = {
+        method: paymentMethod,
+        gcash: {},
+        bank: {},
+      };
+
+      // Build GCash details
+      if (paymentMethod === "gcash" || paymentMethod === "both") {
+        paymentDetails.gcash.number = gcashNumber || null;
+        paymentDetails.gcash.name = gcashName || null;
+      }
+
+      // Build Bank details
+      if (paymentMethod === "bank" || paymentMethod === "both") {
+        paymentDetails.bank.bankName = bankName || null;
+        paymentDetails.bank.accountNumber = accountNumber || null;
+        paymentDetails.bank.accountName = accountName || null;
+      }
+
+      // Handle QR code uploads
+      if (req.files && req.files.length > 0) {
+        // Upload GCash QR if provided
+        const gcashQrFile = req.files.find((f) => f.fieldname === "gcashQr");
+        if (gcashQrFile) {
+          const gcashQrResult = await uploadQr(gcashQrFile);
+          paymentDetails.gcash.qrCodeUrl = gcashQrResult.url;
+          paymentDetails.gcash.qrCodePublicId = gcashQrResult.publicId;
+        }
+
+        // Upload Bank QR if provided
+        const bankQrFile = req.files.find((f) => f.fieldname === "bankQr");
+        if (bankQrFile) {
+          const bankQrResult = await uploadQr(bankQrFile);
+          paymentDetails.bank.qrCodeUrl = bankQrResult.url;
+          paymentDetails.bank.qrCodePublicId = bankQrResult.publicId;
+        }
+      }
+
+      // Get existing payment details if updating
+      let existingPaymentDetails = {};
+      if (userData.role === "seller" && userData.seller?.paymentDetails) {
+        existingPaymentDetails = userData.seller.paymentDetails;
+      } else if (userData.sellerApplication?.paymentDetails) {
+        existingPaymentDetails = userData.sellerApplication.paymentDetails;
+      }
+
+      // Merge with existing data to preserve URLs if not re-uploading
+      if (existingPaymentDetails.gcash?.qrCodeUrl && !paymentDetails.gcash.qrCodeUrl) {
+        paymentDetails.gcash.qrCodeUrl = existingPaymentDetails.gcash.qrCodeUrl;
+        paymentDetails.gcash.qrCodePublicId = existingPaymentDetails.gcash.qrCodePublicId;
+      }
+      if (existingPaymentDetails.bank?.qrCodeUrl && !paymentDetails.bank.qrCodeUrl) {
+        paymentDetails.bank.qrCodeUrl = existingPaymentDetails.bank.qrCodeUrl;
+        paymentDetails.bank.qrCodePublicId = existingPaymentDetails.bank.qrCodePublicId;
+      }
+
+      if (userData.role === "seller") {
+        await db.collection("sellers").doc(uid).update({
+          paymentDetails,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      } else {
+        updates["sellerApplication.paymentDetails"] = paymentDetails;
+      }
+    }
+
     if (Object.keys(updates).length > 0) {
-      await db.collection("users").doc(req.user.uid).update(updates);
+      await db.collection("users").doc(uid).update(updates);
     }
 
     res.json({
@@ -69,6 +148,7 @@ router.put("/profile", verifyAuth, upload.any(), async (req, res) => {
       message: "Seller profile updated successfully",
     });
   } catch (error) {
+    console.error("Seller profile update error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to update seller profile",
@@ -129,7 +209,12 @@ router.post(
         publicId: uploadResult.publicId,
       });
     } catch (error) {
-      res.status(500).json({ success: false, message: "Avatar upload failed" });
+      console.error("Seller avatar upload error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Avatar upload failed",
+        error: error.message,
+      });
     }
   },
 );
@@ -202,6 +287,8 @@ router.put("/approve/:uid", verifyAuth, async (req, res) => {
       storeName: application.storeName,
       storeDescription: application.storeDescription || "",
       paymentDetails: application.paymentDetails,
+      avatarUrl: application.avatarUrl || null,
+      avatarPublicId: application.avatarPublicId || null,
       approvedAt: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -223,10 +310,14 @@ router.put("/approve/:uid", verifyAuth, async (req, res) => {
       .set({
         userId: uid,
         storeName: application.storeName,
-        ownerName: application.storeName,
+        ownerName: userData.displayName || application.storeName,
         avatarUrl: application.avatarUrl || null,
+        avatarPublicId: application.avatarPublicId || null,
         qrCodeUrl: application.paymentDetails?.qrCodeUrl || null,
         paymentDetails: application.paymentDetails,
+        status: "active",
+        isActive: true,
+        isRestricted: false,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
