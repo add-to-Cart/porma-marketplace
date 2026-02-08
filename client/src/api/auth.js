@@ -1,11 +1,11 @@
 // Authentication API functions
-const API_BASE = "http://localhost:3000/auth";
+const API_BASE = "http://localhost:3002/auth";
 
 export const authAPI = {
   // Resolve email from username
   resolveEmail: async (identifier) => {
     const response = await fetch(
-      `http://localhost:3000/users/resolve-email?identifier=${encodeURIComponent(identifier)}`,
+      `http://localhost:3002/users/resolve-email?identifier=${encodeURIComponent(identifier)}`,
     );
     return await response.json();
   },
@@ -54,9 +54,6 @@ export const authAPI = {
   signOut: async (token) => {
     const response = await fetch(`${API_BASE}/signout`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
     });
 
     const data = await response.json();
@@ -66,7 +63,7 @@ export const authAPI = {
   getProfile: async (token) => {
     const response = await fetch(`${API_BASE}/profile`, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
       },
     });
 
@@ -78,7 +75,6 @@ export const authAPI = {
     const response = await fetch(`${API_BASE}/profile`, {
       method: "PUT",
       headers: {
-        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(updates),
@@ -92,9 +88,6 @@ export const authAPI = {
     const ROOT = API_BASE.replace("/auth", "");
     const response = await fetch(`${ROOT}/seller/profile`, {
       method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
       body: formData,
     });
 
@@ -108,9 +101,6 @@ export const authAPI = {
 
     const response = await fetch(`${API_BASE}/profile/avatar`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
       body: formData,
     });
 
@@ -160,10 +150,6 @@ export const authAPI = {
     const ROOT = API_BASE.replace("/auth", "");
     const response = await fetch(`${ROOT}/seller/apply`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        // Don't set Content-Type for FormData - browser will set it with boundary
-      },
       body: formData,
     });
 
@@ -176,10 +162,6 @@ export const authAPI = {
     const ROOT = API_BASE.replace("/auth", "");
     const response = await fetch(`${ROOT}/seller/update-application`, {
       method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        // Don't set Content-Type for FormData - browser will set it with boundary
-      },
       body: formData,
     });
 
@@ -191,9 +173,7 @@ export const authAPI = {
   getSellerApplications: async (token) => {
     const ROOT = API_BASE.replace("/auth", "");
     const response = await fetch(`${ROOT}/seller/applications`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
+      method: "GET",
     });
 
     const data = await response.json();
@@ -205,9 +185,6 @@ export const authAPI = {
     const ROOT = API_BASE.replace("/auth", "");
     const response = await fetch(`${ROOT}/seller/approve/${uid}`, {
       method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
     });
 
     const data = await response.json();
@@ -220,7 +197,6 @@ export const authAPI = {
     const response = await fetch(`${ROOT}/seller/reject/${uid}`, {
       method: "PUT",
       headers: {
-        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ reason }),
@@ -236,7 +212,6 @@ export const authAPI = {
     const ROOT = API_BASE.replace("/auth", "");
     const response = await fetch(`${ROOT}/seller/avatar`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
       body: formData,
     });
     const data = await response.json();

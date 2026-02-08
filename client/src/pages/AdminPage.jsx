@@ -8,7 +8,9 @@ import {
   getSellersWithProducts,
   getAllUsers,
   updateUserStatus,
-  verifyDataConsistency,
+  getSellerApplications,
+  approveSellerApplication,
+  rejectSellerApplication,
 } from "@/api/admin";
 import {
   CheckCircle,
@@ -22,9 +24,7 @@ import {
   Search,
   Settings,
   MoreVertical,
-  ChevronRight,
   TrendingUp,
-  RefreshCw,
 } from "lucide-react";
 
 export default function AdminPage() {
@@ -35,8 +35,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState("all");
-  const [syncLoading, setSyncLoading] = useState(false);
-  const [consistencyReport, setConsistencyReport] = useState(null);
+
   const [expandedSellerId, setExpandedSellerId] = useState(null);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -83,7 +82,7 @@ export default function AdminPage() {
       const token = localStorage.getItem("authToken");
 
       // Fetch applications
-      const appResponse = await authAPI.getSellerApplications(token);
+      const appResponse = await getSellerApplications();
       if (appResponse.success) setApplications(appResponse.applications || []);
 
       // Fetch new sales analytics
@@ -131,23 +130,6 @@ export default function AdminPage() {
     }
   };
 
-  // Re-used handlers logic remains the same (handleApprove, handleReject, etc.)
-  const handleApprove = async (uid) => {
-    /* logic */
-  };
-  const handleReject = async (uid) => {
-    /* logic */
-  };
-  const handleBlockSeller = async (id) => {
-    /* logic */
-  };
-  const handleUnblockSeller = async (id) => {
-    /* logic */
-  };
-  const handleRecoverAccount = async (id) => {
-    /* logic */
-  };
-
   // New user management handlers
   const handleDeactivateUser = async (userId, reason = "Account violation") => {
     try {
@@ -179,26 +161,6 @@ export default function AdminPage() {
       fetchAllData();
     } catch (error) {
       toast.error("Failed to activate user: " + error.message);
-    }
-  };
-
-  // Data consistency check
-  const handleVerifyConsistency = async () => {
-    try {
-      setSyncLoading(true);
-      const report = await verifyDataConsistency();
-      setConsistencyReport(report);
-      if (report.isConsistent) {
-        toast.success("✅ All data is consistent!");
-      } else {
-        toast.error(
-          `⚠️ Found ${report.inconsistencies?.length || 0} inconsistencies`,
-        );
-      }
-    } catch (error) {
-      toast.error("Failed to verify data: " + error.message);
-    } finally {
-      setSyncLoading(false);
     }
   };
 
@@ -289,32 +251,6 @@ export default function AdminPage() {
         {/* OVERVIEW SECTION */}
         {activeTab === "analytics" && (
           <div className="space-y-8">
-            {/* Data Consistency Check */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-700">
-                  Data Consistency Status
-                </p>
-                <p className="text-xs text-slate-500">
-                  {consistencyReport
-                    ? consistencyReport.isConsistent
-                      ? "✅ All data is synchronized"
-                      : `⚠️ ${consistencyReport.inconsistencies?.length || 0} inconsistencies detected`
-                    : "Click to verify data integrity"}
-                </p>
-              </div>
-              <button
-                onClick={handleVerifyConsistency}
-                disabled={syncLoading}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-semibold rounded-lg transition-colors flex items-center gap-2"
-              >
-                <RefreshCw
-                  className={`w-4 h-4 ${syncLoading ? "animate-spin" : ""}`}
-                />
-                {syncLoading ? "Checking..." : "Verify Data"}
-              </button>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
               {[
                 {
@@ -722,6 +658,173 @@ export default function AdminPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* SELLER APPLICATIONS SECTION */}
+        {activeTab === "applications" && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-slate-900">
+                  Seller Applications
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  {applications.length} pending application
+                  {applications.length !== 1 ? "s" : ""}
+                </p>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              {loading ? (
+                <div className="p-8 text-center">
+                  <p className="text-slate-500">Loading applications...</p>
+                </div>
+              ) : applications.length === 0 ? (
+                <div className="p-8 text-center">
+                  <p className="text-slate-500">No pending applications</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-slate-100">
+                  {applications.map((app) => (
+                    <div
+                      key={app.uid}
+                      className="p-6 hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-start gap-4 flex-1">
+                          <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-slate-500 border border-slate-200 flex-shrink-0">
+                            {app.displayName?.charAt(0)?.toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-slate-900 text-sm">
+                              {app.displayName || app.username}
+                            </h4>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {app.email}
+                            </p>
+                            <div className="mt-3 space-y-2">
+                              <div className="text-sm">
+                                <p className="text-xs font-semibold text-slate-600 uppercase">
+                                  Store Name
+                                </p>
+                                <p className="text-slate-900 font-medium">
+                                  {app.sellerApplication?.storeName}
+                                </p>
+                              </div>
+                              <div className="text-sm">
+                                <p className="text-xs font-semibold text-slate-600 uppercase">
+                                  Description
+                                </p>
+                                <p className="text-slate-600 text-sm">
+                                  {app.sellerApplication?.storeDescription}
+                                </p>
+                              </div>
+                              {app.sellerApplication?.paymentDetails && (
+                                <div className="text-sm">
+                                  <p className="text-xs font-semibold text-slate-600 uppercase">
+                                    Payment Details
+                                  </p>
+                                  <p className="text-slate-600 text-sm">
+                                    {
+                                      app.sellerApplication.paymentDetails
+                                        .bankName
+                                    }{" "}
+                                    •{" "}
+                                    {
+                                      app.sellerApplication.paymentDetails
+                                        .accountName
+                                    }
+                                  </p>
+                                </div>
+                              )}
+                              {app.contact && (
+                                <div className="text-sm">
+                                  <p className="text-xs font-semibold text-slate-600 uppercase">
+                                    Contact
+                                  </p>
+                                  <p className="text-slate-900">
+                                    {app.contact}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <button
+                            onClick={async () => {
+                              if (
+                                window.confirm(
+                                  `Approve seller application from ${app.displayName}?`,
+                                )
+                              ) {
+                                try {
+                                  const result = await approveSellerApplication(
+                                    app.uid,
+                                  );
+                                  if (result.success) {
+                                    toast.success("Application approved!");
+                                    setApplications(
+                                      applications.filter(
+                                        (a) => a.uid !== app.uid,
+                                      ),
+                                    );
+                                  } else {
+                                    toast.error(
+                                      result.message || "Failed to approve",
+                                    );
+                                  }
+                                } catch (error) {
+                                  toast.error("Error approving application");
+                                  console.error(error);
+                                }
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-semibold hover:bg-emerald-100 transition-colors"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const reason = prompt(
+                                `Rejection reason for ${app.displayName}:`,
+                              );
+                              if (reason !== null) {
+                                try {
+                                  const result = await rejectSellerApplication(
+                                    app.uid,
+                                    reason,
+                                  );
+                                  if (result.success) {
+                                    toast.success("Application rejected!");
+                                    setApplications(
+                                      applications.filter(
+                                        (a) => a.uid !== app.uid,
+                                      ),
+                                    );
+                                  } else {
+                                    toast.error(
+                                      result.message || "Failed to reject",
+                                    );
+                                  }
+                                } catch (error) {
+                                  toast.error("Error rejecting application");
+                                  console.error(error);
+                                }
+                              }
+                            }}
+                            className="px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded-lg text-xs font-semibold hover:bg-red-100 transition-colors"
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

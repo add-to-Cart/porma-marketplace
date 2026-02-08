@@ -30,14 +30,14 @@ const AdminLogin = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:3000/auth/admin-login", {
+      const res = await fetch("http://localhost:3002/auth/admin-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
       if (data.success) {
-        localStorage.setItem("admin", JSON.stringify(data.admin));
+        localStorage.setItem("adminData", JSON.stringify(data.admin));
         setAdminUser(data.admin);
         toast.success("Login successful!");
         navigate("/admin");

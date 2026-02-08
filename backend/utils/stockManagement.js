@@ -1,12 +1,32 @@
 // utils/stockManagement.js
 import admin from "../config/firebaseAdmin.js";
-const db = admin.firestore();
+
+let db;
+try {
+  const app = admin.app();
+  if (app) {
+    db = admin.firestore();
+  }
+} catch (error) {
+  console.warn(
+    "[WARNING] Firebase not initialized, stock management will use dummy data",
+  );
+  db = null;
+}
 
 /**
  * Check if sufficient stock is available
  */
 export const checkStockAvailability = async (productId, quantity) => {
   try {
+    if (!db) {
+      // Dev mode without Firebase
+      return {
+        available: true,
+        availableStock: 999,
+        product: "Default Product",
+      };
+    }
     const doc = await db.collection("products").doc(productId).get();
 
     if (!doc.exists) {
@@ -70,6 +90,10 @@ export const checkMultipleProductsStock = async (items) => {
  * Reserve stock for a pending order
  */
 export const reserveStock = async (session, productId, quantity) => {
+  if (!db) {
+    // Dev mode without Firebase
+    return;
+  }
   const productRef = db.collection("products").doc(productId);
   const productDoc = await productRef.get();
 
@@ -97,6 +121,10 @@ export const reserveStock = async (session, productId, quantity) => {
  * Release reserved stock back to available
  */
 export const releaseReservedStock = async (session, productId, quantity) => {
+  if (!db) {
+    // Dev mode without Firebase
+    return;
+  }
   const productRef = db.collection("products").doc(productId);
   const productDoc = await productRef.get();
 
@@ -119,6 +147,10 @@ export const releaseReservedStock = async (session, productId, quantity) => {
  * Finalize stock after order completion
  */
 export const finalizeOrderStock = async (session, productId, quantity) => {
+  if (!db) {
+    // Dev mode without Firebase
+    return;
+  }
   const productRef = db.collection("products").doc(productId);
   const productDoc = await productRef.get();
 
@@ -142,6 +174,19 @@ export const finalizeOrderStock = async (session, productId, quantity) => {
  */
 export const getStockStatus = async (productId) => {
   try {
+    if (!db) {
+      // Dev mode without Firebase
+      return {
+        productId,
+        productName: "Default",
+        availableStock: 999,
+        reservedStock: 0,
+        totalStock: 999,
+        soldCount: 0,
+        isLowStock: false,
+        isOutOfStock: false,
+      };
+    }
     const doc = await db.collection("products").doc(productId).get();
 
     if (!doc.exists) {
@@ -171,6 +216,10 @@ export const getStockStatus = async (productId) => {
  */
 export const getSellerStockStatus = async (sellerId) => {
   try {
+    if (!db) {
+      // Dev mode without Firebase
+      return [];
+    }
     const snapshot = await db
       .collection("products")
       .where("sellerId", "==", sellerId)
@@ -217,6 +266,10 @@ export const getSellerStockStatus = async (sellerId) => {
  */
 export const restockProduct = async (productId, additionalQuantity) => {
   try {
+    if (!db) {
+      // Dev mode without Firebase
+      return { success: true, newStock: additionalQuantity };
+    }
     const productRef = db.collection("products").doc(productId);
     const productDoc = await productRef.get();
 

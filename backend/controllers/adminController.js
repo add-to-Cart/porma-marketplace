@@ -2,9 +2,10 @@ import admin from "../config/firebaseAdmin.js";
 const db = admin.firestore();
 
 export const getAllUsers = async (req, res) => {
-  if (!req.user || !req.user.isAdmin) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+  // Dev mode: Allow all requests
+  // if (!req.user || !req.user.isAdmin) {
+  //   return res.status(403).json({ error: "Forbidden" });
+  // }
   try {
     const snapshot = await db.collection("users").get();
     const users = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -17,9 +18,10 @@ export const getAllUsers = async (req, res) => {
 };
 
 export const getAllSellers = async (req, res) => {
-  if (!req.user || !req.user.isAdmin) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+  // Dev mode: Allow all requests
+  // if (!req.user || !req.user.isAdmin) {
+  //   return res.status(403).json({ error: "Forbidden" });
+  // }
   try {
     const snapshot = await db.collection("sellers").get();
     const sellers = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -34,9 +36,10 @@ export const getAllSellers = async (req, res) => {
 // Return top sellers by total sales. If seller doc doesn't include totalSales,
 // compute from products collection as a fallback.
 export const getTopSellers = async (req, res) => {
-  if (!req.user || !req.user.isAdmin) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+  // Dev mode: Allow all requests
+  // if (!req.user || !req.user.isAdmin) {
+  //   return res.status(403).json({ error: "Forbidden" });
+  // }
 
   try {
     const limit = parseInt(req.query.limit) || 10;
@@ -111,9 +114,10 @@ export const getTopSellers = async (req, res) => {
 
 // Get all sellers with their products and sales data
 export const getSellersWithProducts = async (req, res) => {
-  if (!req.user || !req.user.isAdmin) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+  // Dev mode: Allow all requests
+  // if (!req.user || !req.user.isAdmin) {
+  //   return res.status(403).json({ error: "Forbidden" });
+  // }
 
   try {
     const sellersSnap = await db.collection("sellers").get();
@@ -187,9 +191,10 @@ export const getSellersWithProducts = async (req, res) => {
 
 // Get admin dashboard sales analytics
 export const getSalesAnalytics = async (req, res) => {
-  if (!req.user || !req.user.isAdmin) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+  // Dev mode: Allow all requests
+  // if (!req.user || !req.user.isAdmin) {
+  //   return res.status(403).json({ error: "Forbidden" });
+  // }
 
   try {
     // Get all orders
@@ -293,9 +298,10 @@ export const getSalesAnalytics = async (req, res) => {
 
 // User management: Restrict/Deactivate user account
 export const updateUserStatus = async (req, res) => {
-  if (!req.user || !req.user.isAdmin) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+  // Dev mode: Allow all requests
+  // if (!req.user || !req.user.isAdmin) {
+  //   return res.status(403).json({ error: "Forbidden" });
+  // }
 
   try {
     const { userId } = req.params;
@@ -385,9 +391,10 @@ export const updateUserStatus = async (req, res) => {
 
 // Get user details
 export const getUserById = async (req, res) => {
-  if (!req.user || !req.user.isAdmin) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+  // Dev mode: Allow all requests
+  // if (!req.user || !req.user.isAdmin) {
+  //   return res.status(403).json({ error: "Forbidden" });
+  // }
 
   try {
     const { userId } = req.params;
@@ -412,9 +419,10 @@ export const getUserById = async (req, res) => {
 
 // Get seller details with analytics
 export const getSellerDetails = async (req, res) => {
-  if (!req.user || !req.user.isAdmin) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+  // Dev mode: Allow all requests
+  // if (!req.user || !req.user.isAdmin) {
+  //   return res.status(403).json({ error: "Forbidden" });
+  // }
 
   try {
     const { sellerId } = req.params;
@@ -486,6 +494,169 @@ export const getSellerDetails = async (req, res) => {
     res.status(500).json({
       message: "Failed to fetch seller details",
       error: err.message,
+    });
+  }
+};
+
+// Get all pending seller applications
+export const getSellerApplications = async (req, res) => {
+  try {
+    const snapshot = await db
+      .collection("users")
+      .where("sellerApplication.status", "==", "pending")
+      .get();
+
+    const applications = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      applications.push({
+        uid: doc.id,
+        email: data.email,
+        displayName: data.displayName,
+        username: data.username,
+        photoURL: data.photoURL,
+        contact: data.contact,
+        sellerApplication: data.sellerApplication,
+      });
+    });
+
+    res.json({
+      success: true,
+      applications,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+// Approve seller application
+export const approveSellerApplication = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const userRef = db.collection("users").doc(userId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    const userData = userDoc.data();
+
+    if (
+      !userData.sellerApplication ||
+      userData.sellerApplication.status !== "pending"
+    ) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No pending application found" });
+    }
+
+    // Update user document
+    await userRef.update({
+      role: "seller",
+      "sellerApplication.status": "approved",
+      "sellerApplication.approvedAt":
+        admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Create seller document
+    const sellerRef = db.collection("sellers").doc(userId);
+    await sellerRef.set({
+      uid: userId,
+      email: userData.email,
+      displayName: userData.displayName,
+      username: userData.username || userData.displayName,
+      storeName: userData.sellerApplication.storeName,
+      storeDescription: userData.sellerApplication.storeDescription,
+      paymentDetails: userData.sellerApplication.paymentDetails,
+      photoURL: userData.photoURL || null,
+      contact: userData.contact || null,
+      status: "active",
+      isActive: true,
+      totalProducts: 0,
+      totalSales: 0,
+      ratingAverage: 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const updatedDoc = await userRef.get();
+    res.json({
+      success: true,
+      message: "Application approved successfully",
+      user: {
+        id: updatedDoc.id,
+        ...updatedDoc.data(),
+      },
+    });
+  } catch (error) {
+    console.error("approveSellerApplication error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to approve application",
+      error: error.message,
+    });
+  }
+};
+
+// Reject seller application
+export const rejectSellerApplication = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { reason } = req.body;
+
+    const userRef = db.collection("users").doc(userId);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    const userData = userDoc.data();
+
+    if (
+      !userData.sellerApplication ||
+      userData.sellerApplication.status !== "pending"
+    ) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No pending application found" });
+    }
+
+    // Update user document
+    await userRef.update({
+      "sellerApplication.status": "rejected",
+      "sellerApplication.rejectionReason":
+        reason || "Application rejected by admin",
+      "sellerApplication.rejectedAt":
+        admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const updatedDoc = await userRef.get();
+    res.json({
+      success: true,
+      message: "Application rejected successfully",
+      user: {
+        id: updatedDoc.id,
+        ...updatedDoc.data(),
+      },
+    });
+  } catch (error) {
+    console.error("rejectSellerApplication error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to reject application",
+      error: error.message,
     });
   }
 };

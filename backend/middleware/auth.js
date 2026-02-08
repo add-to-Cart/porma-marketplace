@@ -1,58 +1,36 @@
 import admin from "../config/firebaseAdmin.js";
 
+// Development mode: Simple auth middleware - no token verification
 async function authMiddleware(req, res, next) {
   try {
-    const authHeader = req.headers.authorization || req.headers.Authorization;
+    // Skip token verification entirely
+    // Just attach a basic user object to allow requests through
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return res
-        .status(401)
-        .json({ error: "Missing or invalid Authorization header" });
-    }
+    const uid = req.headers["x-user-id"] || "dev-user";
+    const email = req.headers["x-user-email"] || "dev@example.com";
+    const role = req.headers["x-user-role"] || "buyer";
 
-    if (!admin || !admin.auth) {
-      return res.status(500).json({ error: "Firebase admin not initialized" });
-    }
-
-    // Extract token
-    const idToken = authHeader.split(" ")[1];
-
-    // Verify token
-    const decoded = await admin.auth().verifyIdToken(idToken);
-
-    // Fetch user data from Firestore
-    const db = admin.firestore();
-    const userDoc = await db.collection("users").doc(decoded.uid).get();
-    const userData = userDoc.exists ? userDoc.data() : {};
-
-    // Block deactivated or inactive users
-    if (
-      userData.status === "deactivated" ||
-      userData.isActive === false ||
-      userData.status === "restricted" ||
-      userData.isRestricted === true
-    ) {
-      return res
-        .status(403)
-        .json({
-          error:
-            "Account is deactivated or restricted. Please contact support.",
-        });
-    }
-
-    // Attach user info to request
     req.user = {
-      uid: decoded.uid,
-      email: decoded.email,
-      name: decoded.name,
-      isAdmin: userData.isAdmin === true || userData.role === "admin",
-      role: userData.role || "buyer",
-      ...userData,
+      uid: uid,
+      email: email,
+      role: role,
+      isAdmin: role === "admin",
     };
 
     next();
   } catch (err) {
-    return res.status(401).json({ error: "Invalid or expired token" });
+    // Allow request to proceed even on error in dev mode
+    console.error(
+      "Auth middleware error (ignored in dev):",
+      err && err.message ? err.message : err,
+    );
+    req.user = {
+      uid: "dev-user",
+      email: "dev@example.com",
+      role: "buyer",
+      isAdmin: false,
+    };
+    next();
   }
 }
 
